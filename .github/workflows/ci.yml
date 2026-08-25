@@ -36,7 +36,7 @@ jobs:
         run: pnpm size
 
       - name: Install Playwright's Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm --filter @geekchart/cli exec playwright install --with-deps chromium
 
       - name: Render the gallery and run the design gate
         run: pnpm gallery && pnpm gate
