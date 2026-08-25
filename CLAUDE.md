@@ -12,9 +12,9 @@ reference images again — they are other brands, and reproducing one is as
 wrong as ignoring it. If a rule in DESIGN.md seems wrong, say so and propose a
 measured replacement; do not silently work around it.
 
-`docs/dev/REVIEW.md` is the current punch list, each item tagged with the rules it
-breaks. Work it top to bottom: systemic items first, because they fix several
-per-chart items at once.
+`AGENTS.md` is the tool-agnostic guide (repo map, commands, gotchas) — read it
+first. The 2026-08 punch list and plan are done and archived in `docs/history/`;
+the current state is `pnpm gate` and the tests, not a list.
 
 ## How every drawing or layout change is done
 
