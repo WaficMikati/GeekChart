@@ -1,0 +1,18 @@
+stateDiagram-v2
+  direction LR
+  state "Local part<br/>[a-z0-9._%+-]+" as LP
+  state "At sign<br/>literal @" as AT
+  state "Domain<br/>[a-z0-9.-]+" as DM
+  state "Dot<br/>escaped \." as DT
+  state "TLD<br/>[a-z]{2,}" as TLD
+  state "Valid<br/>thomas@email.com" as OK
+  state "Invalid<br/>no @ found" as NO
+  [*] --> LP
+  LP --> AT: thomas
+  AT --> DM: @
+  AT --> NO: tom123email
+  DM --> DT: email
+  DT --> TLD: .
+  TLD --> OK: com
+  OK --> [*]
+  NO --> [*]

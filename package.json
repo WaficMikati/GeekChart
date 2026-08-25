@@ -1,0 +1,25 @@
+{
+  "name": "geekchart-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.20.0",
+  "scripts": {
+    "dev": "pnpm --filter @geekchart/web dev",
+    "build": "pnpm -r build",
+    "deploy": "pnpm --filter @geekchart/web deploy",
+    "typecheck": "pnpm -r exec tsc --noEmit",
+    "lint": "eslint packages/geekchart/src packages/geekchart/test",
+    "size": "pnpm --filter geekchart size",
+    "test": "pnpm --filter @geekchart/cli build && pnpm --filter geekchart build && node --test packages/core/test/*.test.mts packages/cli/test/*.test.mts packages/react/test/*.test.mts packages/geekchart/test/*.test.mts",
+    "gallery": "node packages/cli/scripts/gallery.mjs",
+    "gate": "node packages/cli/scripts/gate.mjs",
+    "bench": "pnpm --filter @geekchart/cli build && pnpm --filter geekchart build && node packages/cli/scripts/bench.mjs",
+    "bench:page": "node packages/cli/scripts/bench-page.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  }
+}

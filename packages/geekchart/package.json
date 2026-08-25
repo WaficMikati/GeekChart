@@ -1,0 +1,71 @@
+{
+  "name": "geekchart",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Paste a mermaid chart, get an animated one in the 4geeks look — a React component, a server renderer, and a CLI.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4GeeksAcademy/geekchart.git",
+    "directory": "packages/geekchart"
+  },
+  "homepage": "https://github.com/4GeeksAcademy/geekchart#readme",
+  "bugs": "https://github.com/4GeeksAcademy/geekchart/issues",
+  "bin": {
+    "geekchart": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./cli": {
+      "default": "./dist/cli.js"
+    },
+    "./fonts.css": "./dist/fonts.css",
+    "./fonts-manim.css": "./dist/fonts-manim.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "size": "node scripts/size.mjs",
+    "lint": "eslint src test",
+    "pretest": "pnpm --filter @geekchart/cli build && node build.mjs",
+    "test": "node --test test/*.test.mts"
+  },
+  "peerDependencies": {
+    "playwright": ">=1.40.0",
+    "react": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@geekchart/core": "workspace:*",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.25.0",
+    "playwright": "^1.49.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}

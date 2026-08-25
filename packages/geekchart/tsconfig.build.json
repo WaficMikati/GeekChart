@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    // A scratch location, flattened into `dist/*.d.ts` by build.mjs and then
+    // discarded. `server.ts` reaches `@geekchart/cli`'s `browser.ts` with a
+    // dynamic `import()` used only for its value (see server.ts's own notes on
+    // why), but tsc still adds it to the program and emits a declaration for
+    // it regardless — unreferenced by anything we actually publish, and
+    // rootDir has to widen to fit it in the same compilation.
+    "outDir": "dist/.decl-tmp",
+    "rootDir": ".."
+  },
+  "files": ["src/index.ts", "src/server.ts"],
+  "include": []
+}

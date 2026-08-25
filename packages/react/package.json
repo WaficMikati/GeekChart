@@ -1,0 +1,38 @@
+{
+  "name": "@geekchart/react",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./fonts.css": "./dist/fonts.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0"
+  },
+  "dependencies": {
+    "@geekchart/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "esbuild": "^0.25.0",
+    "playwright": "^1.49.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}

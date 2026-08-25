@@ -1,0 +1,18 @@
+sequenceDiagram
+  participant S as Student
+  participant L as LearnPack
+  participant R as Rigobot
+  participant M as Model
+  S->>L: run tests in VS Code
+  L->>R: code plus failing test (missing JOIN)
+  R->>M: analyze exercise and history
+  M-->>R: root-cause explanation
+  loop until tests pass
+    R-->>S: highlight line, suggest fix
+    S->>L: edit and rerun
+  end
+  alt tests pass
+    L-->>S: Get Feedback, portfolio updated
+  else still failing
+    R->>M: re-analyze with new diff
+  end

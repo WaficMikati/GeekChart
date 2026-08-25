@@ -1,0 +1,23 @@
+{
+  "name": "@geekchart/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "geekchart": "./bin/geekchart.mjs"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "postinstall": "node build.mjs"
+  },
+  "dependencies": {
+    "@geekchart/core": "workspace:*",
+    "playwright": "^1.49.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "lighthouse": "^13.4.1",
+    "typescript": "^5.7.2"
+  }
+}

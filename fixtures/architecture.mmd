@@ -1,0 +1,17 @@
+flowchart TB
+  subgraph EDGE["Edge | CDN · WAF · TLS"]
+    CDN["Cloudflare"]
+    WAF["Rules engine"]
+  end
+  subgraph APP["Application | Next.js · Gatsby · Workers"]
+    WEB["4geeks.com"]
+    ACAD["4geeksacademy.com"]
+    API["BreatheCode API"]
+  end
+  subgraph DATA["Data | Postgres · Redis · S3"]
+    PG[("Primary")]
+    RD[("Cache")]
+    S3[("Assets")]
+  end
+  EDGE --> APP
+  APP --> DATA

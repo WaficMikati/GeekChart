@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 672" width="1000" height="672" class="gc-chart gc-golden" role="img" aria-labelledby="gt gd">
+<title id="gt">How a cohort runs on BreatheCode</title>
+<desc id="gd">Four inputs feed a central cohort engine of six services, which produces four outputs. Applicants to graduates is the primary path.</desc>
+<style>
+  /* Golden: hand-drawn to DESIGN.md. Canvas 1000 wide, 8-grid, two type faces,
+     one accent on the primary path, one thing moving at a time. */
+  .gc-golden { --e: cubic-bezier(0.61, 0, 0.39, 1); font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif; }
+  .gc-golden .bg     { fill: var(--gc-bg, #17202A); }
+  .gc-golden .title  { fill: var(--gc-ink, #FFFFFF); font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .gc-golden .kicker { fill: var(--gc-quiet, #8794A3); font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 8px; letter-spacing: 0.18em; }
+  .gc-golden .name   { fill: var(--gc-ink, #FFFFFF); font-size: 12px; font-weight: 600; text-anchor: middle; }
+  .gc-golden .cap    { fill: var(--gc-quiet, #8794A3); font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 8.5px; text-anchor: middle; }
+  .gc-golden .legend { fill: var(--gc-quiet, #8794A3); font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 8px; letter-spacing: 0.1em; }
+  .gc-golden .box    { fill: none; stroke: var(--gc-edge, #6B7889); stroke-width: 1.25; }
+  .gc-golden .box.focus { stroke: var(--gc-path, #0084FF); }
+  .gc-golden .panel  { fill: none; stroke: var(--gc-quiet, #8794A3); stroke-width: 1; opacity: .85; }
+  .gc-golden .rule   { stroke: var(--gc-quiet, #8794A3); stroke-width: 0.8; opacity: .5; }
+  .gc-golden .tile   { fill: var(--gc-surface, #232F3C); }
+  .gc-golden .tile.focus { fill: none; stroke: var(--gc-path, #0084FF); stroke-width: 1.25; }
+  .gc-golden .chan   { fill: none; stroke: var(--gc-edge, #6B7889); stroke-width: 1.2; stroke-dasharray: 1.5 6; stroke-linecap: round; }
+  .gc-golden .chan.focus { stroke: var(--gc-path, #0084FF); stroke-dasharray: none; stroke-width: 1.6; }
+  .gc-golden .head   { fill: var(--gc-edge, #6B7889); }
+  .gc-golden .head.focus { fill: var(--gc-path, #0084FF); }
+  .gc-golden .dot    { fill: var(--gc-accent, #00ABE9); opacity: 0; } /* the only element hidden at rest */
+  .gc-golden .live   { fill: var(--gc-accent, #00ABE9); }
+  .gc-golden .sw     { stroke-width: 1.25; fill: none; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* Static styles are the finished frame; keyframes carry the start state, so a
+       still render (animation: none) shows the chart complete. Build-in 0–3.2s,
+       live phase 3.4–6.4s, still beat to 9.6s (the host re-inserts the svg). */
+    .gc-golden .box, .gc-golden .panel, .gc-golden .tile.focus {
+      stroke-dasharray: 1; animation: draw 1s var(--e) both; }
+    .gc-golden .chan { transform-box: fill-box; transform-origin: 50% 0; animation: grow .8s var(--e) both; }
+    .gc-golden .tile, .gc-golden text, .gc-golden .rule, .gc-golden .head, .gc-golden .live {
+      animation: fade .5s var(--e) both; }
+    .gc-golden .rule { animation-name: fade-half; }
+
+    .gc-golden .t0 { animation-delay: 0s }    .gc-golden .t1 { animation-delay: .15s }
+    .gc-golden .t2 { animation-delay: .3s }   .gc-golden .t3 { animation-delay: .45s }
+    .gc-golden .t4 { animation-delay: .6s }   .gc-golden .t5 { animation-delay: .85s }
+    .gc-golden .t6 { animation-delay: 1.1s }  .gc-golden .t7 { animation-delay: 1.35s }
+    .gc-golden .t8 { animation-delay: 1.6s }  .gc-golden .t9 { animation-delay: 1.85s }
+    .gc-golden .t10 { animation-delay: 2.1s } .gc-golden .t11 { animation-delay: 2.4s }
+    .gc-golden .t12 { animation-delay: 2.65s } .gc-golden .t13 { animation-delay: 2.9s }
+
+    /* Live phase. Each channel owns a time --t; everything it touches keys off it:
+       the box it leaves flashes as the dot departs, the channel brightens while
+       the dot is on it, the dot swells into a ripple on the outline it reaches,
+       and the arrowhead takes the colour for a beat. Lag between channels .15s
+       (8.3), so the four read as one wave, not a queue. */
+    .gc-golden .in0 { --t: 3.4s } .gc-golden .in1 { --t: 3.55s } .gc-golden .in2 { --t: 3.7s } .gc-golden .in3 { --t: 3.85s }
+    .gc-golden .out0 { --t: 5.3s } .gc-golden .out1 { --t: 5.45s } .gc-golden .out2 { --t: 5.6s } .gc-golden .out3 { --t: 5.75s }
+
+    .gc-golden .dot   { offset-path: var(--p); animation: travel .7s var(--e) var(--t) both; }
+    .gc-golden .ripple{ fill: none; stroke: var(--gc-accent, #00ABE9); stroke-width: 1.2; opacity: 0;
+                        animation: ripple .5s var(--e) calc(var(--t) + .6s) both; }
+    .gc-golden .chan.live-in, .gc-golden .chan.live-out { animation: grow .8s var(--e) both, pass .7s var(--e) var(--t) both; }
+    .gc-golden .chan.live-in { animation-delay: .45s, var(--t) }
+    .gc-golden .chan.live-out { animation-delay: 2.4s, var(--t) }
+    .gc-golden .head.live-in { animation: fade .5s var(--e) .6s both, catch .5s var(--e) calc(var(--t) + .6s) both; }
+    .gc-golden .head.live-out { animation: fade .5s var(--e) 2.65s both, catch .5s var(--e) calc(var(--t) + .6s) both; }
+    /* departure flash on the box the dot leaves; arrival flash on the one it reaches */
+    .gc-golden .box.leave { animation: draw 1s var(--e) .15s both, flash .45s var(--e) var(--t) both; }
+    .gc-golden .box.arrive { transform-box: fill-box; transform-origin: center;
+      animation: draw 1s var(--e) 2.65s both, flash .6s var(--e) calc(var(--t) + .6s) both,
+                 press .6s cubic-bezier(.22, 1.2, .36, 1) calc(var(--t) + .62s) both; }
+    .gc-golden .cap.arrive { animation: fade .5s var(--e) 2.9s both, brighten .7s var(--e) calc(var(--t) + .62s) both; }
+    /* the panel acknowledges the wave once, as the last dot lands, then Cohorts lights */
+    .gc-golden .panel { animation: draw 1s var(--e) .85s both, flash 1.1s var(--e) 4.0s both; }
+    .gc-golden .tile.focus { transform-box: fill-box; transform-origin: center;
+      animation: draw 1s var(--e) 1.35s both, indicate .7s var(--e) 4.7s both; }
+
+    @keyframes draw      { from { stroke-dashoffset: 1 } to { stroke-dashoffset: 0 } }
+    @keyframes grow      { from { transform: scaleY(0) } to { transform: scaleY(1) } }
+    @keyframes fade      { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes fade-half { from { opacity: 0 } to { opacity: .5 } }
+    @keyframes travel    { 0% { offset-distance: 0%; opacity: 0; r: 1.5 } 15% { opacity: 1; r: 3 }
+                           88% { opacity: 1; r: 3 } 100% { offset-distance: 100%; opacity: 0; r: 1 } }
+    @keyframes ripple    { 0% { r: 3; opacity: 0 } 12% { opacity: .9 } 100% { r: 14; opacity: 0 } }
+    @keyframes pass      { 0%, 100% { stroke: var(--gc-edge, #6B7889) } 50% { stroke: var(--gc-accent, #00ABE9) } }
+    @keyframes catch     { 0%, 100% { fill: var(--gc-edge, #6B7889) } 30% { fill: var(--gc-accent, #00ABE9) } }
+    @keyframes flash     { 0%, 100% { stroke: var(--gc-edge, #6B7889) } 35% { stroke: var(--gc-accent, #00ABE9) } }
+    @keyframes press     { 0% { transform: scale(1) } 30% { transform: scale(1.03) } 100% { transform: scale(1) } }
+    @keyframes brighten  { 0%, 100% { fill: var(--gc-quiet, #8794A3) } 30% { fill: var(--gc-ink, #FFFFFF) } }
+    @keyframes indicate  { 0%, 100% { stroke: var(--gc-path, #0084FF); transform: scale(1) } 40% { stroke: var(--gc-accent, #00ABE9); transform: scale(1.03) } }
+    /* the accent path keeps its own colour through the flashes */
+    .gc-golden .chan.focus.live-in, .gc-golden .chan.focus.live-out { animation-name: grow, pass-focus; }
+    .gc-golden .head.focus.live-in, .gc-golden .head.focus.live-out { animation-name: fade, catch-focus; }
+    .gc-golden .box.focus.leave { animation-name: draw, flash-focus; }
+    .gc-golden .box.focus.arrive { animation-name: draw, flash-focus, press; }
+    @keyframes pass-focus  { 0%, 100% { stroke: var(--gc-path, #0084FF) } 50% { stroke: var(--gc-accent, #00ABE9) } }
+    @keyframes catch-focus { 0%, 100% { fill: var(--gc-path, #0084FF) } 30% { fill: var(--gc-accent, #00ABE9) } }
+    @keyframes flash-focus { 0%, 100% { stroke: var(--gc-path, #0084FF) } 35% { stroke: var(--gc-accent, #00ABE9) } }
+  }
+</style>
+
+<rect class="bg" width="1000" height="672"/>
+
+<!-- title block (7.1, 10.1): the one loud element is the title -->
+<text class="kicker t0" x="104" y="56">4GEEKS · BREATHECODE · HOW A COHORT RUNS</text>
+<text class="title t0" x="104" y="86">From application to placement</text>
+<circle class="live t0" cx="880" cy="82" r="3.5"/>
+<text class="kicker t0" x="890" y="85">LIVE</text>
+
+<!-- inputs: 4 × 160×56 at x 132/356/580/804, y 120; gutter 32 (2.2, 2.3) -->
+<g class="gc-node">
+  <rect class="box leave in0 focus t1" x="132" y="120" width="160" height="56" rx="6" pathLength="1"/>
+  <text class="name t2" x="212" y="144">Applicants</text>
+  <text class="cap t2" x="212" y="160">forms · interviews</text>
+</g>
+<g class="gc-node">
+  <rect class="box leave in1 t1" x="356" y="120" width="160" height="56" rx="6" pathLength="1"/>
+  <text class="name t2" x="436" y="144">Mentors</text>
+  <text class="cap t2" x="436" y="160">availability · skills</text>
+</g>
+<g class="gc-node">
+  <rect class="box leave in2 t1" x="580" y="120" width="160" height="56" rx="6" pathLength="1"/>
+  <text class="name t2" x="660" y="144">Syllabus</text>
+  <text class="cap t2" x="660" y="160">modules · projects</text>
+</g>
+<g class="gc-node">
+  <rect class="box leave in3 t1" x="804" y="120" width="160" height="56" rx="6" pathLength="1"/>
+  <text class="name t2" x="884" y="144">Partners</text>
+  <text class="cap t2" x="884" y="160">hiring · briefs</text>
+</g>
+
+<!-- channels down: bottom-midpoint of each input to the panel's top edge (6.2, 6.6).
+     Line ends 6 short of the outline; head sits on it (10.3). -->
+<path id="c0" class="chan live-in in0 focus t3" d="M212 176 V242"/>
+<polygon class="head live-in in0 focus t4" points="208,242 216,242 212,248"/>
+<path id="c1" class="chan live-in in1 t3" d="M436 176 V242"/>
+<polygon class="head live-in in1 t4" points="432,242 440,242 436,248"/>
+<path id="c2" class="chan live-in in2 t3" d="M660 176 V242"/>
+<polygon class="head live-in in2 t4" points="656,242 664,242 660,248"/>
+<path id="c3" class="chan live-in in3 t3" d="M884 176 V242"/>
+<polygon class="head live-in in3 t4" points="880,242 888,242 884,248"/>
+
+<!-- panel 104..896 × 248..480, padding 24 (2.6); rx 12 (2.5) -->
+<g class="gc-cluster">
+  <rect class="panel t5" x="104" y="248" width="792" height="232" rx="12" pathLength="1"/>
+  <text class="name t6" x="500" y="282" style="font-size:14px">Cohort engine</text>
+  <text class="kicker t6" x="500" y="300" style="text-anchor:middle">16 WEEKS · 4 MODULES · 1 MENTOR PER 8 · DAILY FEEDBACK</text>
+  <line class="rule t6" x1="128" y1="314" x2="872" y2="314"/>
+
+  <!-- tiles 3 × 232×56, gutter 24; rows at 330 and 402 (2.1) -->
+  <g class="gc-node"><rect class="tile focus t7" x="128" y="330" width="232" height="56" rx="6" pathLength="1"/>
+    <text class="name t8" x="244" y="354">Cohorts</text><text class="cap t8" x="244" y="370">enrol · schedule · attendance</text></g>
+  <g class="gc-node"><rect class="tile t7" x="384" y="330" width="232" height="56" rx="6"/>
+    <text class="name t8" x="500" y="354">Assignments</text><text class="cap t8" x="500" y="370">projects · auto-graded · reviewed</text></g>
+  <g class="gc-node"><rect class="tile t7" x="640" y="330" width="232" height="56" rx="6"/>
+    <text class="name t8" x="756" y="354">Mentorship</text><text class="cap t8" x="756" y="370">1:1 · pairing · office hours</text></g>
+  <g class="gc-node"><rect class="tile t9" x="128" y="402" width="232" height="56" rx="6"/>
+    <text class="name t10" x="244" y="426">Assessment</text><text class="cap t10" x="244" y="442">quizzes · rubrics · readiness</text></g>
+  <g class="gc-node"><rect class="tile t9" x="384" y="402" width="232" height="56" rx="6"/>
+    <text class="name t10" x="500" y="426">Career support</text><text class="cap t10" x="500" y="442">cv · mock interviews · intros</text></g>
+  <g class="gc-node"><rect class="tile t9" x="640" y="402" width="232" height="56" rx="6"/>
+    <text class="name t10" x="756" y="426">Feedback loop</text><text class="cap t10" x="756" y="442">every cohort improves the next</text></g>
+</g>
+
+<!-- channels down to outputs: panel bottom 480 → output top 552, same columns as inputs (2.6) -->
+<path id="c4" class="chan live-out out0 focus t11" d="M212 480 V546"/>
+<polygon class="head live-out out0 focus t12" points="208,546 216,546 212,552"/>
+<path id="c5" class="chan live-out out1 t11" d="M436 480 V546"/>
+<polygon class="head live-out out1 t12" points="432,546 440,546 436,552"/>
+<path id="c6" class="chan live-out out2 t11" d="M660 480 V546"/>
+<polygon class="head live-out out2 t12" points="656,546 664,546 660,552"/>
+<path id="c7" class="chan live-out out3 t11" d="M884 480 V546"/>
+<polygon class="head live-out out3 t12" points="880,546 888,546 884,552"/>
+
+<!-- outputs: same x as inputs, y 552 -->
+<g class="gc-node">
+  <rect class="box arrive out0 focus t12" x="132" y="552" width="160" height="56" rx="6" pathLength="1"/>
+  <text class="name t13" x="212" y="576">Graduates</text>
+  <text class="cap arrive out0 t13" x="212" y="592">job-ready · certified</text>
+</g>
+<g class="gc-node">
+  <rect class="box arrive out1 t12" x="356" y="552" width="160" height="56" rx="6" pathLength="1"/>
+  <text class="name t13" x="436" y="576">Portfolios</text>
+  <text class="cap arrive out1 t13" x="436" y="592">public · reviewed</text>
+</g>
+<g class="gc-node">
+  <rect class="box arrive out2 t12" x="580" y="552" width="160" height="56" rx="6" pathLength="1"/>
+  <text class="name t13" x="660" y="576">Placements</text>
+  <text class="cap arrive out2 t13" x="660" y="592">tracked · 6 months</text>
+</g>
+<g class="gc-node">
+  <rect class="box arrive out3 t12" x="804" y="552" width="160" height="56" rx="6" pathLength="1"/>
+  <text class="name t13" x="884" y="576">Reviews</text>
+  <text class="cap arrive out3 t13" x="884" y="592">students · partners</text>
+</g>
+
+<!-- live phase: dots, and the ripple each makes on the outline it reaches (10.4, 5.4) -->
+<circle class="dot in0" r="3" style="--p:path('M212 176 V248')"/><circle class="ripple in0" cx="212" cy="248" r="3"/>
+<circle class="dot in1" r="3" style="--p:path('M436 176 V248')"/><circle class="ripple in1" cx="436" cy="248" r="3"/>
+<circle class="dot in2" r="3" style="--p:path('M660 176 V248')"/><circle class="ripple in2" cx="660" cy="248" r="3"/>
+<circle class="dot in3" r="3" style="--p:path('M884 176 V248')"/><circle class="ripple in3" cx="884" cy="248" r="3"/>
+<circle class="dot out0" r="3" style="--p:path('M212 480 V552')"/><circle class="ripple out0" cx="212" cy="552" r="3"/>
+<circle class="dot out1" r="3" style="--p:path('M436 480 V552')"/><circle class="ripple out1" cx="436" cy="552" r="3"/>
+<circle class="dot out2" r="3" style="--p:path('M660 480 V552')"/><circle class="ripple out2" cx="660" cy="552" r="3"/>
+<circle class="dot out3" r="3" style="--p:path('M884 480 V552')"/><circle class="ripple out3" cx="884" cy="552" r="3"/>
+
+<!-- legend row (7.2), left-aligned at the panel's x -->
+<g class="t13">
+  <rect class="sw" x="104" y="636" width="16" height="8" rx="2" style="stroke:var(--gc-path,#0084FF)"/>
+  <text class="legend" x="128" y="643">PRIMARY PATH · APPLICANT TO GRADUATE</text>
+  <rect class="sw" x="360" y="636" width="16" height="8" rx="2" style="stroke:var(--gc-edge,#6B7889)"/>
+  <text class="legend" x="384" y="643">INPUT · OUTPUT</text>
+  <rect x="488" y="636" width="16" height="8" rx="2" style="fill:var(--gc-surface,#232F3C)"/>
+  <text class="legend" x="512" y="643">SERVICE</text>
+  <line x1="584" y1="640" x2="600" y2="640" style="stroke:var(--gc-edge,#6B7889);stroke-width:1.2;stroke-dasharray:1.5 4;stroke-linecap:round"/>
+  <text class="legend" x="608" y="643">DATA CHANNEL</text>
+</g>
+</svg>

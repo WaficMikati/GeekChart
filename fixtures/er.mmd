@@ -1,0 +1,21 @@
+erDiagram
+  COHORT ||--o{ STUDENT : enrols
+  STUDENT ||--o{ PROJECT : submits
+  MENTOR ||--o{ COHORT : leads
+
+  COHORT {
+    string name PK
+    date startsOn
+    int seats
+  }
+  STUDENT {
+    string email PK
+    string cohortId FK
+  }
+  PROJECT {
+    string repo PK
+    string grade
+  }
+  MENTOR {
+    string name PK
+  }

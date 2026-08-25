@@ -1,0 +1,13 @@
+flowchart LR
+  subgraph SHELL["Shell | PATH lookup"]
+    CMD["python script.py"]
+  end
+  subgraph SHIMS["Shims | $PYENV_ROOT/shims first on PATH"]
+    SHIM["pyenv shim intercepts"]
+  end
+  subgraph RES["Resolution | pyenv version management"]
+    LOCAL["Project .python-version<br/>local override"]
+    GLOBAL["pyenv global<br/>default version"]
+    SYS["System Python<br/>pre-installed on Linux/macOS"]
+  end
+  SHELL --> SHIMS --> RES --> RUN["Correct python binary runs"]

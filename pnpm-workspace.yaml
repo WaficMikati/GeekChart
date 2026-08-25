@@ -1,0 +1,10 @@
+packages:
+  - 'packages/*'
+
+# pnpm 11 asks explicitly about postinstall scripts. esbuild and workerd are the
+# standard native steps for vite's bundler and wrangler's runtime; sharp is an
+# optional wrangler image dependency we never use.
+allowBuilds:
+  esbuild: true
+  workerd: true
+  sharp: false

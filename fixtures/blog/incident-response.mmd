@@ -1,0 +1,11 @@
+flowchart TB
+  DET["Detect<br/>uptime · free -h · top · ip a"]
+  TRI["Triage<br/>ps aux · pstree -p"]
+  ESC{"Confirmed intrusion?"}
+  CON["Contain<br/>block IP · firewall rules"]
+  ERA["Eradicate<br/>kill backdoor · cron job"]
+  REC["Recover<br/>restart services · verify"]
+  LES["Lessons<br/>document · brief a peer"]
+  DET --> TRI --> ESC
+  ESC -->|not yet| TRI
+  ESC -->|yes| CON --> ERA --> REC --> LES

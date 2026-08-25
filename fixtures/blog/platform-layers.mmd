@@ -1,0 +1,18 @@
+flowchart LR
+  subgraph CONTENT["Content | lessons · exercises"]
+    LES["Reading lessons"]
+    EXR["Interactive exercises"]
+  end
+  subgraph LP["LearnPack | VS Code · Gitpod"]
+    RUN["Real-time code testing"]
+  end
+  subgraph RIGO["Rigobot | AI mentor"]
+    SCAN["Scans code · flags bugs"]
+  end
+  subgraph MENT["Mentors | 1-on-1 · LIVE sessions"]
+    BOOK["Book a session"]
+  end
+  subgraph GF["GeekFORCE | 5,000+ employer partners"]
+    JOB["84% placed within 140 days"]
+  end
+  CONTENT --> LP --> RIGO --> MENT --> GF

@@ -1,0 +1,4 @@
+{
+  "//": "Charts the design gate still FAILs. This list only ever shrinks: each phase in PLAN.md removes the charts it fixes, and a chart that starts failing again is a test failure.",
+  "charts": []
+}

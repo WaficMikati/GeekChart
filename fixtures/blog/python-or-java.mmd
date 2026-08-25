@@ -1,0 +1,15 @@
+flowchart TB
+  START["What's your goal?"]
+  Q1{"Data, scripting, or web prototyping?"}
+  PY["Python<br/>#1 on the TIOBE Index"]
+  PYWEB["Django · Flask<br/>web development"]
+  PYDATA["Pandas · NumPy<br/>data science"]
+  JAVA["Java<br/>top 5, TIOBE Index"]
+  JAVAENT["Spring<br/>enterprise backend"]
+  JAVAAND["Android<br/>app development"]
+
+  START --> Q1
+  Q1 -->|yes| PY --> PYDATA
+  PY --> PYWEB
+  Q1 -->|no, enterprise or Android| JAVA --> JAVAENT
+  JAVA --> JAVAAND

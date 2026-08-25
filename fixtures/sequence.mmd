@@ -1,0 +1,10 @@
+sequenceDiagram
+  participant S as Student
+  participant B as Support bot
+  participant M as Mentor
+  S->>B: I am stuck on the exercise
+  B->>B: Search the syllabus
+  B-->>S: Here is the relevant lesson
+  S->>B: Still stuck
+  B->>M: Escalate with context
+  M-->>S: Pairing session booked

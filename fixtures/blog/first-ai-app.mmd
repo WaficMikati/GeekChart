@@ -1,0 +1,14 @@
+sequenceDiagram
+  participant U as User
+  participant C as chatbot.py
+  participant H as History
+  participant A as OpenAI API
+  participant T as Terminal
+  U->>T: types a message
+  T->>C: user_input
+  C->>H: append role user
+  C->>A: ChatCompletion.create model gpt-4o-mini
+  Note over A: temperature 0.7 · max_tokens 150
+  A-->>C: choices[0].message.content
+  C->>H: append role assistant
+  C->>T: print Chatbot: response

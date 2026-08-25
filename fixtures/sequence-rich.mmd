@@ -1,0 +1,19 @@
+sequenceDiagram
+  participant S as Student
+  participant B as Support bot
+  participant M as Mentor
+  S->>B: I am stuck
+  activate B
+  B->>B: Search the syllabus
+  alt found a lesson
+    B-->>S: Here is the lesson
+  else nothing relevant
+    B->>M: Escalate with context
+    M-->>S: Pairing booked
+  end
+  deactivate B
+  loop every sprint
+    S->>M: Progress check
+  end
+  Note over S,M: Reviewed weekly
+  S-xB: Close the ticket

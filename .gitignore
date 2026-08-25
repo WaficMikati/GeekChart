@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.gate/
+*.tgz
+gallery.html
+packages/geekchart/.lazy-chunk.json
+packages/geekchart/.gc-ssr-*

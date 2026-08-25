@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "geekchart",
+  "compatibility_date": "2026-08-01",
+  // Static-only: the whole app runs in the browser, so there is no Worker
+  // script to keep in sync with the web build.
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

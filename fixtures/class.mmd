@@ -1,0 +1,15 @@
+classDiagram
+  class Cohort {
+    +String name
+    +Date startsOn
+    +enroll(student)
+  }
+  class Student {
+    +String email
+    +submit(project)
+  }
+  class Project {
+    +String repo
+  }
+  Cohort "1" --> "*" Student
+  Student "1" --> "*" Project

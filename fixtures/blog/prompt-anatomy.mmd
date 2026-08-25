@@ -1,0 +1,10 @@
+flowchart TB
+  RAW["Raw idea<br/>one-line vague ask"] --> PANEL
+  subgraph PANEL["Anatomy of a prompt"]
+    ROLE["Role<br/>act as a senior engineer"]
+    CTX["Context<br/>RAG · retrieved passages"]
+    TASK["Task<br/>clear detailed instruction"]
+    FMT["Format<br/>delimiters · triple quotes"]
+    EX["Examples<br/>few-shot · sample JSON"]
+  end
+  PANEL --> OUT["Model response<br/>accurate and specific"]

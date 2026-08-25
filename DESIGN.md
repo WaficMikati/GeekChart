@@ -1,0 +1,246 @@
+# Geekchart design spec
+
+This is the standard every chart is checked against. It was written by measuring
+two references the team chose — the diagram-design gallery
+(https://cathrynlavery.github.io/diagram-design/) and the Lyzr "Marketing Agentic
+OS Control Plane" diagram — and then reading them as rules rather than pictures.
+Do **not** copy either reference's colours, fonts or branding. Geekchart stays on
+the 4geeks palette on a dark ground. What transfers is the discipline below.
+
+Rules are numbered so a change can cite the ones it touches (see CLAUDE.md).
+Numbers are in **canvas units** unless they say "on screen".
+
+## 1. Canvas
+
+- **1.1** The canvas is **at most 1000 units wide** (boards up to 1200) and
+  **hugs its content**: width = content + 2×48, snapped to 8, never below 480.
+  Height is whatever the content needs. Charts are responsive, so a narrow
+  chart padded out to 1000 would only lose type size to the padding in a
+  narrow viewer; hugging keeps 11-unit text at or near 1:1. (Revised 2026-08-21
+  from a fixed 1000: the fixed width only gave consistent type while every
+  chart was shown at the same pixel width.)
+- **1.2** The content box is 904 wide (1000 − 2×48). A left-to-right run that
+  does not fit it **wraps into rows**; a run that fits but uses under half the
+  width is the same fault and is re-laid out. Content covers at least 35% of
+  the canvas area (the gate's 7.4 check). A thin strip across an empty stage has
+  failed this rule.
+- **1.3** Outer margin 48. Content touches neither the edge nor the margin line.
+- **1.4** Height never exceeds 1.4× width. Tall stacks (Subgraphs is 470×1095
+  today) go side by side instead.
+
+## 2. Grid and sizing
+
+- **2.1** Everything sits on an **8-unit grid**: positions, widths, heights,
+  gutters.
+- **2.2** Nodes come in **fixed sizes from a short list**, not fitted to their
+  label: `160×48` (title only), `160×56` (title + caption), `200×48` (wide),
+  `120×48` (compact). One chart uses at most two of these. Labels that don't
+  fit are shortened or wrapped to a second line, never given a wider box.
+- **2.3** Nodes in the same row share an exact `y` and height; nodes in the same
+  column share an exact `x` and width. Gutters between siblings are equal
+  (24 or 32).
+- **2.4** Diamonds are drawn around a 160×48 label box with 16 of clearance at
+  the widest point. Terminals (ovals) are the same 160×48 with `rx` = half the
+  height.
+- **2.5** Corner radius is one value per chart: `rx 6` for nodes, `rx 12` for
+  panels/clusters. Never mixed.
+- **2.6** Panels (clusters, swimlanes, the Lyzr-style control plane) have 24
+  inner padding on all sides and their children obey 2.3 inside them.
+  Inputs above a panel and outputs below it line up **column for column**.
+
+## 3. Type
+
+Two families only: **Archivo** for names, **JetBrains Mono** for everything
+technical (captions, edge labels, kickers, axis ticks). No third face, ever.
+
+Sizes, in canvas units, on the 1000-wide canvas. The body of a chart uses at
+most **three** of these (name, caption, label); the title block adds its two:
+
+| role | size | weight | tracking | case |
+|---|---|---|---|---|
+| chart title | 22 | 600 | −0.02em | sentence |
+| chart kicker / subtitle | 11 mono | 400 | 0.18em | UPPER |
+| node name | 13 | 600 | normal | sentence |
+| node caption | 11 mono | 400 | normal | lower |
+| edge label, legend, axis tick | 11 mono | 400 | 0.08–0.14em | UPPER |
+| record row (class member, ER column) | 11 mono | 400 | normal | as written |
+| big index numeral (`01`) | 72 mono | 600 | — | — |
+
+- **3.1** Nothing smaller than **11 canvas units**. Charts are responsive and a
+  1000-unit canvas is routinely shown at ~760px (an artifact panel, a phone in
+  landscape), where 11 units is 8.4px — the legibility floor. The gate measures
+  on-screen size at 760px. (Raised from 8 on 2026-08-21: the gallery's 8 was
+  only legible because it never scaled below 1:1.)
+- **3.2** Every node is **two-tier**: a name and a one-line caption (Lyzr:
+  "CRM / pipeline", gallery: "Cloudflare / Pages · cache"). A node with no
+  caption gets the 160×48 box, not a centred name in a 56-high box.
+- **3.3** Captions joined with ` · ` (middle dot, spaces), never commas or
+  slashes.
+- **3.4** Text is never rotated, with one exception: a single vertical axis
+  label on a chart with axes. If a node or commit label only fits rotated, the
+  layout is wrong (see Git graph).
+- **3.5** Text sits on the same baseline across a row. Baselines are set by
+  cap height as in 10.2: name at `y + 24` and caption at `y + 40` in a 56-high
+  box; single name at `y + 28` in a 48-high box. Rows inside a record (class
+  members, ER columns) are caption-size mono on a 16 step.
+
+## 4. Strokes, fills, depth
+
+- **4.1** Hairlines. Node outlines 1.25, edges 1.2, cluster boxes 1, dividers
+  0.8 at 50% opacity. The accent path may be 1.6. Nothing above 2 except a
+  deliberate thick-edge style (3.6) used once per chart at most.
+- **4.2** **One depth cue per box**: either an outline or a fill, never both,
+  and never a shadow. Lyzr uses solid dark tiles inside the panel and outlined
+  tiles outside it — two tiers, and the difference means something
+  (inside = the system, outside = what it talks to).
+- **4.3** Fills are flat. No gradients, no translucent tints layered on tints.
+  Fill opacity for "quiet" boxes is one value (0.12) across the chart.
+- **4.4** Dividers inside a node (class/ER rows) are 0.8 hairlines at 50% and
+  sit on the 8-grid.
+
+## 5. Colour
+
+- **5.1** The ground is dark (`--gc-bg`); ink is near-white; "quiet" is one
+  grey. Those three do 90% of the work.
+- **5.2** **One accent per chart**, and it is reserved for the one thing the
+  reader should follow: the primary path, the focal layer, the current step.
+  Gallery: "Color reserved for the happy path." If two things are accented,
+  neither is.
+- **5.3** A second hue (alt) is allowed only when it encodes a category the
+  legend explains. Blue-vs-yellow boxes with no legend (today's Org chart) are
+  noise.
+- **5.4** Colour carries **motion**: the travelling dot, the flash on arrival,
+  the stroke that draws on. Static colour on a static box is decoration.
+- **5.5** Everything must survive the palette being swapped: no colour is
+  hard-coded; every fill/stroke is a `--gc-*` variable with a fallback.
+  The light palette, gated on the golden: bg `#FFFFFF`, ink `#17202A`, quiet
+  `#5A6672`, edge `#9AA5B1`, surface `#EEF2F6`, path `#0075E0`, accent
+  `#0096D6`. Edge stays a step quieter than ink in both (10.3).
+
+## 6. Edges
+
+- **6.1** Orthogonal (H/V with a single elbow) or straight. **No diagonals**
+  across other nodes; a diagonal through a cylinder (today's Subgraphs) is a
+  routing failure.
+- **6.2** Edges attach at the **midpoint of a side**, on the outline, and leave
+  it perpendicular. Never at a corner, never ending short of or inside the box.
+- **6.3** Exactly one arrowhead per directed edge, 8×6, filled, aligned to the
+  last segment within 1°. A bidirectional edge is two edges or a double-headed
+  one; never a stacked head.
+- **6.4** Edges fan from **separate** attachment points, spaced on the 8-grid,
+  never converging on one pixel (today's Control plane).
+- **6.5** Edge labels are 8 mono caps on a knockout plate the colour of the
+  ground, 6 padding, centred on the segment's midpoint, and plates never overlap
+  each other or a node.
+- **6.6** Dashed = return / async / optional (`5 4`). Dotted (`1.5 6`) = the
+  Lyzr style of a channel along which a dot travels. Solid = the main call.
+- **6.7** Loops back go **around** the content, with a 24 clearance, as one
+  rounded orthogonal path — not a free-form arc under the diagram.
+- **6.8 What the gate measures on every edge of every graph chart** (added
+  2026-08-22, no per-chart exceptions): orthogonal only; leaves the side facing
+  its target; ≤ 2 bends forward, ≤ 4 on a loop-back; path ≤ 1.4× the straight
+  distance (+32); forward edges never cross each other; no two edges share a
+  segment except a fan bus from one point; 16 clearance from every node it does
+  not connect; ports on one side ordered by where their targets are; a label
+  sits on its line only if its plate covers ≤ 60% of a horizontal segment or
+  ≤ 40% of a vertical one at least 64 long — otherwise it sits beside the line.
+  Added 2026-08-22 (second pass): a forward edge **arrives** on the side facing
+  its source with the flow axis taking priority; a loop-back arrives on the
+  same side the target's forward edge arrived on ("you are back at this
+  step"); no hairpins anywhere (a loop goes around once); a sole child sits on
+  its sole parent's centre line; a Z edge's middle run is centred in the free
+  channel between the nearest walls, panels included. A loop-back takes the
+  nearest corridor (length ≤ Manhattan distance of its ends + 128), and edges
+  arriving on one side of a node merge into a single centred trunk with one
+  arrowhead.
+
+## 7. Composition
+
+- **7.1** Every chart has a title (3: 22/600) and usually a kicker line in mono
+  caps above or below it. The Lyzr panel's "LYZR AI · SKOTT · MODEL AGNOSTIC"
+  line is the pattern: a tracked, dotted list of facts.
+- **7.2** A **legend row** at the bottom when shape or colour means something:
+  small swatches, 8 mono labels, one row, left-aligned.
+- **7.3** Layout is symmetric about the canvas centre unless the content has a
+  direction (timeline, layers). Inputs/outputs on either side of a panel are
+  centred on it.
+- **7.4** Whitespace is even. If the right half of the stage is empty, wrap,
+  re-centre, or change the canvas height — never leave it.
+- **7.5** Nothing is clipped at the canvas edge, including the last milestone
+  diamond and the last quadrant label. Measured, not eyeballed.
+- **7.6** Every chart type — including pie, mindmap, git graph — is drawn by
+  Geekchart's own renderer with these rules. Raw mermaid output is never shown
+  next to native charts.
+
+## 8. Motion (from the Manim bar)
+
+- **8.1** Easing is `cubic-bezier(0.61, 0, 0.39, 1)` everywhere. No ease-out.
+- **8.2** Stroke draws on, then fill fades in (DrawBorderThenFill). A plain
+  opacity fade on a node is wrong.
+- **8.3** Elements overlap in time (`lag_ratio` 0.1–0.5) rather than queue.
+- **8.4** After build, one pass of the accent travelling the primary path, with
+  an Indicate (scale 1.05 + accent flash) on each node as it arrives; then a
+  `wait()` beat of at least 1.5s before the loop restarts.
+- **8.5** Activation bars, plates and sparks sit **below** arrowheads in stacking
+  order; a head is never covered.
+
+## 9. Don'ts (the amateur tells)
+
+- Boxes of different widths in one row because the labels differ.
+- Type that changes size between charts because the canvas changed size.
+- Diagonal edges, converging fans, stacked arrowheads, arcs under the diagram.
+- Rotated labels, clipped labels, labels escaping their box.
+- Outline + fill + shadow on one box.
+- Two accent colours with no legend.
+- A chart that is a thin strip in a large empty stage.
+- Raw mermaid output (default theme, white boxes, fat coloured curves).
+- Dark-on-dark text (today's Pie title and legend).
+- Light-theme page with a dark stage because one variable wasn't redefined.
+
+## 10. Elegance — the part hygiene doesn't buy
+
+Rules 1–9 remove what makes a chart look amateur. These make it look finished.
+
+- **10.1 One loud element.** Each chart has exactly one thing at full weight —
+  the title, or the focal tile — and everything else is a step quieter. If two
+  elements compete for the eye, demote one. Measured: at most one text run at
+  the largest size, and no outline brighter than the text it frames.
+- **10.2 Air inside boxes.** Text occupies about a third of the box height. In
+  the 56-high box: name baseline at `y + 24`, caption baseline at `y + 40`,
+  nothing within 16 of the left or right edge. In the 48-high box the single
+  name sits at `y + 28`. A box whose text touches its padding is too small or
+  its label too long — shorten the label.
+- **10.3 Optical centring.** Centre text by cap height, not by the em box
+  (Archivo cap height ≈ 0.72em; for a 12px name that is the `+24` above, not
+  `+28`). Arrowheads stop **on** the outline; the line under them ends 6 short
+  so the head reads as meeting the box, not piercing it. Outline strokes are
+  one step quieter than the text inside them (`--gc-edge`, not `--gc-ink`).
+- **10.4 Motion is one wave, and everything it touches reacts.** After the
+  build-in, the live phase is a single wave: sibling dots leave with a 0.15s
+  lag and travel in ~0.7s, so they read as one event, not a queue. Nothing
+  appears or vanishes flatly — a dot scales in from 1.5 to 3, the box it
+  leaves flashes to the accent as it departs, the channel brightens while the
+  dot is on it, and on arrival the dot is absorbed (r 3→1) into a ripple (r 3→14)
+  on the outline while the shape it reaches **presses**: scale 1→1.03→1 over
+  0.6s with a settling ease (`cubic-bezier(.22,1.2,.36,1)`), outline to the
+  accent, caption brightened to ink for the beat, arrowhead taking the colour. A container acknowledges the
+  wave once, as the last dot lands. Then a still beat of ≥ 2s, because the still
+  frame is what most people see. Nothing hidden at rest may use fill-mode
+  `both` with a visible first keyframe — it will show during its delay.
+- **10.5 Subtract first.** Before styling an element, ask whether removing it
+  loses information. A hairline divider instead of a box; a dot terminus
+  instead of an arrowhead on a quiet edge; a knockout plate instead of a label
+  background; no cluster box when alignment already groups the children. The
+  references are elegant because of what is not drawn.
+- **10.6 The golden.** `fixtures/golden/control-plane.svg` is one chart drawn
+  by hand to every rule in this file, in the 4geeks palette. It is the picture
+  of "done". A renderer change to panels is finished when `pnpm gate` passes
+  **and** the rendered control plane is indistinguishable from the golden at
+  review size. Never edit the golden to match the renderer.
+
+## How to use this file
+
+Before changing any drawing or layout code, list which rule numbers the change
+touches and what the measured value will be after. After the change, run
+`pnpm gate` (see `packages/cli/scripts/gate.mjs`) and paste the numbers. The
+gate checks what it can check; the rest is reviewed against the screenshot.

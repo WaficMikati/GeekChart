@@ -1,0 +1,11 @@
+flowchart LR
+  A(["Applies online"]) --> B{"Meets the prerequisites?"}
+  B -->|yes| C["Onboarding call"]
+  B -->|no| D["Prep course"]
+  D --> B
+  C --> E["16-week bootcamp"]
+  E --> F[("Portfolio projects")]
+  F --> G{"Passes final review?"}
+  G -->|yes| H(["Job placement"])
+  G -->|no| I["Mentor pairing"]
+  I --> F

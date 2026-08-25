@@ -1,0 +1,14 @@
+gitGraph
+  commit id: "scaffold"
+  branch feature
+  commit id: "editor"
+  checkout main
+  commit id: "docs"
+  branch hotfix
+  commit id: "patch"
+  checkout feature
+  commit id: "preview"
+  checkout main
+  merge hotfix
+  merge feature
+  commit id: "release"

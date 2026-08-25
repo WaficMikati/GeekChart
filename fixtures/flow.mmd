@@ -1,0 +1,8 @@
+flowchart LR
+  A[Applies] --> B{Fits the cohort?}
+  B -->|yes| C[Onboarding call]
+  B -->|no| D[Prep course]
+  D --> B
+  C --> E[Week 1-16 bootcamp]
+  E --> F[Final project]
+  F --> G([Job placement])

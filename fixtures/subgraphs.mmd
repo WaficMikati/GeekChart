@@ -1,0 +1,12 @@
+flowchart TB
+  subgraph Client
+    A[Browser] --> B[Service worker]
+  end
+  subgraph Edge
+    C[Worker] --> D[(Cache)]
+  end
+  subgraph Origin
+    E[API] --> F[(Database)]
+  end
+  B --> C
+  C --> E
