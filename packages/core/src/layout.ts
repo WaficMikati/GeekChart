@@ -1,6 +1,7 @@
 import type { Graph, GraphCluster, GraphNode } from './graph.ts';
 import { clusterHeadroom, type Scene } from './scene.ts';
 import { tipReach } from './tips.ts';
+import { getElk, type ElkNode } from './layout/elk.ts';
 
 /**
  * Size the nodes, then let ELK place them.
@@ -11,37 +12,6 @@ import { tipReach } from './tips.ts';
  * previous pipeline sized boxes after the fact and spent most of its complexity
  * repairing the damage.
  */
-
-interface ElkNode {
-  id: string;
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  children?: ElkNode[];
-  layoutOptions?: Record<string, string>;
-  edges?: { id: string; sources: string[]; targets: string[] }[];
-}
-type ElkApi = { layout(graph: ElkNode): Promise<ElkNode> };
-
-// ~1.4 MB unminified: only flowchart/state/class/er diagrams ever call
-// `layout()`, so it is loaded here, in its own chunk, rather than statically —
-// exactly the way mermaid lazy-loads its own per-diagram-type code elsewhere in
-// this file's callers. Sequence, chronicle, board, plot, radial and commits
-// charts never fetch it at all.
-let elkPromise: Promise<ElkApi> | undefined;
-function getElk(): Promise<ElkApi> {
-  if (!elkPromise) {
-    elkPromise = import('elkjs/lib/elk.bundled.js').then((ELKModule) => {
-      // elkjs ships a UMD bundle; its default export lands in different places
-      // depending on how the consumer resolves modules.
-      const ElkCtor = ((ELKModule as unknown as { default?: unknown }).default ??
-        ELKModule) as unknown as new () => ElkApi;
-      return new ElkCtor();
-    });
-  }
-  return elkPromise;
-}
 
 /**
  * Measure a string without laying anything out permanently.
