@@ -11,7 +11,7 @@
     "lint": "eslint packages/core/src packages/cli/src packages/cli/scripts packages/cli/test packages/react/src packages/geekchart/src packages/geekchart/test",
     "format": "prettier --write packages/core/src packages/cli/src packages/cli/scripts packages/cli/test packages/react/src packages/geekchart/src packages/geekchart/test",
     "size": "pnpm --filter geekchart size",
-    "test": "pnpm --filter @geekchart/cli build && pnpm --filter geekchart build && node --test packages/core/test/*.test.mts packages/cli/test/*.test.mts packages/react/test/*.test.mts packages/geekchart/test/*.test.mts",
+    "test": "node scripts/build-if-stale.mjs cli && node scripts/build-if-stale.mjs geekchart && node packages/cli/scripts/shared-browser.mjs packages/core/test/*.test.mts packages/cli/test/*.test.mts packages/react/test/*.test.mts packages/geekchart/test/*.test.mts",
     "gallery": "node packages/cli/scripts/gallery.mjs",
     "gate": "node packages/cli/scripts/gate.mjs",
     "bench": "pnpm --filter @geekchart/cli build && pnpm --filter geekchart build && node packages/cli/scripts/bench.mjs",
