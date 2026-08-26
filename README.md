@@ -50,5 +50,6 @@ change that breaks the look fails the build before anyone sees it.
 
 ## Contributing
 
-Read [CLAUDE.md](CLAUDE.md) for how a drawing change is made — cite the rule,
-change the renderer, run the gate, add the assertion. MIT licensed.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the change loop, and how to
+add a chart type or a `DESIGN.md` rule. [AGENTS.md](AGENTS.md) has the fuller
+map of the codebase. MIT licensed.
