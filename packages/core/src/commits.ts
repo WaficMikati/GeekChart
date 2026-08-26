@@ -2,6 +2,7 @@ import { parseWith } from './graph.ts';
 import { makeMeasurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
+import { PRESS_EASE, WAVE_LAG } from './tokens.ts';
 
 /**
  * Git graph.
@@ -481,9 +482,6 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
   };
 }
 
-/** DESIGN 10.4's press: an arrival overshoots slightly before settling. */
-const PRESS_EASE = 'cubic-bezier(.22,1.2,.36,1)';
-
 /**
  * Time at which the scene's own ease (cubic-bezier(0.61, 0, 0.39, 1)) has
  * covered `fraction` of the distance. Copied from chronicle.ts's
@@ -564,7 +562,7 @@ function animate(
     mainSpan.firstId !== undefined ? (cxOf.get(mainSpan.firstId) ?? sweepLeft) : sweepLeft;
   const mainLastX =
     mainSpan.lastId !== undefined ? (cxOf.get(mainSpan.lastId) ?? sweepRight) : sweepRight;
-  const mainTravelStart = last + 0.15;
+  const mainTravelStart = last + WAVE_LAG;
   const mainDist = Math.max(1, mainLastX - mainFirstX);
   const TRAVEL_MAIN = Math.min(1.6, 0.5 + mainDist / 400);
   const mainTravelEnd = mainTravelStart + TRAVEL_MAIN;

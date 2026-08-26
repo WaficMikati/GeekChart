@@ -1,4 +1,5 @@
 import { boundaryPoint, type Point, type Shape } from '../geometry.ts';
+import { GRID } from '../tokens.ts';
 import { NORMALS, isVertical, type Extent, type Side } from './shared.ts';
 import { faceLine } from './ports.ts';
 
@@ -270,7 +271,7 @@ export function elbows(
     }
     if (leftWall === -Infinity || rightWall === Infinity || leftWall > rightWall) return null;
     const want = (leftWall + rightWall) / 2;
-    const snapped = Math.round(want / 8) * 8;
+    const snapped = Math.round(want / GRID) * GRID;
     return Math.abs(snapped - want) <= 4 ? snapped : want;
   };
   // Puts the channel-centred value first (if there is a real channel to

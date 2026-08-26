@@ -3,6 +3,7 @@
  * they are not inside of, swallow most of the edge they sit on, or sit on
  * another edge than their own.
  */
+import { RULES } from '@geekchart/core';
 import { pathPoints, rect, texts, visible, type Check } from './helpers.ts';
 
 function transformPts(pts: [number, number][], ctm: DOMMatrix): [number, number][] {
@@ -133,12 +134,16 @@ export const labelSwallow: Check = {
           horiz && Math.abs(cy - y1) < b.height && cx > Math.min(x1, x2) && cx < Math.max(x1, x2);
         const onV =
           vert && Math.abs(cx - x1) < b.width && cy > Math.min(y1, y2) && cy < Math.max(y1, y2);
-        if (onH && b.width > 0.6 * Math.abs(x2 - x1)) {
+        if (onH && b.width > RULES['6.5']!.threshold! * Math.abs(x2 - x1)) {
           swallowed++;
           swallowIds.push(own!);
           break;
         }
-        if (onV && (b.height > 0.4 * Math.abs(y2 - y1) || Math.abs(y2 - y1) < 64)) {
+        if (
+          onV &&
+          (b.height > RULES['6.5-vertical']!.threshold! * Math.abs(y2 - y1) ||
+            Math.abs(y2 - y1) < RULES['6.5-min-run']!.threshold!)
+        ) {
           swallowed++;
           swallowIds.push(own!);
           break;

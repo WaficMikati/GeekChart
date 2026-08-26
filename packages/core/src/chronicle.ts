@@ -2,6 +2,7 @@ import { parseWith } from './graph.ts';
 import { makeMeasurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
+import { WAVE_LAG } from './tokens.ts';
 
 /**
  * Timeline, gantt and journey — the three diagrams that are really one shape.
@@ -845,7 +846,7 @@ function animate(
       dot.at(0, { r: '0', opacity: '0' });
       dot.at(start - 0.01, { r: '0', opacity: '0' });
       dot.at(start, { opacity: '1' });
-      dot.at(start + 0.15, { r: '6', opacity: '1' });
+      dot.at(start + WAVE_LAG, { r: '6', opacity: '1' });
       dot.at(cycle, { r: '6', opacity: '1' });
       const text = track(
         `.gc-chron-item[data-id="${beat.id}"] text, .gc-chron-item[data-id="${beat.id}"] rect`,
@@ -895,9 +896,9 @@ export function chronicleCss(scene: Scene): string {
 .gc-chron-band-box { fill: var(--gc-surface, ${scene.surface}); }
 .gc-chron-lane { fill: var(--gc-ink, ${scene.ink}); font-family: ${scene.titleFont};
   font-weight: ${scene.type.nameWeight}; font-size: ${scene.type.name}px; }
-.gc-chron-grid { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: .8px;
+.gc-chron-grid { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: ${scene.dividerStroke}px;
   opacity: .28; }
-.gc-chron-axis { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: 1.2px;
+.gc-chron-axis { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: ${scene.edgeStroke}px;
   opacity: .6; }
 .gc-chron-tick { fill: var(--gc-quiet, ${scene.quiet}); font-family: ${scene.rowFont};
   font-size: ${scene.type.label}px; letter-spacing: ${scene.type.labelTracking};

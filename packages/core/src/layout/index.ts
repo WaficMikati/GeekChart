@@ -1,6 +1,7 @@
 import type { Graph, GraphNode } from '../graph.ts';
 import { clusterHeadroom, type Scene } from '../scene.ts';
 import { tipReach } from '../tips.ts';
+import { BOX_SIZES, GRID } from '../tokens.ts';
 import { square } from './align.ts';
 import type { ElkNode } from './elk.ts';
 import { getElk } from './elk.ts';
@@ -120,7 +121,8 @@ export async function layout(
   // Wrapping (below) never feeds back into this — one long caption-less title
   // is not allowed to drag every other node's shared width up with it.
   const wanted = Math.max(...pool.map((i) => i.label.width + scene.padX * 2));
-  const baseWidth = [120, 160, 200].find((w) => w >= wanted) ?? 200;
+  const boxWidths = [BOX_SIZES.compact.width, BOX_SIZES.standard.width, BOX_SIZES.wide.width];
+  const baseWidth = boxWidths.find((w) => w >= wanted) ?? BOX_SIZES.wide.width;
 
   // DESIGN 2.2: "a label that will not fit is the label's problem, not the
   // box's." Once the chart's shared width is settled, any caption-less title
@@ -144,7 +146,7 @@ export async function layout(
   }
   measurer.done();
 
-  const grid = 8;
+  const grid = GRID;
   const roundUp = (v: number) => Math.ceil(v / grid) * grid;
 
   // Two box heights only, and which one a chart uses is decided by the chart,
@@ -153,7 +155,10 @@ export async function layout(
   // the thing 3.2 forbids, and one row of 48s beside a row of 56s breaks 2.3.
   // A wrapped title's second line gets the same 56-high box a caption would.
   const twoTier = graph.nodes.some((n) => Boolean(n.caption) || Boolean(n.titleLines));
-  const base = { width: baseWidth, height: twoTier ? 56 : 48 };
+  const base = {
+    width: baseWidth,
+    height: twoTier ? BOX_SIZES.captioned.height : BOX_SIZES.standard.height,
+  };
 
   for (const item of intrinsic) {
     const fitted = fitShape(item, base, scene, flow);

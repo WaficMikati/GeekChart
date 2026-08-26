@@ -2,6 +2,7 @@
  * DESIGN.md §3 (type sizes, rotation, raw tags), §9 (contrast), §10.2 (text
  * centred in its box).
  */
+import { RULES } from '@geekchart/core';
 import { rect, texts, type Check, type Ctx } from './helpers.ts';
 
 function typeStats(ctx: Ctx): {
@@ -52,7 +53,7 @@ export const minLegible: Check = {
   rule: '3.1',
   run(svg, ctx) {
     const { minScreen, minScreenText } = typeStats(ctx);
-    return minScreen < 8
+    return minScreen < RULES['3.1']!.threshold!
       ? [{ severity: 'fail', message: `3.1 ${minScreen}px on screen "${minScreenText}"` }]
       : [];
   },

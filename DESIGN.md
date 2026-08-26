@@ -12,6 +12,11 @@ Numbers are in **canvas units** unless they say "on screen".
 
 ## 1. Canvas
 
+The numbers in this file live in code as `packages/core/src/tokens.ts` (sizes,
+strokes, gutters, clearances, motion timings, palettes) and `rules.ts`
+(gate thresholds); the gate reads them from there, so this file, the renderer
+and the check that enforces it cannot drift apart.
+
 - **1.1** The canvas is **at most 1000 units wide** (boards up to 1200) and
   **hugs its content**: width = content + 2×48, snapped to 8, never below 480.
   Height is whatever the content needs. Charts are responsive, so a narrow

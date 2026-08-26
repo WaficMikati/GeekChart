@@ -1,4 +1,5 @@
 import type { Graph } from '../graph.ts';
+import { GUTTER } from '../tokens.ts';
 import type { ElkNode } from './elk.ts';
 import { bandByCentre, chainWraps, longestPath } from './fold.ts';
 
@@ -90,7 +91,7 @@ export function placeSatellites(
   soleParent: Map<string, string>,
 ): void {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  const gutter = 32;
+  const gutter = GUTTER.panel;
   const others0 = graph.nodes.filter((n) => n.x !== undefined && !satelliteIds.has(n.id));
   const rowCentres: number[] = [];
   for (const c of others0.map((n) => n.y! + n.height! / 2).sort((a, b) => a - b)) {

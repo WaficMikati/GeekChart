@@ -1,6 +1,7 @@
 import type { Graph } from './graph.ts';
 import type { Drawing, DrawnEdge } from './draw.ts';
 import type { Scene } from './scene.ts';
+import { PRESS_EASE, WAVE_LAG } from './tokens.ts';
 
 /**
  * The motion layer.
@@ -126,10 +127,10 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
 
   // DESIGN 10.4 / 8.3: 0.15s between siblings, everywhere something builds or
   // leaves in a group, so a row of elements reads as one event, not a queue.
-  const SIBLING_LAG = 0.15;
+  const SIBLING_LAG = WAVE_LAG;
   const FILL_DELAY = 0.3; // fills fade in 0.3s after their outline starts
   const FILL_DURATION = 0.5;
-  const LABEL_GAP = 0.15; // labels follow fills by another beat
+  const LABEL_GAP = WAVE_LAG; // labels follow fills by another beat
   const LABEL_DURATION = 0.5;
   const EDGE_GROW = m.build;
   const TRAVEL = 0.7; // spark travel time
@@ -138,7 +139,7 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
   const FLASH_OUT = 0.45; // departure outline flash
   // The one exception to 8.1's ease everywhere: the arrival settle wants an
   // overshoot, not the drawing's own draw-on curve.
-  const PRESS_EASE = 'cubic-bezier(.22,1.2,.36,1)';
+  // (PRESS_EASE imported from tokens.ts, DESIGN 10.4.)
 
   // A card inside a panel is filled rather than outlined (DESIGN 4.2) — its
   // `.gc-outline` is `stroke: none` in the static stylesheet. Forcing a stroke

@@ -2,6 +2,7 @@
  * DESIGN.md §6: orthogonal routing (6.1), side/arrival/self-pierce (6.2),
  * arrowheads (6.3), shared/parallel runs (6.4), hairpins and loop-backs (6.7).
  */
+import { RULES } from '@geekchart/core';
 import {
   clusters,
   degrees,
@@ -84,8 +85,8 @@ export function edgeShapeStats(ctx: Ctx): {
       }
       const a = pts[0]!;
       const b = pts[pts.length - 1]!;
-      const direct = Math.hypot(b[0] - a[0], b[1] - a[1]) + 32;
-      if (len < 16) touching++;
+      const direct = Math.hypot(b[0] - a[0], b[1] - a[1]) + RULES['6.1-detour-pad']!.threshold!;
+      if (len < RULES['2.3']!.threshold!) touching++;
       const m = (e.getAttribute('data-id') || '').match(/^L_(.+?)_(.+?)_\d+$/);
       const na = m && ids.get(m[1]!);
       const nb = m && ids.get(m[2]!);
@@ -96,7 +97,7 @@ export function edgeShapeStats(ctx: Ctx): {
         rect(nb).left <= rect(na).left + 8
       );
       const back = isBack || e.classList.contains('gc-back');
-      if (!back && len > 1.4 * direct) {
+      if (!back && len > RULES['6.1']!.threshold! * direct) {
         detours++;
         detourIds.push(e.dataset.id!);
       }
@@ -110,7 +111,10 @@ export function edgeShapeStats(ctx: Ctx): {
         if (prev && dir !== prev) bends++;
         prev = dir;
       }
-      if ((!back && bends > 2) || (back && bends > 4)) {
+      if (
+        (!back && bends > RULES['6.1-bends-forward']!.threshold!) ||
+        (back && bends > RULES['6.1-bends-loop']!.threshold!)
+      ) {
         overBent++;
         bentIds.push(`${e.dataset.id}:${bends}`);
       }
@@ -403,7 +407,7 @@ export const clearance: Check = {
         if (x2 - x1 < 8 && y2 - y1 < 8) continue;
         for (const [id, nb] of nodeRects) {
           if (id === fromId || id === toId) continue;
-          const clear = 16 * ctx.unit - 1;
+          const clear = RULES['6.8']!.threshold! * ctx.unit - 1;
           if (
             x1 < nb.right + clear &&
             x2 > nb.left - clear &&
@@ -424,7 +428,7 @@ export const clearance: Check = {
       ? [
           {
             severity: 'fail',
-            message: `6.1 ${hugging} edges within 16 of a foreign node (${hugIds.slice(0, 3).join(' ')})`,
+            message: `6.1 ${hugging} edges within ${RULES['6.8']!.threshold!} of a foreign node (${hugIds.slice(0, 3).join(' ')})`,
           },
         ]
       : [];
@@ -656,9 +660,10 @@ export const longLoop: Check = {
       const a = pts[0]!;
       const b = pts[pts.length - 1]!;
       const manhattan = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]);
-      if (len > manhattan + 128) {
+      const corridorPad = RULES['6.7']!.threshold!;
+      if (len > manhattan + corridorPad) {
         longLoops++;
-        longLoopIds.push(`${e.dataset.id}:${Math.round(len)}>${Math.round(manhattan + 128)}`);
+        longLoopIds.push(`${e.dataset.id}:${Math.round(len)}>${Math.round(manhattan + corridorPad)}`);
       }
     }
     return longLoops

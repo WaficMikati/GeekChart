@@ -2,6 +2,7 @@ import { parseWith } from './graph.ts';
 import { makeMeasurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
+import { WAVE_LAG } from './tokens.ts';
 
 /**
  * Sankey, treemap and kanban.
@@ -701,7 +702,7 @@ function animate(
   const ribbonStart = new Map<string, number>();
   {
     let layer = -1;
-    let base = scaffold + 0.15;
+    let base = scaffold + WAVE_LAG;
     let idx = 0;
     marks.forEach((mark) => {
       if (!mark.ribbon) return;
@@ -716,7 +717,7 @@ function animate(
   }
   const ribbonLast = Math.max(0, ...[...ribbonStart.values()].map((s) => s + ribbonGrow));
   const last = Math.max(
-    scaffold + 0.15 + Math.max(marks.length - 1, 0) * step + m.build,
+    scaffold + WAVE_LAG + Math.max(marks.length - 1, 0) * step + m.build,
     ribbonLast,
   );
   const cycle = last + m.hold;
@@ -753,7 +754,7 @@ function animate(
   fade('.gc-board-group', lead + 0.08);
   fade('.gc-board-column', lead + 0.08);
   marks.forEach((mark, i) => {
-    const start = scaffold + 0.15 + i * step;
+    const start = scaffold + WAVE_LAG + i * step;
     if (mark.ribbon) {
       grow(
         `.gc-ribbon[data-id="${mark.id}"]`,
@@ -835,7 +836,7 @@ ${series}
 .gc-board-count { fill: var(--gc-quiet, ${scene.quiet}); font-family: ${scene.rowFont};
   font-size: ${scene.type.label}px; font-variant-numeric: tabular-nums; }
 .gc-board-card-box { fill: var(--gc-bg, ${scene.bg}); stroke: var(--gc-edge, ${scene.edge});
-  stroke-width: 1.25px; stroke-opacity: .45; }
+  stroke-width: ${scene.nodeStroke}px; stroke-opacity: .45; }
 /* The column's own colour, carried onto its cards — one flat fill, no second
    cue on the card box itself (DESIGN 4.2, 4.3). */
 .gc-board-column-stripe { fill: var(--gc-mark, var(--gc-path, ${scene.path})); }

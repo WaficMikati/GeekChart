@@ -2,6 +2,8 @@
  * DESIGN.md §2: box sizing and the 8-grid (2.1/2.2), rows and gutters (2.3),
  * panels hugging their contents (2.6).
  */
+import { RULES, tokens } from '@geekchart/core';
+const { GRID } = tokens;
 import {
   compositionRows,
   degrees,
@@ -31,7 +33,7 @@ function nodeDims(ctx: Ctx): { sizes: string[]; offGrid: number } {
       const w = Math.round(bb.width);
       const h = Math.round(bb.height);
       dims.set(`${w}x${h}`, (dims.get(`${w}x${h}`) || 0) + 1);
-      if (w % 8 || h % 8) offGrid++;
+      if (w % GRID || h % GRID) offGrid++;
     }
     return { sizes: [...dims.entries()].map(([k, v]) => `${k}×${v}`), offGrid };
   });
@@ -95,7 +97,7 @@ export const boxSizes: Check = {
   rule: '2.2',
   run(svg, ctx) {
     const { sizes } = nodeDims(ctx);
-    return sizes.length > 2
+    return sizes.length > RULES['2.2']!.threshold!
       ? [
           {
             severity: 'warn',

@@ -1,5 +1,6 @@
 import type { Graph, GraphCluster, GraphNode } from '../graph.ts';
 import { clusterHeadroom, type Scene } from '../scene.ts';
+import { GRID, GUTTER } from '../tokens.ts';
 import { onGrid } from './shared.ts';
 
 /**
@@ -30,7 +31,7 @@ import { onGrid } from './shared.ts';
  * only push its own boundary into whatever sits below the panel.
  */
 export function enforceClusterGutters(graph: Graph): void {
-  const gutter = 32;
+  const gutter = GUTTER.panel;
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const connected = new Set(graph.edges.map((e) => [e.from, e.to].sort().join('|')));
   const linked = (a: GraphNode, b: GraphNode) => connected.has([a.id, b.id].sort().join('|'));
@@ -95,7 +96,10 @@ export function alignPanels(graph: Graph, scene: Scene): void {
     const width = Math.max(...[...inputs, ...outputs].map((n) => n.width!));
     const room = scene.canvas.width - scene.canvas.margin * 2;
     // Equal gutters on the 8-grid, as wide as the canvas can carry. DESIGN 2.3.
-    const gutter = [32, 24, 16, 8].find((g) => columns * width + (columns - 1) * g <= room) ?? 8;
+    const gutter =
+      [GUTTER.panel, GUTTER.sibling, 16, GRID].find(
+        (g) => columns * width + (columns - 1) * g <= room,
+      ) ?? GRID;
     const span = columns * width + (columns - 1) * gutter;
     const left = onGrid((room - span) / 2);
 
@@ -135,7 +139,7 @@ export function alignPanels(graph: Graph, scene: Scene): void {
     // times the size of the ones outside it, which is 2.3's "gutters are equal"
     // broken at the level nobody thinks to check.
     const inner = x1 - x0 - pad * 2;
-    const gap = 24;
+    const gap = GUTTER.sibling;
     for (const row of rows.values()) {
       row.sort((a, b) => a.x! - b.x!);
       const cellWidth = Math.max(
@@ -224,7 +228,7 @@ export function spreadClusters(graph: Graph, scene: Scene): void {
   const widest = Math.max(...clusters.map((c) => c.width!));
   if (widest >= room * 0.55) return;
 
-  const gutter = 32;
+  const gutter = GUTTER.panel;
   const total = clusters.reduce((sum, c) => sum + c.width!, 0) + gutter * (clusters.length - 1);
   if (total > room) return;
 

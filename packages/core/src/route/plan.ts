@@ -1,4 +1,5 @@
 import { squareOff, tidyOrtho, type Point, type Shape } from '../geometry.ts';
+import { CLEARANCE } from '../tokens.ts';
 import {
   NORMALS,
   faceMiddle,
@@ -147,7 +148,7 @@ export interface OrthoRoute {
 /** How far a route runs straight out of a face before it is allowed to turn. */
 const STUB = 24;
 /** Clearance a loop keeps from the content it goes around. DESIGN 6.7. */
-const LOOP_CLEAR = 24;
+const LOOP_CLEAR = CLEARANCE.loop;
 
 interface Pending<T> {
   edge: T;

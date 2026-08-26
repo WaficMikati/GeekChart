@@ -2,6 +2,7 @@ import { parseWith } from './graph.ts';
 import { makeMeasurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
+import { BOX_SIZES, GUTTER, PRESS_EASE, WAVE_LAG } from './tokens.ts';
 
 /**
  * Pie and mindmap.
@@ -359,11 +360,11 @@ function mindmap(
   marks: Mark[],
 ): Built {
   const root = radial.root ?? { name: '', children: [] };
-  const rowStep = 72; // 48-high box + 24 gutter, on the 8-grid.
-  const colStep = 160 + 32; // 160 box + 32 gutter, on the 8-grid.
-  const rootW = 200,
-    childW = 160,
-    boxH = 48;
+  const boxH = BOX_SIZES.standard.height;
+  const childW = BOX_SIZES.standard.width;
+  const rootW = BOX_SIZES.wide.width;
+  const rowStep = boxH + GUTTER.sibling; // 48-high box + 24 gutter, on the 8-grid.
+  const colStep = childW + GUTTER.panel; // 160 box + 32 gutter, on the 8-grid.
 
   const rows: Record<'l' | 'r', { n: number }> = { l: { n: 0 }, r: { n: 0 } };
   function place(node: MindNode, depth: number, side: 'l' | 'r', branch: number): Placed {
@@ -393,8 +394,8 @@ function mindmap(
     n.y -= rootYLocal;
     n.x =
       n.side === 'r'
-        ? rootW / 2 + 32 + (n.depth - 1) * colStep + childW / 2
-        : -(rootW / 2) - 32 - (n.depth - 1) * colStep - childW / 2;
+        ? rootW / 2 + GUTTER.panel + (n.depth - 1) * colStep + childW / 2
+        : -(rootW / 2) - GUTTER.panel - (n.depth - 1) * colStep - childW / 2;
     flat.push(n);
     n.children.forEach(shift);
   };
@@ -502,7 +503,7 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
   const lead = 0.25;
   const scaffold = lead + m.build;
   const step = Math.min(0.14, 2.6 / Math.max(marks.length, 1));
-  const last = scaffold + 0.15 + Math.max(marks.length - 1, 0) * step + m.build;
+  const last = scaffold + WAVE_LAG + Math.max(marks.length - 1, 0) * step + m.build;
   // A mindmap's build is topological, and its live phase walks every link, so
   // its loop is longer than the index cadence would give; computed below.
   const mindLinks = marks.filter((mk) => mk.id.startsWith('m-')).length;
@@ -545,7 +546,7 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
     root.at(scaffold + m.build * 0.7, {
       opacity: '1',
       transform: 'scale(1)',
-      'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)',
+      'animation-timing-function': PRESS_EASE,
     });
     root.at(cycle, { opacity: '1', transform: 'scale(1)' });
     done.set('root', scaffold + m.build * 0.5);
@@ -596,13 +597,13 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
       node.at(at + walk - 0.02, { transform: 'scale(1)' });
       node.at(at + walk + 0.18, {
         transform: 'scale(1.03)',
-        'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)',
+        'animation-timing-function': PRESS_EASE,
       });
       node.at(at + walk + 0.5, { transform: 'scale(1)' });
       node.at(cycle, { transform: 'scale(1)' });
       const outline = track(`[data-id="n-${mark.id}"] rect`);
       outline.at(at + walk - 0.02, { stroke: 'var(--gc-mark)' });
-      outline.at(at + walk + 0.15, { stroke: 'var(--gc-accent)' });
+      outline.at(at + walk + WAVE_LAG, { stroke: 'var(--gc-accent)' });
       outline.at(at + walk + 0.5, { stroke: 'var(--gc-mark)' });
       outline.at(cycle, { stroke: 'var(--gc-mark)' });
       at += walk * 0.8;
@@ -610,7 +611,7 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
   }
   marks.forEach((mark, i) => {
     if (isMind) return;
-    const start = scaffold + 0.15 + i * step;
+    const start = scaffold + WAVE_LAG + i * step;
     if (mark.sweep) {
       // The wedge itself sweeps through its own `d` steps — a plain opacity
       // fade would show the *finished* shape appearing, not the arc drawing.

@@ -102,7 +102,7 @@ export function sceneCss(scene: Scene): string {
 .gc-row { fill: var(--gc-ink, ${scene.ink}); font-family: ${scene.rowFont}; font-size: ${scene.type.caption}px;
   text-anchor: start; opacity: .82; }
 .gc-row-strong { fill: var(--gc-quiet, ${scene.quiet}); letter-spacing: .08em; }
-.gc-divider { fill: none; stroke: var(--gc-hue); stroke-width: .8px; opacity: .5; }
+.gc-divider { fill: none; stroke: var(--gc-hue); stroke-width: ${scene.dividerStroke}px; opacity: .5; }
 
 /* Edges stay neutral in both scenes. Colour is reserved for the nodes and for
    emphasis, so a coloured line always means something. */
@@ -133,7 +133,7 @@ export function sceneCss(scene: Scene): string {
    default opacity parks on the start of its edge as a stray dot. */
 .gc-spark { fill: var(--gc-accent, ${scene.accent}); opacity: 0; }
 
-.gc-cluster-box { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: 1px;
+.gc-cluster-box { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: ${scene.clusterStroke}px;
   opacity: .85; }
 /* The panel's name is the chart's loudest text (DESIGN 10.1), so this is the
    one place the title size from §3 is used inside a drawing. */
@@ -143,7 +143,7 @@ export function sceneCss(scene: Scene): string {
 .gc-cluster-kicker { fill: var(--gc-quiet, ${scene.quiet}); font-family: ${scene.clusterFont};
   font-size: ${scene.type.kicker}px; letter-spacing: ${scene.type.kickerTracking};
   text-anchor: middle; text-transform: uppercase; }
-.gc-cluster-rule { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: .8px;
+.gc-cluster-rule { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: ${scene.dividerStroke}px;
   opacity: .5; }
 
 /* Figure and ground swap inside a panel. The cards there are filled rather than

@@ -1,110 +1,55 @@
 /**
  * The drawing specification, derived from Manim rather than invented.
  *
- * Numbers here were measured from Manim Community's source, not eyeballed:
- * the easing is a curve fit of its default `smooth()`, the palette is its own
- * constants, and the staggering follows its `lag_ratio` convention. Both scenes
- * share every timing and weight — only colour and type differ — so a chart
- * looks like the same object wearing a different coat.
+ * The actual numbers — measured from Manim Community's source, DESIGN.md's
+ * sizing rules, and 4geeks.com's own tokens — live in `tokens.ts`, one value
+ * per rule it cites. This file composes them into the two named scenes and
+ * keeps the shapes (`Scene`, `Frame`, `fitCanvas`) that draw from them; it
+ * writes no size, weight or colour of its own. Both scenes share every
+ * timing and weight — only colour and type differ — so a chart looks like
+ * the same object wearing a different coat.
  */
+import {
+  BOX_SIZES,
+  CANVAS,
+  CLEARANCE,
+  EASE,
+  GRID,
+  GUTTER,
+  MOTION,
+  PALETTE_DARK,
+  PRESS_EASE,
+  SERIES_DARK,
+  STROKE,
+  TYPE,
+  WAVE_LAG,
+  type CanvasSpec,
+  type Motion,
+  type TypeScale,
+} from './tokens.ts';
 
 export type SceneName = 'manim' | 'geeks';
 
-export interface Motion {
-  /**
-   * Manim's `smooth()` is a sigmoid smoothstep, not a CSS ease. Fitted to within
-   * 0.01 by this curve. It nearly stops at both ends, which is what makes the
-   * motion read as deliberate rather than mechanical.
-   */
-  ease: string;
-  /** Seconds for one node's outline to draw itself. */
-  build: number;
-  /** Seconds between consecutive elements. Manim's lag_ratio, in absolute time. */
-  lag: number;
-  /** Seconds of stillness after the build, before emphasis. The pause is the point. */
-  beat: number;
-  /** Seconds for one node's Indicate — a lift and a colour flash. */
-  pulse: number;
-  /** Seconds between pulses as emphasis walks the primary path. */
-  pulseStep: number;
-  /** Seconds held on the finished frame before the loop repeats. */
-  hold: number;
-}
+/** Alias kept for every existing `Canvas` reference in this file and its callers. */
+export type Canvas = CanvasSpec;
 
-/**
- * The stage every chart is drawn on. DESIGN 1.1 and 1.3.
- *
- * One width for the whole library is the reason type reads the same size on
- * every chart: a 12-unit name is 12px on screen because the canvas is shown at
- * its own width. A renderer that picks its own width undoes that for every
- * chart in the set, not just its own.
- */
-export interface Canvas {
-  /** Canvas width ceiling in units. A chart hugs its content down to `min`. */
-  width: number;
-  /** The narrowest canvas. Below this a chart is padded out, not shrunk. */
-  min: number;
-  /** The widest a chart may ever be. DESIGN 1.1 allows 1200 for boards. */
-  max: number;
-  /** Outer margin. Content touches neither the edge nor this line. DESIGN 1.3. */
-  margin: number;
-  /** Height ceiling, as a multiple of the width. DESIGN 1.4. */
-  maxAspect: number;
-}
-
-/**
- * The five sizes a chart is allowed to set, from DESIGN §3.
- *
- * Family files read this table; none of them writes a number. That is the whole
- * mechanism behind "type does not change size between charts" — there is only
- * one place a size can come from, and it is not scaled by anything.
- */
-export interface TypeScale {
-  /** Chart title: 22 / 600 / −0.02em, sentence case. */
-  title: number;
-  titleWeight: number;
-  titleTracking: string;
-  /** Kicker and subtitle: 11 mono, 0.18em, caps. */
-  kicker: number;
-  kickerTracking: string;
-  /** Node name: 13 / 600, sentence case. */
-  name: number;
-  nameWeight: number;
-  /** Node caption and any technical row: 11 mono. */
-  caption: number;
-  /** Edge label, legend, axis tick: 11 mono caps, 0.08–0.14em. */
-  label: number;
-  labelTracking: string;
-  /** Baseline-to-baseline for a run of caption-sized rows, on the 8-grid. */
-  rowStep: number;
-  /** The big index numeral (`01`): 72 mono / 600. */
-  numeral: number;
-}
-
-/**
- * The one type table. DESIGN §3, measured, not chosen here.
- *
- * 11 is the floor (3.1, raised 2026-08-21): the canvas is routinely shown at
- * ~760px, where 11 units is 8.4px, the legibility floor at that scale.
- * Nothing in this table may go under it.
- */
-export const TYPE: TypeScale = {
-  title: 22,
-  titleWeight: 600,
-  titleTracking: '-0.02em',
-  kicker: 11,
-  kickerTracking: '.18em',
-  name: 13,
-  nameWeight: 600,
-  caption: 11,
-  label: 11,
-  labelTracking: '.12em',
-  rowStep: 16,
-  numeral: 72,
+// Re-exported so anything that used to import these from scene.ts (render.ts's
+// `CANVAS`, chiefly) still finds them here — the values now live in tokens.ts.
+export type { Motion, TypeScale };
+export {
+  BOX_SIZES,
+  CANVAS,
+  CLEARANCE,
+  EASE,
+  GRID,
+  GUTTER,
+  PRESS_EASE,
+  STROKE,
+  TYPE,
+  WAVE_LAG,
+  PALETTE_DARK,
+  SERIES_DARK,
 };
-
-/** The canvas every renderer lays out on. */
-export const CANVAS: Canvas = { width: 1000, min: 480, max: 1200, margin: 48, maxAspect: 1.4 };
 
 export interface Box {
   x: number;
@@ -139,7 +84,7 @@ export interface Frame {
  * moved to sit in the middle of it.
  */
 export function fitCanvas(extent: Box, canvas: Canvas = CANVAS, max = canvas.width): Frame {
-  const grid = (v: number) => Math.ceil(v / 8) * 8;
+  const grid = (v: number) => Math.ceil(v / GRID) * GRID;
   const ceiling = Math.min(max, canvas.max);
   // Hug the content (DESIGN 1.1 rev. 2026-08-21): a narrow chart padded to 1000 and
   // then scaled into a viewer panel loses its type size to the padding.
@@ -231,6 +176,10 @@ export interface Scene {
 
   nodeStroke: number;
   edgeStroke: number;
+  /** Cluster/panel box hairline. DESIGN 4.1. */
+  clusterStroke: number;
+  /** Divider inside a node — class/ER row separators. DESIGN 4.1, 4.4. */
+  dividerStroke: number;
   /** Corner radius for a node. One value per chart. DESIGN 2.5. */
   radius: number;
   /** Corner radius for a panel or cluster. DESIGN 2.5. */
@@ -287,34 +236,6 @@ export interface Scene {
   motion: Motion;
 }
 
-/** Shared across both scenes: only colour and type are allowed to differ. */
-const MOTION: Motion = {
-  ease: 'cubic-bezier(0.61, 0, 0.39, 1)',
-  build: 0.7,
-  lag: 0.5,
-  beat: 0.8,
-  pulse: 0.56,
-  pulseStep: 0.52,
-  hold: 2.4,
-};
-
-/**
- * Categorical steps for a dark surface, in assignment order.
- *
- * Not invented: these are a validated categorical set with 4geeks blue in the
- * first slot, confirmed against #17202A with the palette validator. Reordering
- * them re-opens the colour-blindness check, because the check is on *adjacent*
- * pairs — the order is part of what passed.
- */
-const SERIES_DARK = [
-  '#0084FF', // 4geeks blue
-  '#D95926', // orange
-  '#199E70', // aqua
-  '#C98500', // yellow
-  '#D55181', // magenta
-  '#008300', // green
-] as const;
-
 const SERIF = "'Source Serif 4', 'Iowan Old Style', Georgia, serif";
 const SANS = "'Archivo', 'Lato', ui-sans-serif, system-ui, sans-serif";
 const MONO = "'JetBrains Mono', ui-monospace, Menlo, monospace";
@@ -344,20 +265,26 @@ const shared = {
 
   // Hairlines, per DESIGN 4.1. These were 2.5 and 2 when the canvas was two to
   // three times too wide; at 1000 units they were tree trunks.
-  nodeStroke: 1.25,
-  edgeStroke: 1.2,
+  nodeStroke: STROKE.node,
+  edgeStroke: STROKE.edge,
+  clusterStroke: STROKE.cluster,
+  dividerStroke: STROKE.divider,
   radius: 6,
   panelRadius: 12,
-  // 16 of clear air either side of a label, which is DESIGN 10.2's floor.
+  // 16 of clear air either side of a label, which is DESIGN 10.2's floor —
+  // the same number as CLEARANCE.node (6.1/6.8) but a different rule, so it
+  // stays its own literal rather than borrowing that token.
   padX: 16,
   padY: 8,
   padShape: 12,
-  gapNode: 24,
+  gapNode: GUTTER.sibling,
+  // Vertical rank spacing — not one of DESIGN 2.3's 24/32 gutters (GUTTER),
+  // and not named by any other rule number, so it stays a literal.
   gapLayer: 48,
   clusterPad: 24,
   // The line stops 6 short of the outline so the head reads as meeting the box
   // rather than piercing it. DESIGN 10.3.
-  edgeGap: 6,
+  edgeGap: CLEARANCE.stub,
   edgeGapStart: 4,
   // Multiples of the line's own weight, solved so the head comes out 8 across
   // and 6 long at a 1.2 hairline — the golden's proportions, and the only pair
@@ -377,17 +304,10 @@ const shared = {
 export const scenes: Record<SceneName, Scene> = {
   manim: {
     ...shared,
+    ...PALETTE_DARK.manim,
     name: 'manim',
     label: 'Manim',
     description: "Manim's own palette on black. Reads as 3Blue1Brown at a glance.",
-    bg: '#000000',
-    surface: '#171A1F',
-    ink: '#FFFFFF',
-    quiet: '#888888',
-    path: '#58C4DD',
-    alt: '#FC6255',
-    accent: '#F7D96F',
-    edge: '#8A8F98',
     series: SERIES_DARK,
     titleFont: SERIF,
   },
@@ -397,17 +317,10 @@ export const scenes: Record<SceneName, Scene> = {
   // rather than next to it.
   geeks: {
     ...shared,
+    ...PALETTE_DARK.geeks,
     name: 'geeks',
     label: 'Geeks',
     description: "4geeks.com's own tokens — blue #0084FF on the site's dark surface.",
-    bg: '#17202A',
-    surface: '#232F3C',
-    ink: '#FFFFFF',
-    quiet: '#8794A3',
-    path: '#0084FF',
-    alt: '#FFB718',
-    accent: '#00ABE9',
-    edge: '#6B7889',
     series: SERIES_DARK,
     titleFont: SANS,
   },

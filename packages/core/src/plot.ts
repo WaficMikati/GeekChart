@@ -2,6 +2,7 @@ import { parseWith } from './graph.ts';
 import { makeMeasurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
+import { PRESS_EASE, WAVE_LAG } from './tokens.ts';
 
 /**
  * Quadrant, radar and xy — the diagrams that are actually charts.
@@ -683,7 +684,7 @@ function animate(
   const lead = 0.25;
   const scaffold = lead + m.build;
   const step = Math.min(0.16, 2.4 / Math.max(marks.length, 1));
-  const last = scaffold + 0.15 + Math.max(marks.length - 1, 0) * step + m.build;
+  const last = scaffold + WAVE_LAG + Math.max(marks.length - 1, 0) * step + m.build;
   const cycle = last + m.hold;
 
   const fade = (selector: string, from: number, over = m.build * 0.8) => {
@@ -701,7 +702,7 @@ function animate(
   if (plot.kind === 'quadrant') fade('.gc-plot-quad, .gc-plot-quad-label', lead + 0.2);
 
   marks.forEach((mark, i) => {
-    const start = scaffold + 0.15 + i * step;
+    const start = scaffold + WAVE_LAG + i * step;
     // A bar grows from its baseline; anything else arrives in place. A bar that
     // faded in would say nothing about magnitude, which is the only thing a bar
     // is for.
@@ -735,7 +736,7 @@ function animate(
       dot.at(start + 0.03, { opacity: '1' });
       dot.at(start + flight, {
         transform: 'translate(0, 0) scale(1.15)',
-        'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)',
+        'animation-timing-function': PRESS_EASE,
       });
       dot.at(start + flight + 0.12, { transform: 'translate(0, 0) scale(1)' });
       dot.at(cycle, { transform: 'translate(0, 0) scale(1)', opacity: '1' });
@@ -768,7 +769,7 @@ function animate(
       dot.at(start + 0.02, { opacity: '1' });
       dot.at(start + m.build * 0.6, {
         transform: 'scale(1.25)',
-        'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)',
+        'animation-timing-function': PRESS_EASE,
       });
       dot.at(start + m.build * 0.85, { transform: 'scale(1)' });
       dot.at(cycle, { transform: 'scale(1)', opacity: '1' });
@@ -832,9 +833,9 @@ ${series}
 /* A 2px ring in the surface colour keeps overlapping marks legible. */
 .gc-plot-dot { stroke: var(--gc-bg, ${scene.bg}); stroke-width: 2px; }
 
-.gc-plot-grid { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: .8px; opacity: .26; }
-.gc-plot-spoke { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: .8px; opacity: .3; }
-.gc-plot-axis { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: 1.2px; opacity: .55; }
+.gc-plot-grid { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: ${scene.dividerStroke}px; opacity: .26; }
+.gc-plot-spoke { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: ${scene.dividerStroke}px; opacity: .3; }
+.gc-plot-axis { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: ${scene.edgeStroke}px; opacity: .55; }
 .gc-plot-tick { fill: var(--gc-quiet, ${scene.quiet}); font-family: ${scene.rowFont};
   font-size: ${scene.type.label}px; letter-spacing: ${scene.type.labelTracking};
   text-anchor: middle; text-transform: uppercase; }

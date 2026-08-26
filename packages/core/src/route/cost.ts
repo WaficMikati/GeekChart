@@ -1,4 +1,5 @@
 import type { Point } from '../geometry.ts';
+import { CLEARANCE } from '../tokens.ts';
 import type { Extent } from './shared.ts';
 
 /**
@@ -116,7 +117,7 @@ export function sharedRunCost(points: Point[], placed: readonly PlacedSeg[]): nu
 }
 
 /** Clearance a route keeps from any node it does not connect to. DESIGN 6.1. */
-const HUG_CLEAR = 16;
+const HUG_CLEAR = CLEARANCE.node;
 
 /**
  * How much of a polyline runs through boxes it has no business being in, or

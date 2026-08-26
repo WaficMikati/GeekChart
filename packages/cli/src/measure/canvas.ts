@@ -2,6 +2,8 @@
  * DESIGN.md §1 (canvas), §7.3/7.4 (centring, coverage, orphan columns),
  * §7.5 (clipping), §7.6 (native drawing).
  */
+import { RULES, tokens } from '@geekchart/core';
+const { CANVAS } = tokens;
 import {
   clusters,
   compositionRows,
@@ -103,7 +105,9 @@ export const canvasWidth: Check = {
   rule: '1.1',
   run(svg) {
     const w = Math.round(svg.viewBox.baseVal.width);
-    return w < 480 || w > 1200 ? [{ severity: 'fail', message: `1.1 canvas ${w}w` }] : [];
+    return w < CANVAS.min || w > CANVAS.max
+      ? [{ severity: 'fail', message: `1.1 canvas ${w}w` }]
+      : [];
   },
 };
 
@@ -113,7 +117,9 @@ export const aspect: Check = {
   run(svg) {
     const w = Math.round(svg.viewBox.baseVal.width);
     const h = Math.round(svg.viewBox.baseVal.height);
-    return h > w * 1.4 ? [{ severity: 'fail', message: `1.4 taller than 1.4×w (${h})` }] : [];
+    return h > w * CANVAS.maxAspect
+      ? [{ severity: 'fail', message: `1.4 taller than ${CANVAS.maxAspect}×w (${h})` }]
+      : [];
   },
 };
 
@@ -139,7 +145,7 @@ export const centred: Check = {
   run(svg, ctx) {
     const { minX, maxX } = contentBBox(ctx);
     const offCentre = Math.round((minX - ctx.sb.left - (ctx.sb.right - maxX)) / ctx.unit);
-    return Math.abs(offCentre) > 8
+    return Math.abs(offCentre) > RULES['7.3']!.threshold!
       ? [{ severity: 'fail', message: `7.3 content off-centre by ${offCentre}` }]
       : [];
   },
@@ -170,7 +176,7 @@ export const coverage: Check = {
       ctx.sb.width && ctx.sb.height
         ? +(((maxX - minX) * (maxY - minY)) / (ctx.sb.width * ctx.sb.height)).toFixed(2)
         : 0;
-    return fill < 0.35
+    return fill < RULES['7.4']!.threshold!
       ? [{ severity: 'warn', message: `7.4 content covers ${Math.round(fill * 100)}% of canvas` }]
       : [];
   },

@@ -5,6 +5,7 @@ import { tipPath } from './tips.ts';
 import type { EdgeTip } from './graph.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
 import type { Point } from './geometry.ts';
+import { GRID } from './tokens.ts';
 
 /**
  * Sequence diagrams.
@@ -247,7 +248,7 @@ export async function drawSequence(
   // 56s and 48s in a row).
   const twoTier = keys.some((k) => Boolean(labels.get(k)!.caption));
 
-  const grid8 = (v: number) => Math.ceil(v / 8) * 8;
+  const grid8 = (v: number) => Math.ceil(v / GRID) * GRID;
   // Five or more lifelines cannot share 904 units at 160 wide; DESIGN 2.2's
   // 120×48 compact box exists for exactly this, with a tighter label wrap.
   const compact = keys.length > 4;
@@ -883,7 +884,7 @@ export function sequenceCss(scene: Scene): string {
 /* The lifeline is scaffolding, not content: it has to be visible enough to
    follow a column down and quiet enough never to compete with a message.
    DESIGN 6.6/table: 0.8 hairline, dashed, 50% opacity. */
-.gc-lifeline { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: .8px;
+.gc-lifeline { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: ${scene.dividerStroke}px;
   stroke-dasharray: 3 7; opacity: .5; }
 .gc-active { fill: var(--gc-path, ${scene.path}); fill-opacity: .28; stroke: var(--gc-path, ${scene.path});
   stroke-width: 1px; }
@@ -906,9 +907,9 @@ export function sequenceCss(scene: Scene): string {
 
 /* A block frame is an annotation on the conversation, so it sits behind
    everything and stays in the neutral ink. */
-.gc-frame-box { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: 1px; opacity: .45; }
+.gc-frame-box { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: ${scene.clusterStroke}px; opacity: .45; }
 .gc-frame-tab { fill: var(--gc-quiet, ${scene.quiet}); opacity: .18; }
-.gc-frame-split { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: .8px;
+.gc-frame-split { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: ${scene.dividerStroke}px;
   stroke-dasharray: 4 5; opacity: .45; }
 .gc-frame-kind { fill: var(--gc-ink, ${scene.ink}); font-family: ${scene.rowFont};
   font-size: ${scene.type.label}px; letter-spacing: ${scene.type.labelTracking};
@@ -918,7 +919,7 @@ export function sequenceCss(scene: Scene): string {
 
 /* One depth cue, an outline — no fill — the same treatment as a frame box.
    DESIGN 4.2: a note is an annotation, not a coloured tile. */
-.gc-note-box { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: 1px; opacity: .45; }
+.gc-note-box { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: ${scene.clusterStroke}px; opacity: .45; }
 .gc-note-text { fill: var(--gc-ink, ${scene.ink}); font-family: ${scene.rowFont};
   font-size: ${scene.type.caption}px; text-anchor: middle; }
 `;

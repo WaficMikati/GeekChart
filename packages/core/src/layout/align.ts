@@ -1,5 +1,6 @@
 import type { Graph, GraphCluster, GraphNode } from '../graph.ts';
 import type { Scene } from '../scene.ts';
+import { GUTTER } from '../tokens.ts';
 import {
   alignPanels,
   enforceClusterGutters,
@@ -227,7 +228,7 @@ function centreRows(graph: Graph): void {
   // DESIGN 2.3 allows 24 or 32; 32 is the gutter every panel-level pass already
   // uses (enforceClusterGutters, alignPanels), so a repacked row matches its
   // neighbours rather than introducing a third value.
-  const gutter = 32;
+  const gutter = GUTTER.panel;
   const centreOf = (it: Item) => (it.x0 + it.x1) / 2;
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri]!;

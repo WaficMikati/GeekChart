@@ -58,6 +58,8 @@ export { themeCss, themeVariables, pageCss, paletteFor, toAttributeSelectors } f
 export { styles } from './styles.ts';
 export type { StyleName, StyleSpec } from './styles.ts';
 export * as tokens from './tokens.ts';
+export { RULES } from './rules.ts';
+export type { Rule } from './rules.ts';
 // The legacy renderer's option and result shapes clash by name with the ones the
 // top-level `render` uses, so they are re-exported under explicit names rather
 // than a wildcard.
