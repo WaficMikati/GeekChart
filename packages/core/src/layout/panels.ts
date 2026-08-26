@@ -42,7 +42,8 @@ export function enforceClusterGutters(graph: Graph): void {
     const columns: GraphNode[][] = [];
     for (const node of [...members].sort((a, b) => a.x! - b.x!)) {
       const column = columns.find((c) =>
-        c.some((o) => node.x! < o.x! + o.width! && o.x! + o.width! > node.x!));
+        c.some((o) => node.x! < o.x! + o.width! && o.x! + o.width! > node.x!),
+      );
       if (column) column.push(node);
       else columns.push([node]);
     }
@@ -79,8 +80,12 @@ export function alignPanels(graph: Graph, scene: Scene): void {
   for (const cluster of graph.clusters) {
     if (cluster.x === undefined) continue;
     const outside = (id: string) => !inside.has(id) && byId.has(id);
-    const feeds = graph.edges.filter((e) => e.to === cluster.id && outside(e.from)).map((e) => e.from);
-    const yields = graph.edges.filter((e) => e.from === cluster.id && outside(e.to)).map((e) => e.to);
+    const feeds = graph.edges
+      .filter((e) => e.to === cluster.id && outside(e.from))
+      .map((e) => e.from);
+    const yields = graph.edges
+      .filter((e) => e.from === cluster.id && outside(e.to))
+      .map((e) => e.to);
     const inputs = [...new Set(feeds)].map((id) => byId.get(id)!);
     const outputs = [...new Set(yields)].map((id) => byId.get(id)!);
     if (!inputs.length && !outputs.length) continue;
@@ -183,7 +188,12 @@ export function refitClusters(graph: Graph, scene: Scene): void {
 }
 
 /** Move a cluster and everything in it. */
-export function shiftCluster(cluster: GraphCluster, byId: Map<string, GraphNode>, dx: number, dy: number): void {
+export function shiftCluster(
+  cluster: GraphCluster,
+  byId: Map<string, GraphNode>,
+  dx: number,
+  dy: number,
+): void {
   cluster.x! += dx;
   cluster.y! += dy;
   for (const id of cluster.nodes) {
@@ -281,7 +291,10 @@ export function shareClusterGrid(graph: Graph): void {
   // A row of groups: one top edge, so title bands line up. Each panel keeps
   // its own hugged height — DESIGN 2.6's bottom padding is the panel's own
   // children plus 24, never stretched to match a taller sibling.
-  for (const row of groupBy((c) => c.y!, (c) => c.y! + c.height!)) {
+  for (const row of groupBy(
+    (c) => c.y!,
+    (c) => c.y! + c.height!,
+  )) {
     if (row.length < 2) continue;
     const top = onGrid(Math.min(...row.map((c) => c.y!)));
     for (const cluster of row) {
@@ -291,7 +304,10 @@ export function shareClusterGrid(graph: Graph): void {
   // A column of groups: centred on the column's widest member, DESIGN 7.3 —
   // each panel keeps its own hugged width rather than being stretched to a
   // sibling's.
-  for (const column of groupBy((c) => c.x!, (c) => c.x! + c.width!)) {
+  for (const column of groupBy(
+    (c) => c.x!,
+    (c) => c.x! + c.width!,
+  )) {
     if (column.length < 2) continue;
     const left = onGrid(Math.min(...column.map((c) => c.x!)));
     const width = Math.max(...column.map((c) => c.x! + c.width!)) - left;

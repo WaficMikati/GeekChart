@@ -45,7 +45,9 @@ const clean = (t: unknown) => String(t ?? '').trim();
 export async function toCommits(source: string): Promise<Commits> {
   const db = await parseWith(source);
   const title = clean(db.getDiagramTitle?.());
-  const branches = ((db.getBranchesAsObjArray?.() as { name?: string }[] | undefined) ?? []).map((b) => clean(b.name));
+  const branches = ((db.getBranchesAsObjArray?.() as { name?: string }[] | undefined) ?? []).map(
+    (b) => clean(b.name),
+  );
   const raw =
     (db.getCommitsArray?.() as
       | { id?: string; seq?: number; branch?: string; parents?: string[]; type?: number }[]
@@ -72,7 +74,10 @@ export async function toCommits(source: string): Promise<Commits> {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const esc = (t: string) =>
-  t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  t.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 const round = (n: number) => Number(n.toFixed(2));
 
 export interface CommitsDrawing {
@@ -160,10 +165,20 @@ function bendHugging(x1: number, y1: number, x2: number, y2: number, hug: 'start
   const crossing = { crossX: jogX, crossYMin: Math.min(y1, y2), crossYMax: Math.max(y1, y2) };
   if (hug === 'start') {
     const body = `H${round(jogX - dirX * rr)} ${arc}`;
-    return { d: `M${round(x1)},${round(y1)} ${body}`, body, drop: { x: jogX + dirX * rr, y: y2 }, ...crossing };
+    return {
+      d: `M${round(x1)},${round(y1)} ${body}`,
+      body,
+      drop: { x: jogX + dirX * rr, y: y2 },
+      ...crossing,
+    };
   }
   const body = `${arc} H${round(x2)}`;
-  return { d: `M${round(jogX - dirX * rr)},${round(y1)} ${body}`, body, drop: { x: jogX - dirX * rr, y: y1 }, ...crossing };
+  return {
+    d: `M${round(jogX - dirX * rr)},${round(y1)} ${body}`,
+    body,
+    drop: { x: jogX - dirX * rr, y: y1 },
+    ...crossing,
+  };
 }
 
 export function drawCommits(g: Commits, scene: Scene, measureWith?: string): CommitsDrawing {
@@ -181,10 +196,13 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
   // hash — so it is never shown (DESIGN 3.2). Its label is the branch it
   // merged, read off the parent that isn't its own branch.
   const mergedBranchName = (c: CommitInfo): string => {
-    const other = c.parents.map((pid) => byId.get(pid)).find((p): p is CommitInfo => p != null && p.branch !== c.branch);
+    const other = c.parents
+      .map((pid) => byId.get(pid))
+      .find((p): p is CommitInfo => p != null && p.branch !== c.branch);
     return other?.branch ?? 'merge';
   };
-  const labelFor = (c: CommitInfo): string => (c.merge ? `MERGE ${mergedBranchName(c).toUpperCase()}` : c.id.toUpperCase());
+  const labelFor = (c: CommitInfo): string =>
+    c.merge ? `MERGE ${mergedBranchName(c).toUpperCase()}` : c.id.toUpperCase();
 
   const byBranch = new Map<string, CommitInfo[]>();
   for (const c of g.commits) {
@@ -195,7 +213,8 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
   const idxInBranch = new Map<string, number>();
   for (const list of byBranch.values()) list.forEach((c, i) => idxInBranch.set(c.id, i));
 
-  const labelW = (c: CommitInfo) => width(labelFor(c), scene.rowFont, scene.type.label, scene.type.labelTracking);
+  const labelW = (c: CommitInfo) =>
+    width(labelFor(c), scene.rowFont, scene.type.label, scene.type.labelTracking);
   const maxLabelW = Math.max(...g.commits.map(labelW), 40);
   // 96 apart on the 8-grid (DESIGN 2.1), stretched only as far as the widest
   // label needs so two labels can never touch. No longer stretched to fill the
@@ -228,9 +247,13 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
   const marks: Mark[] = [];
 
   if (hasTitle) {
-    parts.push(`<text class="gc-commit-title" x="${round(pad)}" y="${round(titleY)}">${esc(g.title!)}</text>`);
+    parts.push(
+      `<text class="gc-commit-title" x="${round(pad)}" y="${round(titleY)}">${esc(g.title!)}</text>`,
+    );
   }
-  parts.push(`<text class="gc-commit-kicker" x="${round(pad)}" y="${round(kickerY)}">${esc(kickerParts.join(' · '))}</text>`);
+  parts.push(
+    `<text class="gc-commit-kicker" x="${round(pad)}" y="${round(kickerY)}">${esc(kickerParts.join(' · '))}</text>`,
+  );
 
   // Main is the one accent (DESIGN 5.2) and stays plain path-blue. Every other
   // branch already carries its own legend — the name beside its lane — so it
@@ -249,8 +272,10 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
     for (const pid of c.parents) {
       const parent = byId.get(pid);
       if (!parent || parent.branch === c.branch) continue;
-      const x1 = colX(parent.seq), y1 = laneY(laneOf.get(parent.branch) ?? 0);
-      const x2 = colX(c.seq), y2 = laneY(laneOf.get(c.branch) ?? 0);
+      const x1 = colX(parent.seq),
+        y1 = laneY(laneOf.get(parent.branch) ?? 0);
+      const x2 = colX(c.seq),
+        y2 = laneY(laneOf.get(c.branch) ?? 0);
       const id = `k-${parent.id}-${c.id}`;
       // A connector belongs to whichever end is a side branch — the branch
       // the reader is following across the merge — not to main.
@@ -290,8 +315,10 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
     if (!list || !list.length) return;
     const main = i === mainIdx;
     const series = main ? '' : seriesFor(i);
-    const first = list[0]!, last = list[list.length - 1]!;
-    let sx = colX(first.seq), ex = colX(last.seq);
+    const first = list[0]!,
+      last = list[list.length - 1]!;
+    let sx = colX(first.seq),
+      ex = colX(last.seq);
     if (main) {
       sx -= 24;
       ex += 24;
@@ -331,17 +358,20 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
     const laneI = laneOf.get(c.branch) ?? 0;
     const main = laneI === mainIdx;
     const series = main ? '' : seriesFor(laneI);
-    const cx = colX(c.seq), cy = laneY(laneI);
+    const cx = colX(c.seq),
+      cy = laneY(laneI);
     const label = labelFor(c);
     const tw = width(label, scene.rowFont, scene.type.label, scene.type.labelTracking);
-    const boxW = tw + 12, boxH = scene.type.label * 2 + 4;
+    const boxW = tw + 12,
+      boxH = scene.type.label * 2 + 4;
     // Alternate above/below per commit within its own lane so neighbours never
     // crowd (DESIGN). A lane's first commit always goes below, which leaves
     // the space above it free for that lane's own name.
     const idx = idxInBranch.get(c.id) ?? 0;
     const above = idx % 2 === 1;
     const off = above ? -20 : 20;
-    const boxX = cx - boxW / 2, boxY = cy + off - boxH / 2;
+    const boxX = cx - boxW / 2,
+      boxY = cy + off - boxH / 2;
     const id = `c-${c.id}`;
     const body = c.merge
       ? `<circle class="gc-commit-halo" cx="${round(cx)}" cy="${round(cy)}" r="8"/>` +
@@ -400,12 +430,16 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
       mergeCommitId: merge?.toId,
       branchLastId: list[list.length - 1]!.id,
     });
-    parts.push(`<circle class="gc-commit-spark" data-id="${esc(sparkId)}" r="5" style="offset-path:path('${d}')"/>`);
+    parts.push(
+      `<circle class="gc-commit-spark" data-id="${esc(sparkId)}" r="5" style="offset-path:path('${d}')"/>`,
+    );
     if (merge) {
       const mc = byId.get(merge.toId);
       const mx = mc ? colX(mc.seq) : merge.drop.x;
       const my = mc ? laneY(laneOf.get(mc.branch) ?? mainIdx) : laneRow;
-      parts.push(`<circle class="gc-commit-ripple" data-id="${esc(sparkId)}" cx="${round(mx)}" cy="${round(my)}" r="3"/>`);
+      parts.push(
+        `<circle class="gc-commit-ripple" data-id="${esc(sparkId)}" cx="${round(mx)}" cy="${round(my)}" r="3"/>`,
+      );
     }
   }
 
@@ -423,12 +457,19 @@ export function drawCommits(g: Commits, scene: Scene, measureWith?: string): Com
     `<svg class="gc-chart" viewBox="0 0 ${frame.width} ${frame.height}" ` +
     `width="${frame.width}" height="${frame.height}" role="img" xmlns="${SVGNS}">` +
     `<g class="gc-frame" transform="${frameTransform(frame)}">` +
-    parts.join('') + marks.map((m) => m.markup).join('') + `</g></svg>`;
+    parts.join('') +
+    marks.map((m) => m.markup).join('') +
+    `</g></svg>`;
 
   const motion = animate(
-    marks, hasTitle, scene, sweepLeft, sweepRight,
+    marks,
+    hasTitle,
+    scene,
+    sweepLeft,
+    sweepRight,
     { firstId: mainFirstId, lastId: mainLastId },
-    branchSparks, laneSpans,
+    branchSparks,
+    laneSpans,
   );
   return {
     svg,
@@ -453,16 +494,28 @@ const PRESS_EASE = 'cubic-bezier(.22,1.2,.36,1)';
  */
 function easedTimeFor(fraction: number): number {
   const v = Math.min(1, Math.max(0, fraction));
-  const x1 = 0.61, y1 = 0, x2 = 0.39, y2 = 1;
+  const x1 = 0.61,
+    y1 = 0,
+    x2 = 0.39,
+    y2 = 1;
   const bx = (t: number) => 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t ** 2 * x2 + t ** 3;
   const by = (t: number) => 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t ** 2 * y2 + t ** 3;
-  let lo = 0, hi = 1;
-  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (by(mid) < v) lo = mid; else hi = mid; }
+  let lo = 0,
+    hi = 1;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (by(mid) < v) lo = mid;
+    else hi = mid;
+  }
   return bx((lo + hi) / 2);
 }
 
 function animate(
-  marks: Mark[], hasTitle: boolean, scene: Scene, sweepLeft: number, sweepRight: number,
+  marks: Mark[],
+  hasTitle: boolean,
+  scene: Scene,
+  sweepLeft: number,
+  sweepRight: number,
   mainSpan: { firstId?: string; lastId?: string },
   branchSparks: BranchSpark[],
   laneSpans: { id: string; sx: number; ex: number }[],
@@ -485,7 +538,10 @@ function animate(
   const laneStart = lead + 0.08;
   const laneEnd = laneStart + laneBuild;
   const POP = Math.min(m.build, 0.4);
-  const fracOf = (cx: number) => (sweepRight > sweepLeft ? Math.min(1, Math.max(0, (cx - sweepLeft) / (sweepRight - sweepLeft))) : 0);
+  const fracOf = (cx: number) =>
+    sweepRight > sweepLeft
+      ? Math.min(1, Math.max(0, (cx - sweepLeft) / (sweepRight - sweepLeft)))
+      : 0;
   // The head's own eased x position: at real time T within [laneStart,laneEnd],
   // the lane's stroke-dashoffset (eased by the same m.ease CSS timing function
   // between these two keyframes) has revealed fracOf(x) of the sweep exactly
@@ -504,13 +560,17 @@ function animate(
   // DESIGN 8.4/10.4: one spark travels main from first commit to last, timed
   // by the same ease as everything else — a fork it passes is reached at the
   // eased time for that fraction of the distance, not the linear one.
-  const mainFirstX = mainSpan.firstId !== undefined ? (cxOf.get(mainSpan.firstId) ?? sweepLeft) : sweepLeft;
-  const mainLastX = mainSpan.lastId !== undefined ? (cxOf.get(mainSpan.lastId) ?? sweepRight) : sweepRight;
+  const mainFirstX =
+    mainSpan.firstId !== undefined ? (cxOf.get(mainSpan.firstId) ?? sweepLeft) : sweepLeft;
+  const mainLastX =
+    mainSpan.lastId !== undefined ? (cxOf.get(mainSpan.lastId) ?? sweepRight) : sweepRight;
   const mainTravelStart = last + 0.15;
   const mainDist = Math.max(1, mainLastX - mainFirstX);
   const TRAVEL_MAIN = Math.min(1.6, 0.5 + mainDist / 400);
   const mainTravelEnd = mainTravelStart + TRAVEL_MAIN;
-  const timeAtX = (x: number) => mainTravelStart + easedTimeFor(Math.min(1, Math.max(0, (x - mainFirstX) / mainDist))) * TRAVEL_MAIN;
+  const timeAtX = (x: number) =>
+    mainTravelStart +
+    easedTimeFor(Math.min(1, Math.max(0, (x - mainFirstX) / mainDist))) * TRAVEL_MAIN;
 
   // Each side branch: when the main spark passes its fork, a second spark
   // splits off, rides the branch, and (if the branch merges back) rejoins
@@ -581,18 +641,30 @@ function animate(
   // the instants that matter, so a branch can never be caught ahead of it.
   const cssEaseForward = (inputFraction: number): number => {
     const s = Math.min(1, Math.max(0, inputFraction));
-    const x1 = 0.61, y1 = 0, x2 = 0.39, y2 = 1;
+    const x1 = 0.61,
+      y1 = 0,
+      x2 = 0.39,
+      y2 = 1;
     const bx = (t: number) => 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t ** 2 * x2 + t ** 3;
     const by = (t: number) => 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t ** 2 * y2 + t ** 3;
-    let lo = 0, hi = 1;
-    for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (bx(mid) < s) lo = mid; else hi = mid; }
+    let lo = 0,
+      hi = 1;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      if (bx(mid) < s) lo = mid;
+      else hi = mid;
+    }
     return by((lo + hi) / 2);
   };
   const TIME_SAMPLES = 32;
   const timeSamples: number[] = [];
-  for (let i = 0; i <= TIME_SAMPLES; i++) timeSamples.push(laneStart + (laneBuild * i) / TIME_SAMPLES);
+  for (let i = 0; i <= TIME_SAMPLES; i++)
+    timeSamples.push(laneStart + (laneBuild * i) / TIME_SAMPLES);
   const headXAt = new Map<number, number>(
-    timeSamples.map((T) => [T, sweepLeft + cssEaseForward((T - laneStart) / laneBuild) * (sweepRight - sweepLeft)]),
+    timeSamples.map((T) => [
+      T,
+      sweepLeft + cssEaseForward((T - laneStart) / laneBuild) * (sweepRight - sweepLeft),
+    ]),
   );
   const growLane = (sel: string, sx: number, ex: number) => {
     const t = track(sel);
@@ -621,10 +693,17 @@ function animate(
   for (const mk of marks) {
     if (mk.commit) {
       const start = commitStart.get(mk.commit.rawId)!;
-      pop(`.gc-commit[data-id="${mk.id}"] .gc-commit-dot, .gc-commit[data-id="${mk.id}"] .gc-commit-ring`, start, 6);
+      pop(
+        `.gc-commit[data-id="${mk.id}"] .gc-commit-dot, .gc-commit[data-id="${mk.id}"] .gc-commit-ring`,
+        start,
+        6,
+      );
       pop(`.gc-commit[data-id="${mk.id}"] .gc-commit-halo`, start, 8);
       // The label reads once its commit has actually arrived, not alongside it.
-      fade(`.gc-commit[data-id="${mk.id}"] .gc-commit-label, .gc-commit[data-id="${mk.id}"] .gc-plate`, start + POP * 0.6);
+      fade(
+        `.gc-commit[data-id="${mk.id}"] .gc-commit-label, .gc-commit[data-id="${mk.id}"] .gc-plate`,
+        start + POP * 0.6,
+      );
     } else if (mk.connector) {
       // Grows from whichever end is the parent — always the earlier commit,
       // so a branch connector already starts at its fork and a merge

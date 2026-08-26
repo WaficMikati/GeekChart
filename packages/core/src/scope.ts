@@ -24,7 +24,9 @@
  * `gc-c11` and nothing already rewritten is visited twice.
  */
 function renameFrames(css: string, id: string): string {
-  const declared = [...new Set([...css.matchAll(/@keyframes\s+([A-Za-z_][\w-]*)/g)].map((m) => m[1]!))];
+  const declared = [
+    ...new Set([...css.matchAll(/@keyframes\s+([A-Za-z_][\w-]*)/g)].map((m) => m[1]!)),
+  ];
   if (!declared.length) return css;
   const escaped = declared
     .sort((a, b) => b.length - a.length)

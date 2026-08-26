@@ -16,8 +16,14 @@ export function selfLoop(shape: Shape, side: Side, gap: number): string {
   const start = portOn(shape, side, -0.35);
   const end = portOn(shape, side, 0.35);
   const reach = 46;
-  const c1 = { x: start.x + normal.x * reach - along.x * 12, y: start.y + normal.y * reach - along.y * 12 };
-  const c2 = { x: end.x + normal.x * (reach + gap) + along.x * 12, y: end.y + normal.y * (reach + gap) + along.y * 12 };
+  const c1 = {
+    x: start.x + normal.x * reach - along.x * 12,
+    y: start.y + normal.y * reach - along.y * 12,
+  };
+  const c2 = {
+    x: end.x + normal.x * (reach + gap) + along.x * 12,
+    y: end.y + normal.y * (reach + gap) + along.y * 12,
+  };
   const tip = { x: end.x + normal.x * gap, y: end.y + normal.y * gap };
   return (
     `M${start.x.toFixed(2)},${start.y.toFixed(2)} ` +
@@ -50,10 +56,22 @@ export function loopSide(
 ): Side {
   const vertical = flow === 'vertical';
   // The band the loop travels through, and how far out each node already sits.
-  const lo = Math.min(vertical ? from.centre.y : from.centre.x, vertical ? to.centre.y : to.centre.x);
-  const hi = Math.max(vertical ? from.centre.y : from.centre.x, vertical ? to.centre.y : to.centre.x);
-  const near = Math.min(vertical ? from.centre.x : from.centre.y, vertical ? to.centre.x : to.centre.y);
-  const far = Math.max(vertical ? from.centre.x : from.centre.y, vertical ? to.centre.x : to.centre.y);
+  const lo = Math.min(
+    vertical ? from.centre.y : from.centre.x,
+    vertical ? to.centre.y : to.centre.x,
+  );
+  const hi = Math.max(
+    vertical ? from.centre.y : from.centre.x,
+    vertical ? to.centre.y : to.centre.x,
+  );
+  const near = Math.min(
+    vertical ? from.centre.x : from.centre.y,
+    vertical ? to.centre.x : to.centre.y,
+  );
+  const far = Math.max(
+    vertical ? from.centre.x : from.centre.y,
+    vertical ? to.centre.x : to.centre.y,
+  );
 
   let ahead = 0;
   let behind = 0;
@@ -95,20 +113,24 @@ export function loopSide(
  * by 16).
  */
 export function marginShortfall(points: readonly Point[], content: Extent, clear: number): number {
-  const top = content.y, bottom = content.y + content.height;
-  const left = content.x, right = content.x + content.width;
+  const top = content.y,
+    bottom = content.y + content.height;
+  const left = content.x,
+    right = content.x + content.width;
   let worst = 0;
   for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!, b = points[i]!;
-    const dx = b.x - a.x, dy = b.y - a.y;
+    const a = points[i - 1]!,
+      b = points[i]!;
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
     if (Math.abs(dx) < 0.5 && Math.abs(dy) > 40) {
       const x = (a.x + b.x) / 2;
       if (x < left) worst = Math.max(worst, Math.max(0, x - (left - clear)));
-      if (x > right) worst = Math.max(worst, Math.max(0, (right + clear) - x));
+      if (x > right) worst = Math.max(worst, Math.max(0, right + clear - x));
     } else if (Math.abs(dy) < 0.5 && Math.abs(dx) > 40) {
       const y = (a.y + b.y) / 2;
       if (y < top) worst = Math.max(worst, Math.max(0, y - (top - clear)));
-      if (y > bottom) worst = Math.max(worst, Math.max(0, (bottom + clear) - y));
+      if (y > bottom) worst = Math.max(worst, Math.max(0, bottom + clear - y));
     }
   }
   return worst;

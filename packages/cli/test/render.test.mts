@@ -3,11 +3,19 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openSession, render, renderAny, type RenderRequest, type Session } from '../src/browser.ts';
+import {
+  openSession,
+  render,
+  renderAny,
+  type RenderRequest,
+  type Session,
+} from '../src/browser.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, '..', '..', '..', 'fixtures');
-const names = readdirSync(fixtures).filter((f) => f.endsWith('.mmd')).sort();
+const names = readdirSync(fixtures)
+  .filter((f) => f.endsWith('.mmd'))
+  .sort();
 
 const baseRequest: RenderRequest = {
   theme: 'light',
@@ -103,10 +111,11 @@ describe('the animation is actually wired up', () => {
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
-    const missing = await session.page.evaluate(() =>
-      Array.from(
-        document.querySelectorAll('[class~="gc-node"], [class~="gc-edge"], [class~="gc-fade"]'),
-      ).filter((el) => !(el as HTMLElement).style.getPropertyValue('--gc-t')).length,
+    const missing = await session.page.evaluate(
+      () =>
+        Array.from(
+          document.querySelectorAll('[class~="gc-node"], [class~="gc-edge"], [class~="gc-fade"]'),
+        ).filter((el) => !(el as HTMLElement).style.getPropertyValue('--gc-t')).length,
     );
     assert.equal(missing, 0);
   });
@@ -187,7 +196,11 @@ describe('styling survives serialisation', () => {
       return Array.from(label.querySelectorAll('tspan')).map((t) => getComputedStyle(t).fill);
     });
     assert.ok(fills.length > 0, 'found the multi-word label');
-    assert.equal(new Set(fills).size, 1, `one line should be one colour, got ${[...new Set(fills)].join(', ')}`);
+    assert.equal(
+      new Set(fills).size,
+      1,
+      `one line should be one colour, got ${[...new Set(fills)].join(', ')}`,
+    );
   });
 
   test('the brand font is loaded before mermaid measures text', async () => {
@@ -233,7 +246,11 @@ describe('chronicle geometry', () => {
     // Regression: the last milestone on a plan (a diamond with a zero-width bar)
     // sits at the very end of the date axis, and its label has to flip to the
     // left of the diamond rather than run off the canvas. DESIGN 7.5.
-    const reply = await renderAny(session.page, readFileSync(join(fixtures, 'gantt-states.mmd'), 'utf8'), {});
+    const reply = await renderAny(
+      session.page,
+      readFileSync(join(fixtures, 'gantt-states.mmd'), 'utf8'),
+      {},
+    );
     assert.equal(reply.ok, true, reply.ok ? '' : JSON.stringify(reply));
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -244,13 +261,22 @@ describe('chronicle geometry', () => {
       for (const el of svg.querySelectorAll('text, rect, path, circle, polygon')) {
         const b = el.getBoundingClientRect();
         if (!b.width && !b.height) continue;
-        if (b.left < sb.left - 1 || b.right > sb.right + 1 || b.top < sb.top - 1 || b.bottom > sb.bottom + 1) {
-          out.push({ tag: el.tagName, cls: el.getAttribute('class'), text: el.textContent?.slice(0, 24) ?? null });
+        if (
+          b.left < sb.left - 1 ||
+          b.right > sb.right + 1 ||
+          b.top < sb.top - 1 ||
+          b.bottom > sb.bottom + 1
+        ) {
+          out.push({
+            tag: el.tagName,
+            cls: el.getAttribute('class'),
+            text: el.textContent?.slice(0, 24) ?? null,
+          });
         }
       }
       return out;
     });
-    assert.deepEqual(overflowing, [], 'an element\'s bbox reaches past the svg viewBox');
+    assert.deepEqual(overflowing, [], "an element's bbox reaches past the svg viewBox");
   });
 });
 
@@ -259,7 +285,11 @@ describe('sequence geometry', () => {
     // DESIGN 8.5: activation bars, plates and sparks sit below arrowheads in
     // stacking order, so a head is never covered. In SVG, "below" means earlier
     // in document order — later elements paint on top.
-    const reply = await renderAny(session.page, readFileSync(join(fixtures, 'sequence-rich.mmd'), 'utf8'), {});
+    const reply = await renderAny(
+      session.page,
+      readFileSync(join(fixtures, 'sequence-rich.mmd'), 'utf8'),
+      {},
+    );
     assert.equal(reply.ok, true, reply.ok ? '' : JSON.stringify(reply));
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -272,7 +302,10 @@ describe('sequence geometry', () => {
     const firstArrow = order.indexOf('arrow');
     assert.ok(lastBar >= 0, 'the fixture has activation bars');
     assert.ok(firstArrow >= 0, 'the fixture has arrowheads');
-    assert.ok(lastBar < firstArrow, `an activation bar (index ${lastBar}) comes after an arrowhead (index ${firstArrow})`);
+    assert.ok(
+      lastBar < firstArrow,
+      `an activation bar (index ${lastBar}) comes after an arrowhead (index ${firstArrow})`,
+    );
   });
 
   test('first-ai-app: every visible label clears the 11-unit legibility floor', async () => {
@@ -298,7 +331,10 @@ describe('sequence geometry', () => {
     });
     assert.ok(sizes.length > 0, 'first-ai-app has no visible labels');
     for (const { text, effective } of sizes) {
-      assert.ok(effective >= 11 - 0.05, `"${text}" renders at an effective ${effective.toFixed(2)} units, below the 11-unit floor`);
+      assert.ok(
+        effective >= 11 - 0.05,
+        `"${text}" renders at an effective ${effective.toFixed(2)} units, below the 11-unit floor`,
+      );
     }
   });
 
@@ -317,7 +353,8 @@ describe('sequence geometry', () => {
     // so `Animation.finish()` throws; dropping the `animation` property
     // instead falls back to the element's unanimated (= settled) CSS state.
     await session.page.evaluate(() => {
-      for (const el of document.querySelectorAll('svg *')) (el as HTMLElement).style.animation = 'none';
+      for (const el of document.querySelectorAll('svg *'))
+        (el as HTMLElement).style.animation = 'none';
     });
     const overflowing = await session.page.evaluate(() => {
       const svg = document.querySelector('svg')!;
@@ -326,8 +363,17 @@ describe('sequence geometry', () => {
       for (const el of svg.querySelectorAll('text, rect, path, circle, polygon')) {
         const b = el.getBoundingClientRect();
         if (!b.width && !b.height) continue;
-        if (b.left < sb.left - 1 || b.right > sb.right + 1 || b.top < sb.top - 1 || b.bottom > sb.bottom + 1) {
-          out.push({ tag: el.tagName, cls: el.getAttribute('class'), text: el.textContent?.slice(0, 24) ?? null });
+        if (
+          b.left < sb.left - 1 ||
+          b.right > sb.right + 1 ||
+          b.top < sb.top - 1 ||
+          b.bottom > sb.bottom + 1
+        ) {
+          out.push({
+            tag: el.tagName,
+            cls: el.getAttribute('class'),
+            text: el.textContent?.slice(0, 24) ?? null,
+          });
         }
       }
       return out;
@@ -342,10 +388,18 @@ describe('board chrome', () => {
     // title syntax, so this was the one board type that always rendered
     // without one. DESIGN 4.3: fills are flat — a ribbon's colour never comes
     // from a <linearGradient>.
-    const reply = await renderAny(session.page, readFileSync(join(fixtures, 'sankey.mmd'), 'utf8'), {});
+    const reply = await renderAny(
+      session.page,
+      readFileSync(join(fixtures, 'sankey.mmd'), 'utf8'),
+      {},
+    );
     assert.equal(reply.ok, true, reply.ok ? '' : JSON.stringify(reply));
     if (!reply.ok) return;
-    assert.match(reply.svg, /<text class="gc-board-title"[^>]*>[^<]+<\/text>/, 'no title text in the sankey svg');
+    assert.match(
+      reply.svg,
+      /<text class="gc-board-title"[^>]*>[^<]+<\/text>/,
+      'no title text in the sankey svg',
+    );
     assert.doesNotMatch(reply.svg, /linearGradient/, 'a sankey ribbon is using a gradient fill');
   });
 
@@ -353,10 +407,16 @@ describe('board chrome', () => {
     // DESIGN 8.2/10.4: a ribbon draws on left to right, layer by layer, rather
     // than fading in as a flat rectangle. Every ribbon's own @keyframes block
     // must carry a clip-path change — opacity alone is the old, wrong build.
-    const reply = await renderAny(session.page, readFileSync(join(fixtures, 'sankey.mmd'), 'utf8'), {});
+    const reply = await renderAny(
+      session.page,
+      readFileSync(join(fixtures, 'sankey.mmd'), 'utf8'),
+      {},
+    );
     assert.equal(reply.ok, true, reply.ok ? '' : JSON.stringify(reply));
     if (!reply.ok) return;
-    const ids = [...reply.svg.matchAll(/class="gc-ribbon[^"]*" data-id="(l-[^"]+)"/g)].map((m) => m[1]!);
+    const ids = [...reply.svg.matchAll(/class="gc-ribbon[^"]*" data-id="(l-[^"]+)"/g)].map(
+      (m) => m[1]!,
+    );
     assert.ok(ids.length > 0, 'sankey.mmd drew no ribbons');
     for (const id of ids) {
       const selector = `.gc-ribbon[data-id="${id}"]{animation:`;
@@ -367,7 +427,11 @@ describe('board chrome', () => {
       assert.ok(kfStart >= 0, `${id}: no @keyframes block for ${name}`);
       const kfEnd = reply.css.indexOf('\n', kfStart);
       const body = reply.css.slice(kfStart, kfEnd === -1 ? reply.css.length : kfEnd);
-      assert.match(body, /clip-path/, `${id}: a ribbon must grow via clip-path, not just fade — keyframes were "${body}"`);
+      assert.match(
+        body,
+        /clip-path/,
+        `${id}: a ribbon must grow via clip-path, not just fade — keyframes were "${body}"`,
+      );
     }
   });
 });

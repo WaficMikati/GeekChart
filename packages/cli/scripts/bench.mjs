@@ -17,7 +17,14 @@
  */
 import { chromium } from 'playwright';
 import {
-  existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -42,7 +49,10 @@ const WARMUP = 1;
 const RENDER_OPTS = { width: 1180 }; // matches gallery.mjs, which gate.mjs measures
 
 const notes = []; // "could not measure X because Y" — surfaced in the report
-const note = (s) => { notes.push(s); process.stderr.write(`note: ${s}\n`); };
+const note = (s) => {
+  notes.push(s);
+  process.stderr.write(`note: ${s}\n`);
+};
 const log = (s) => process.stderr.write(`${s}\n`);
 
 function stats(nums) {
@@ -96,7 +106,10 @@ const FAMILY_PATTERNS = [
   [/^kanban/i, 'kanban'],
 ];
 function familyOf(source) {
-  const lines = source.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('```'));
+  const lines = source
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('```'));
   const first = lines[0] ?? '';
   for (const [re, name] of FAMILY_PATTERNS) if (re.test(first)) return name;
   return 'other';
@@ -119,12 +132,13 @@ async function withCpuThrottle(page, rate, fn) {
 
 async function timedRenderAny(page, source, options) {
   return page.evaluate(
-    ([src, opts]) => (async () => {
-      const t0 = performance.now();
-      const reply = await window.geekchartAny(src, opts);
-      const t1 = performance.now();
-      return { reply, ms: t1 - t0 };
-    })(),
+    ([src, opts]) =>
+      (async () => {
+        const t0 = performance.now();
+        const reply = await window.geekchartAny(src, opts);
+        const t1 = performance.now();
+        return { reply, ms: t1 - t0 };
+      })(),
     [source, options],
   );
 }
@@ -140,34 +154,42 @@ async function benchRenderTime(fixtures) {
         if (!reply.ok) throw new Error(`${fx.id}: ${reply.error.message}`);
         return ms;
       });
-      const throttled = await withCpuThrottle(session.page, 4, () => sampled(WARMUP, N, async () => {
-        const { reply, ms } = await timedRenderAny(session.page, fx.source, RENDER_OPTS);
-        if (!reply.ok) throw new Error(`${fx.id}: ${reply.error.message}`);
-        return ms;
-      }));
+      const throttled = await withCpuThrottle(session.page, 4, () =>
+        sampled(WARMUP, N, async () => {
+          const { reply, ms } = await timedRenderAny(session.page, fx.source, RENDER_OPTS);
+          if (!reply.ok) throw new Error(`${fx.id}: ${reply.error.message}`);
+          return ms;
+        }),
+      );
       const family = familyOf(fx.source);
       perChart.push({
-        id: fx.id, family,
+        id: fx.id,
+        family,
         desktop: stats(desktop),
         cpu4x: stats(throttled),
       });
-      log(`  ${fx.id.padEnd(28)} ${stats(desktop).median.toFixed(1)}ms  ×4cpu ${stats(throttled).median.toFixed(1)}ms`);
+      log(
+        `  ${fx.id.padEnd(28)} ${stats(desktop).median.toFixed(1)}ms  ×4cpu ${stats(throttled).median.toFixed(1)}ms`,
+      );
     }
   } finally {
     await session.close();
   }
   const families = {};
   for (const c of perChart) {
-    (families[c.family] ??= { desktop: [], cpu4x: [] });
+    families[c.family] ??= { desktop: [], cpu4x: [] };
     families[c.family].desktop.push(c.desktop.median);
     families[c.family].cpu4x.push(c.cpu4x.median);
   }
   const perFamily = Object.fromEntries(
-    Object.entries(families).map(([name, v]) => [name, {
-      desktopMedian: stats(v.desktop).median,
-      cpu4xMedian: stats(v.cpu4x).median,
-      count: v.desktop.length,
-    }]),
+    Object.entries(families).map(([name, v]) => [
+      name,
+      {
+        desktopMedian: stats(v.desktop).median,
+        cpu4xMedian: stats(v.cpu4x).median,
+        count: v.desktop.length,
+      },
+    ]),
   );
   return { perChart, perFamily };
 }
@@ -176,11 +198,14 @@ async function benchRenderTime(fixtures) {
 
 async function buildMermaidBundle(scratch) {
   const entry = join(scratch, 'mermaid-entry.mjs');
-  writeFileSync(entry, [
-    "import mermaid from 'mermaid';",
-    "mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });",
-    'window.__mermaid = mermaid;',
-  ].join('\n'));
+  writeFileSync(
+    entry,
+    [
+      "import mermaid from 'mermaid';",
+      "mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });",
+      'window.__mermaid = mermaid;',
+    ].join('\n'),
+  );
   const outfile = join(scratch, 'mermaid-bundle.js');
   const result = await build({
     entryPoints: [entry],
@@ -216,7 +241,8 @@ async function buildMermaidBundle(scratch) {
       walk(imp.path);
     }
   })(entryKey);
-  let raw = 0, brotli = 0;
+  let raw = 0,
+    brotli = 0;
   // Metafile output keys are paths relative to process.cwd(), however many
   // `..` segments that takes to reach the scratch dir — `resolve` (not
   // `join(repo, …)`) is the correct inverse of that.
@@ -225,7 +251,12 @@ async function buildMermaidBundle(scratch) {
     raw += buf.length;
     brotli += brotliSize(buf);
   }
-  return { outfile, bundleRaw: raw, bundleBrotli: brotli, files: [...closure].map((k) => k.split('/').pop()) };
+  return {
+    outfile,
+    bundleRaw: raw,
+    bundleBrotli: brotli,
+    files: [...closure].map((k) => k.split('/').pop()),
+  };
 }
 
 async function benchMermaidBaseline(fixtures, scratch) {
@@ -238,10 +269,13 @@ async function benchMermaidBaseline(fixtures, scratch) {
   // produces sibling chunks reached by *relative* import, which only resolve
   // correctly when the module is fetched from a real URL — an inline module
   // on about:blank has no base to resolve "./mermaid-chunk-*.js" against.
-  writeFileSync(join(mermaidDir, 'index.html'), [
-    '<!doctype html><meta charset="utf-8">',
-    '<script type="module" src="./mermaid-bundle.js"></script>',
-  ].join('\n'));
+  writeFileSync(
+    join(mermaidDir, 'index.html'),
+    [
+      '<!doctype html><meta charset="utf-8">',
+      '<script type="module" src="./mermaid-bundle.js"></script>',
+    ].join('\n'),
+  );
   const { server, port } = await serveDir(mermaidDir);
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -256,30 +290,41 @@ async function benchMermaidBaseline(fixtures, scratch) {
       // one dry run outside the timed samples, so a genuine parse error is
       // caught once rather than N+1 times, and doesn't pollute the warm-up.
       const probe = await page.evaluate(
-        ([id, src]) => window.__mermaid.render(id, src).then(() => true).catch((e) => String(e?.message ?? e)),
+        ([id, src]) =>
+          window.__mermaid
+            .render(id, src)
+            .then(() => true)
+            .catch((e) => String(e?.message ?? e)),
         [`m0`, fx.source],
       );
       if (probe !== true) throw new Error(probe);
       const samples = await sampled(WARMUP, N, async () => {
         const id = `m${counter++}`;
         const ms = await page.evaluate(
-          ([id, src]) => (async () => {
-            const a = performance.now();
-            await window.__mermaid.render(id, src);
-            return performance.now() - a;
-          })(),
+          ([id, src]) =>
+            (async () => {
+              const a = performance.now();
+              await window.__mermaid.render(id, src);
+              return performance.now() - a;
+            })(),
           [id, fx.source],
         );
         return ms;
       });
       perChart.push({ id: fx.id, family: familyOf(fx.source), desktop: stats(samples) });
     } catch (err) {
-      skipped.push({ id: fx.id, reason: err instanceof Error ? err.message.slice(0, 160) : String(err).slice(0, 160) });
+      skipped.push({
+        id: fx.id,
+        reason: err instanceof Error ? err.message.slice(0, 160) : String(err).slice(0, 160),
+      });
     }
   }
   await browser.close();
   server.close();
-  if (skipped.length) note(`mermaid baseline skipped ${skipped.length} fixture(s) it cannot render: ${skipped.map((s) => s.id).join(', ')}`);
+  if (skipped.length)
+    note(
+      `mermaid baseline skipped ${skipped.length} fixture(s) it cannot render: ${skipped.map((s) => s.id).join(', ')}`,
+    );
   return { perChart, skipped, bundle: { raw: bundleRaw, brotli: bundleBrotli, files } };
 }
 
@@ -305,10 +350,17 @@ function serveDir(dir) {
     const buf = readFileSync(file);
     const type = contentType(file);
     const acceptsBr = (req.headers['accept-encoding'] || '').includes('br');
-    const headers = { 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable' };
+    const headers = {
+      'Content-Type': type,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    };
     if (acceptsBr && buf.length > 256) {
       const compressed = brotliCompressSync(buf);
-      res.writeHead(200, { ...headers, 'Content-Encoding': 'br', 'Content-Length': compressed.length });
+      res.writeHead(200, {
+        ...headers,
+        'Content-Encoding': 'br',
+        'Content-Length': compressed.length,
+      });
       res.end(compressed);
     } else {
       res.writeHead(200, { ...headers, 'Content-Length': buf.length });
@@ -324,15 +376,18 @@ async function buildDemoPage(scratch, demoSource) {
   const dir = join(scratch, 'demo');
   mkdirSync(dir, { recursive: true });
   const appEntry = join(dir, '_app-entry.jsx');
-  writeFileSync(appEntry, [
-    "import React from 'react';",
-    "import { createRoot } from 'react-dom/client';",
-    `import { Geekchart } from ${JSON.stringify(join(repo, 'packages', 'geekchart', 'src', 'index.ts'))};`,
-    `const source = ${JSON.stringify(demoSource)};`,
-    "createRoot(document.getElementById('app')).render(",
-    '  React.createElement(Geekchart, { source, scene: "manim" }),',
-    ');',
-  ].join('\n'));
+  writeFileSync(
+    appEntry,
+    [
+      "import React from 'react';",
+      "import { createRoot } from 'react-dom/client';",
+      `import { Geekchart } from ${JSON.stringify(join(repo, 'packages', 'geekchart', 'src', 'index.ts'))};`,
+      `const source = ${JSON.stringify(demoSource)};`,
+      "createRoot(document.getElementById('app')).render(",
+      '  React.createElement(Geekchart, { source, scene: "manim" }),',
+      ');',
+    ].join('\n'),
+  );
   await build({
     entryPoints: [appEntry],
     outdir: dir,
@@ -351,17 +406,20 @@ async function buildDemoPage(scratch, demoSource) {
     // node_modules chain.
     nodePaths: [join(repo, 'packages', 'geekchart', 'node_modules')],
   });
-  writeFileSync(join(dir, 'index.html'), [
-    '<!doctype html><meta charset="utf-8"><title>bench</title>',
-    '<div id="app"></div>',
-    '<script>window.__ready = new Promise((resolve) => {',
-    "  new MutationObserver(() => {",
-    "    const svg = document.querySelector('#app svg.gc-chart');",
-    '    if (svg) resolve(performance.now());',
-    "  }).observe(document.getElementById('app'), { childList: true, subtree: true });",
-    '});</script>',
-    '<script type="module" src="./app.js"></script>',
-  ].join('\n'));
+  writeFileSync(
+    join(dir, 'index.html'),
+    [
+      '<!doctype html><meta charset="utf-8"><title>bench</title>',
+      '<div id="app"></div>',
+      '<script>window.__ready = new Promise((resolve) => {',
+      '  new MutationObserver(() => {',
+      "    const svg = document.querySelector('#app svg.gc-chart');",
+      '    if (svg) resolve(performance.now());',
+      "  }).observe(document.getElementById('app'), { childList: true, subtree: true });",
+      '});</script>',
+      '<script type="module" src="./app.js"></script>',
+    ].join('\n'),
+  );
   return dir;
 }
 
@@ -377,7 +435,10 @@ async function measureFirstChart(port) {
       const cdp = await context.newCDPSession(page);
       await cdp.send('Network.enable');
       await cdp.send('Network.emulateNetworkConditions', {
-        offline: false, latency: 150, downloadThroughput: (1.6 * 1024 * 1024) / 8, uploadThroughput: (750 * 1024) / 8,
+        offline: false,
+        latency: 150,
+        downloadThroughput: (1.6 * 1024 * 1024) / 8,
+        uploadThroughput: (750 * 1024) / 8,
       });
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
@@ -388,7 +449,10 @@ async function measureFirstChart(port) {
       await page.goto(url, { waitUntil: 'commit' });
       const warmMs = await page.evaluate(() => window.__ready);
 
-      if (i >= WARMUP) { cold.push(coldMs); warm.push(warmMs); }
+      if (i >= WARMUP) {
+        cold.push(coldMs);
+        warm.push(warmMs);
+      }
     } finally {
       await browser.close();
     }
@@ -412,14 +476,25 @@ async function runLighthouse(port, scratch) {
     const userDataDir = join(scratch, 'lh-profile');
     mkdirSync(userDataDir, { recursive: true });
     const debugPort = 9222 + Math.floor(Math.random() * 1000);
-    chrome = spawn(execPath, [
-      `--remote-debugging-port=${debugPort}`, '--headless=new', '--no-sandbox',
-      `--user-data-dir=${userDataDir}`, '--disable-gpu',
-    ], { stdio: 'ignore' });
+    chrome = spawn(
+      execPath,
+      [
+        `--remote-debugging-port=${debugPort}`,
+        '--headless=new',
+        '--no-sandbox',
+        `--user-data-dir=${userDataDir}`,
+        '--disable-gpu',
+      ],
+      { stdio: 'ignore' },
+    );
     await new Promise((r) => setTimeout(r, 1200));
     const runnerResult = await lighthouse(`http://127.0.0.1:${port}/`, {
-      port: debugPort, output: 'json', logLevel: 'silent', onlyCategories: ['performance'],
-      formFactor: 'mobile', screenEmulation: { mobile: true, width: 360, height: 640, deviceScaleFactor: 2 },
+      port: debugPort,
+      output: 'json',
+      logLevel: 'silent',
+      onlyCategories: ['performance'],
+      formFactor: 'mobile',
+      screenEmulation: { mobile: true, width: 360, height: 640, deviceScaleFactor: 2 },
     });
     const lhr = runnerResult.lhr;
     return {
@@ -454,21 +529,27 @@ async function benchFirstChart(fixtures, scratch) {
 // -------------------------------------------------------------- 4. animation
 
 async function measureFps(page, ms) {
-  return page.evaluate((ms) => new Promise((resolve) => {
-    const times = [];
-    const start = performance.now();
-    function tick(t) {
-      times.push(t);
-      if (t - start < ms) requestAnimationFrame(tick);
-      else resolve(times);
-    }
-    requestAnimationFrame(tick);
-  }), ms).then((times) => {
-    const deltas = [];
-    for (let i = 1; i < times.length; i++) deltas.push(times[i] - times[i - 1]);
-    const duration = times[times.length - 1] - times[0];
-    return { fps: (times.length - 1) / (duration / 1000), worstFrameMs: Math.max(...deltas) };
-  });
+  return page
+    .evaluate(
+      (ms) =>
+        new Promise((resolve) => {
+          const times = [];
+          const start = performance.now();
+          function tick(t) {
+            times.push(t);
+            if (t - start < ms) requestAnimationFrame(tick);
+            else resolve(times);
+          }
+          requestAnimationFrame(tick);
+        }),
+      ms,
+    )
+    .then((times) => {
+      const deltas = [];
+      for (let i = 1; i < times.length; i++) deltas.push(times[i] - times[i - 1]);
+      const duration = times[times.length - 1] - times[0];
+      return { fps: (times.length - 1) / (duration / 1000), worstFrameMs: Math.max(...deltas) };
+    });
 }
 
 async function benchAnimation(heaviest) {
@@ -478,19 +559,32 @@ async function benchAnimation(heaviest) {
   try {
     for (const fx of heaviest) {
       const reply = await renderAny(session.page, fx.source, { ...RENDER_OPTS, motion: true });
-      if (!reply.ok) { note(`animation: ${fx.id} failed to render: ${reply.error.message}`); continue; }
+      if (!reply.ok) {
+        note(`animation: ${fx.id} failed to render: ${reply.error.message}`);
+        continue;
+      }
       await session.page.setContent(reply.html, { waitUntil: 'load' });
       await session.page.evaluate(() => document.fonts.ready);
 
       const desktop = await sampled(WARMUP, N, () => measureFps(session.page, 3000));
-      const throttled = await withCpuThrottle(session.page, 4, () => sampled(WARMUP, N, () => measureFps(session.page, 3000)));
+      const throttled = await withCpuThrottle(session.page, 4, () =>
+        sampled(WARMUP, N, () => measureFps(session.page, 3000)),
+      );
 
       perChart.push({
         id: fx.id,
-        desktop: { fps: stats(desktop.map((d) => d.fps)), worstFrameMs: stats(desktop.map((d) => d.worstFrameMs)) },
-        cpu4x: { fps: stats(throttled.map((d) => d.fps)), worstFrameMs: stats(throttled.map((d) => d.worstFrameMs)) },
+        desktop: {
+          fps: stats(desktop.map((d) => d.fps)),
+          worstFrameMs: stats(desktop.map((d) => d.worstFrameMs)),
+        },
+        cpu4x: {
+          fps: stats(throttled.map((d) => d.fps)),
+          worstFrameMs: stats(throttled.map((d) => d.worstFrameMs)),
+        },
       });
-      log(`  ${fx.id.padEnd(28)} ${stats(desktop.map((d) => d.fps)).median.toFixed(0)}fps  ×4cpu ${stats(throttled.map((d) => d.fps)).median.toFixed(0)}fps`);
+      log(
+        `  ${fx.id.padEnd(28)} ${stats(desktop.map((d) => d.fps)).median.toFixed(0)}fps  ×4cpu ${stats(throttled.map((d) => d.fps)).median.toFixed(0)}fps`,
+      );
     }
   } finally {
     await session.close();
@@ -501,9 +595,23 @@ async function benchAnimation(heaviest) {
 // ---------------------------------------------------------------- 5. server
 
 class SimpleLru {
-  constructor(max) { this.max = max; this.store = new Map(); }
-  get(k) { const v = this.store.get(k); if (v !== undefined) { this.store.delete(k); this.store.set(k, v); } return v; }
-  set(k, v) { if (this.store.has(k)) this.store.delete(k); else if (this.store.size >= this.max) this.store.delete(this.store.keys().next().value); this.store.set(k, v); }
+  constructor(max) {
+    this.max = max;
+    this.store = new Map();
+  }
+  get(k) {
+    const v = this.store.get(k);
+    if (v !== undefined) {
+      this.store.delete(k);
+      this.store.set(k, v);
+    }
+    return v;
+  }
+  set(k, v) {
+    if (this.store.has(k)) this.store.delete(k);
+    else if (this.store.size >= this.max) this.store.delete(this.store.keys().next().value);
+    this.store.set(k, v);
+  }
 }
 
 function psSnapshot() {
@@ -520,7 +628,9 @@ async function benchServer(fixtures) {
   log('5. server path (geekchart/server): start time, warm miss, cache hit, throughput, RSS');
   const serverModPath = join(geekchartDist, 'server.js');
   if (!existsSync(serverModPath)) {
-    note('packages/geekchart/dist/server.js missing — run `pnpm --filter geekchart build` first; skipping section 5');
+    note(
+      'packages/geekchart/dist/server.js missing — run `pnpm --filter geekchart build` first; skipping section 5',
+    );
     return null;
   }
   const { renderToHtml, closeServer } = await import(serverModPath);
@@ -572,11 +682,16 @@ async function benchServer(fixtures) {
   const nodeRssKb = Math.round(process.memoryUsage().rss / 1024);
 
   await closeServer();
-  if (!browserRssKb) note('could not isolate the server-path browser process by PID diff — browserRssKb is 0');
+  if (!browserRssKb)
+    note('could not isolate the server-path browser process by PID diff — browserRssKb is 0');
 
   return {
-    coldStartMs, warmMiss: stats(warmMiss), cacheHit: stats(cacheHit),
-    coldCachePassMs, fixtureCount: fixtures.length, throughput,
+    coldStartMs,
+    warmMiss: stats(warmMiss),
+    cacheHit: stats(cacheHit),
+    coldCachePassMs,
+    fixtureCount: fixtures.length,
+    throughput,
     rss: { nodeKb: nodeRssKb, browserKb: browserRssKb },
   };
 }
@@ -591,42 +706,82 @@ function sizeOf(file) {
 function benchBundle() {
   log('6. bundle sizes (packages/geekchart/dist)');
   if (!existsSync(geekchartDist)) {
-    note('packages/geekchart/dist missing — run `pnpm --filter geekchart build` first; skipping section 6');
+    note(
+      'packages/geekchart/dist missing — run `pnpm --filter geekchart build` first; skipping section 6',
+    );
     return null;
   }
   const lazyChunkManifest = join(repo, 'packages', 'geekchart', '.lazy-chunk.json');
-  const lazyChunkFiles = existsSync(lazyChunkManifest) ? JSON.parse(readFileSync(lazyChunkManifest, 'utf8')) : [];
-  const entries = ['index.js', 'server.js', 'cli.js'].filter((f) => existsSync(join(geekchartDist, f)));
+  const lazyChunkFiles = existsSync(lazyChunkManifest)
+    ? JSON.parse(readFileSync(lazyChunkManifest, 'utf8'))
+    : [];
+  const entries = ['index.js', 'server.js', 'cli.js'].filter((f) =>
+    existsSync(join(geekchartDist, f)),
+  );
   const entrySizes = Object.fromEntries(entries.map((f) => [f, sizeOf(join(geekchartDist, f))]));
-  const lazyChunkSizes = lazyChunkFiles.map((f) => ({ file: f, ...sizeOf(join(geekchartDist, f)) }));
-  const lazyChunkTotal = lazyChunkSizes.reduce((acc, f) => ({ raw: acc.raw + f.raw, brotli: acc.brotli + f.brotli }), { raw: 0, brotli: 0 });
+  const lazyChunkSizes = lazyChunkFiles.map((f) => ({
+    file: f,
+    ...sizeOf(join(geekchartDist, f)),
+  }));
+  const lazyChunkTotal = lazyChunkSizes.reduce(
+    (acc, f) => ({ raw: acc.raw + f.raw, brotli: acc.brotli + f.brotli }),
+    { raw: 0, brotli: 0 },
+  );
   const allJs = readdirSync(geekchartDist).filter((f) => f.endsWith('.js'));
   const furtherLazy = allJs.filter((f) => !entries.includes(f) && !lazyChunkFiles.includes(f));
-  const furtherLazySizes = furtherLazy.map((f) => sizeOf(join(geekchartDist, f))).reduce((acc, s) => ({ raw: acc.raw + s.raw, brotli: acc.brotli + s.brotli }), { raw: 0, brotli: 0 });
-  return { entries: entrySizes, lazyChunk: { files: lazyChunkSizes, total: lazyChunkTotal }, furtherLazy: { count: furtherLazy.length, total: furtherLazySizes } };
+  const furtherLazySizes = furtherLazy
+    .map((f) => sizeOf(join(geekchartDist, f)))
+    .reduce((acc, s) => ({ raw: acc.raw + s.raw, brotli: acc.brotli + s.brotli }), {
+      raw: 0,
+      brotli: 0,
+    });
+  return {
+    entries: entrySizes,
+    lazyChunk: { files: lazyChunkSizes, total: lazyChunkTotal },
+    furtherLazy: { count: furtherLazy.length, total: furtherLazySizes },
+  };
 }
 
 // -------------------------------------------------------------- machine spec
 
 function machineSpec() {
   const cpuInfo = (() => {
-    try { return execFileSync('lscpu').toString(); } catch { return ''; }
+    try {
+      return execFileSync('lscpu').toString();
+    } catch {
+      return '';
+    }
   })();
   const model = cpuInfo.match(/Model name:\s*(.+)/)?.[1]?.trim() ?? 'unknown';
   const cores = cpuInfo.match(/^CPU\(s\):\s*(\d+)/m)?.[1] ?? String(os.cpus().length);
   const osRelease = (() => {
-    try { return readFileSync('/etc/os-release', 'utf8'); } catch { return ''; }
+    try {
+      return readFileSync('/etc/os-release', 'utf8');
+    } catch {
+      return '';
+    }
   })();
   const osName = osRelease.match(/PRETTY_NAME="(.+)"/)?.[1] ?? process.platform;
   let kernel = '';
-  try { kernel = execFileSync('uname', ['-r']).toString().trim(); } catch { /* ignore */ }
+  try {
+    kernel = execFileSync('uname', ['-r']).toString().trim();
+  } catch {
+    /* ignore */
+  }
   let ramGb = null;
   try {
     const mem = execFileSync('free', ['-b']).toString();
     const bytes = Number(mem.split('\n')[1].trim().split(/\s+/)[1]);
     ramGb = +(bytes / 1024 ** 3).toFixed(1);
-  } catch { /* ignore */ }
-  return { cpuModel: model, cpuCores: Number(cores) || null, ramGb, os: `${osName}${kernel ? ` (${kernel})` : ''}` };
+  } catch {
+    /* ignore */
+  }
+  return {
+    cpuModel: model,
+    cpuCores: Number(cores) || null,
+    ramGb,
+    os: `${osName}${kernel ? ` (${kernel})` : ''}`,
+  };
 }
 
 // --------------------------------------------------------------- README.md
@@ -636,13 +791,16 @@ const stat3 = (s) => `${ms1(s.min)} / ${ms1(s.median)} / ${ms1(s.max)}`;
 const kb = (bytes) => (bytes / 1024).toFixed(1);
 
 function renderReadme(results) {
-  const { machine, config, renderTime, mermaidBaseline, firstChart, animation, server, bundle } = results;
+  const { machine, config, renderTime, mermaidBaseline, firstChart, animation, server, bundle } =
+    results;
   const lines = [];
   const p = (s = '') => lines.push(s);
 
   p('# Geekchart performance benchmarks');
   p();
-  p(`Generated ${results.generatedAt} · min / median / max over ${config.runs} runs, ${config.warmup} warm-up run discarded (a "cold cache" pass is a single measurement — see §5).`);
+  p(
+    `Generated ${results.generatedAt} · min / median / max over ${config.runs} runs, ${config.warmup} warm-up run discarded (a "cold cache" pass is a single measurement — see §5).`,
+  );
   p();
   p('## Machine');
   p();
@@ -654,44 +812,60 @@ function renderReadme(results) {
 
   p('## 1. Render time per chart');
   p();
-  p('Desktop and 4x CPU throttling, via the built renderer (same bundle `gate.mjs` measures against), in ms.');
+  p(
+    'Desktop and 4x CPU throttling, via the built renderer (same bundle `gate.mjs` measures against), in ms.',
+  );
   p();
   p('| chart | family | desktop min/median/max | 4x CPU min/median/max |');
   p('|---|---|---|---|');
-  for (const c of renderTime.perChart) p(`| ${c.id} | ${c.family} | ${stat3(c.desktop)} | ${stat3(c.cpu4x)} |`);
+  for (const c of renderTime.perChart)
+    p(`| ${c.id} | ${c.family} | ${stat3(c.desktop)} | ${stat3(c.cpu4x)} |`);
   p();
   p('Per-family median (of per-chart medians), ms:');
   p();
   p('| family | n | desktop | 4x CPU |');
   p('|---|---|---|---|');
-  for (const [name, f] of Object.entries(renderTime.perFamily)) p(`| ${name} | ${f.count} | ${ms1(f.desktopMedian)} | ${ms1(f.cpu4xMedian)} |`);
+  for (const [name, f] of Object.entries(renderTime.perFamily))
+    p(`| ${name} | ${f.count} | ${ms1(f.desktopMedian)} | ${ms1(f.cpu4xMedian)} |`);
   p();
 
   p('## 2. Mermaid baseline');
   p();
-  p(`mermaid's own \`mermaid.render\`, same fixtures, desktop only. Bundle: what a browser fetches eagerly to call it once (esbuild, code-split, only the static-import closure — the same method \`packages/geekchart/build.mjs\` uses for Geekchart's own lazy chunk): **${kb(mermaidBaseline.bundle.brotli)} kB brotli** (${kb(mermaidBaseline.bundle.raw)} kB raw, ${mermaidBaseline.bundle.files.length} files).`);
+  p(
+    `mermaid's own \`mermaid.render\`, same fixtures, desktop only. Bundle: what a browser fetches eagerly to call it once (esbuild, code-split, only the static-import closure — the same method \`packages/geekchart/build.mjs\` uses for Geekchart's own lazy chunk): **${kb(mermaidBaseline.bundle.brotli)} kB brotli** (${kb(mermaidBaseline.bundle.raw)} kB raw, ${mermaidBaseline.bundle.files.length} files).`,
+  );
   p();
   p('| chart | family | desktop min/median/max |');
   p('|---|---|---|');
   for (const c of mermaidBaseline.perChart) p(`| ${c.id} | ${c.family} | ${stat3(c.desktop)} |`);
   p();
   if (mermaidBaseline.skipped.length) {
-    p(`Skipped (mermaid could not render the source as-is): ${mermaidBaseline.skipped.map((s) => `\`${s.id}\``).join(', ')}.`);
+    p(
+      `Skipped (mermaid could not render the source as-is): ${mermaidBaseline.skipped.map((s) => `\`${s.id}\``).join(', ')}.`,
+    );
     p();
   }
 
   p('## 3. First-chart experience (Fast 3G + 4x CPU)');
   p();
-  p('A minimal page mounting `<Geekchart source>` from the built `geekchart` package (React + ReactDOM + the component, esbuild-bundled, served brotli-compressed with far-future cache headers). Time from navigation to the chart\'s `svg.gc-chart` appearing.');
+  p(
+    "A minimal page mounting `<Geekchart source>` from the built `geekchart` package (React + ReactDOM + the component, esbuild-bundled, served brotli-compressed with far-future cache headers). Time from navigation to the chart's `svg.gc-chart` appearing.",
+  );
   p();
   p('| | min | median | max |');
   p('|---|---|---|---|');
-  p(`| cold (empty cache) | ${ms1(firstChart.timeline.cold.min)}ms | ${ms1(firstChart.timeline.cold.median)}ms | ${ms1(firstChart.timeline.cold.max)}ms |`);
-  p(`| warm (2nd navigation) | ${ms1(firstChart.timeline.warm.min)}ms | ${ms1(firstChart.timeline.warm.median)}ms | ${ms1(firstChart.timeline.warm.max)}ms |`);
+  p(
+    `| cold (empty cache) | ${ms1(firstChart.timeline.cold.min)}ms | ${ms1(firstChart.timeline.cold.median)}ms | ${ms1(firstChart.timeline.cold.max)}ms |`,
+  );
+  p(
+    `| warm (2nd navigation) | ${ms1(firstChart.timeline.warm.min)}ms | ${ms1(firstChart.timeline.warm.median)}ms | ${ms1(firstChart.timeline.warm.max)}ms |`,
+  );
   p();
   if (firstChart.lighthouse) {
     const l = firstChart.lighthouse;
-    p(`Lighthouse (mobile preset, single run): performance score **${l.performanceScore}**, LCP ${ms1(l.lcpMs)}ms, TBT ${ms1(l.tbtMs)}ms, CLS ${l.cls}.`);
+    p(
+      `Lighthouse (mobile preset, single run): performance score **${l.performanceScore}**, LCP ${ms1(l.lcpMs)}ms, TBT ${ms1(l.tbtMs)}ms, CLS ${l.cls}.`,
+    );
   } else {
     p('Lighthouse: not run (see notes).');
   }
@@ -699,12 +873,18 @@ function renderReadme(results) {
 
   p('## 4. Animation');
   p();
-  p(`fps and worst single-frame time over 3s, on the ${results.heaviestCharts.length} heaviest charts by desktop render time: ${results.heaviestCharts.join(', ')}.`);
+  p(
+    `fps and worst single-frame time over 3s, on the ${results.heaviestCharts.length} heaviest charts by desktop render time: ${results.heaviestCharts.join(', ')}.`,
+  );
   p();
-  p('| chart | desktop fps min/median/max | desktop worst frame (ms) | 4x CPU fps min/median/max | 4x CPU worst frame (ms) |');
+  p(
+    '| chart | desktop fps min/median/max | desktop worst frame (ms) | 4x CPU fps min/median/max | 4x CPU worst frame (ms) |',
+  );
   p('|---|---|---|---|---|');
   for (const a of animation) {
-    p(`| ${a.id} | ${stat3(a.desktop.fps)} | ${ms1(a.desktop.worstFrameMs.max)} | ${stat3(a.cpu4x.fps)} | ${ms1(a.cpu4x.worstFrameMs.max)} |`);
+    p(
+      `| ${a.id} | ${stat3(a.desktop.fps)} | ${ms1(a.desktop.worstFrameMs.max)} | ${stat3(a.cpu4x.fps)} | ${ms1(a.cpu4x.worstFrameMs.max)} |`,
+    );
   }
   p();
 
@@ -715,12 +895,20 @@ function renderReadme(results) {
     p();
     p('| | min | median | max |');
     p('|---|---|---|---|');
-    p(`| warm miss (cache disabled) | ${ms1(server.warmMiss.min)}ms | ${ms1(server.warmMiss.median)}ms | ${ms1(server.warmMiss.max)}ms |`);
-    p(`| cache hit | ${ms1(server.cacheHit.min)}ms | ${ms1(server.cacheHit.median)}ms | ${ms1(server.cacheHit.max)}ms |`);
+    p(
+      `| warm miss (cache disabled) | ${ms1(server.warmMiss.min)}ms | ${ms1(server.warmMiss.median)}ms | ${ms1(server.warmMiss.max)}ms |`,
+    );
+    p(
+      `| cache hit | ${ms1(server.cacheHit.min)}ms | ${ms1(server.cacheHit.median)}ms | ${ms1(server.cacheHit.max)}ms |`,
+    );
     p();
-    p(`Cold-cache full pass, all ${server.fixtureCount} fixtures, sequential, fresh cache: **${ms1(server.coldCachePassMs)}ms** (single measurement — repeating it would no longer be cold).`);
+    p(
+      `Cold-cache full pass, all ${server.fixtureCount} fixtures, sequential, fresh cache: **${ms1(server.coldCachePassMs)}ms** (single measurement — repeating it would no longer be cold).`,
+    );
     p();
-    p(`Throughput, ${server.fixtureCount} fixtures per run, \`Promise.all\` batches (renders/second):`);
+    p(
+      `Throughput, ${server.fixtureCount} fixtures per run, \`Promise.all\` batches (renders/second):`,
+    );
     p();
     p('| concurrency | min | median | max |');
     p('|---|---|---|---|');
@@ -729,7 +917,9 @@ function renderReadme(results) {
       p(`| ${c} | ${t.min.toFixed(1)} | ${t.median.toFixed(1)} | ${t.max.toFixed(1)} |`);
     }
     p();
-    p(`RSS after the throughput run: Node ${(server.rss.nodeKb / 1024).toFixed(0)} MB, Chromium (all processes) ${(server.rss.browserKb / 1024).toFixed(0)} MB.`);
+    p(
+      `RSS after the throughput run: Node ${(server.rss.nodeKb / 1024).toFixed(0)} MB, Chromium (all processes) ${(server.rss.browserKb / 1024).toFixed(0)} MB.`,
+    );
   } else {
     p('Not measured — see notes.');
   }
@@ -740,9 +930,14 @@ function renderReadme(results) {
   if (bundle) {
     p('| entry | raw | brotli |');
     p('|---|---|---|');
-    for (const [name, s] of Object.entries(bundle.entries)) p(`| ${name} | ${kb(s.raw)} kB | ${kb(s.brotli)} kB |`);
-    p(`| **lazy chunk (${bundle.lazyChunk.files.length} files, fetched on first chart mount)** | **${kb(bundle.lazyChunk.total.raw)} kB** | **${kb(bundle.lazyChunk.total.brotli)} kB** |`);
-    p(`| further lazy (mermaid's own per-diagram-type chunks, ${bundle.furtherLazy.count} files) | ${kb(bundle.furtherLazy.total.raw)} kB | ${kb(bundle.furtherLazy.total.brotli)} kB |`);
+    for (const [name, s] of Object.entries(bundle.entries))
+      p(`| ${name} | ${kb(s.raw)} kB | ${kb(s.brotli)} kB |`);
+    p(
+      `| **lazy chunk (${bundle.lazyChunk.files.length} files, fetched on first chart mount)** | **${kb(bundle.lazyChunk.total.raw)} kB** | **${kb(bundle.lazyChunk.total.brotli)} kB** |`,
+    );
+    p(
+      `| further lazy (mermaid's own per-diagram-type chunks, ${bundle.furtherLazy.count} files) | ${kb(bundle.furtherLazy.total.raw)} kB | ${kb(bundle.furtherLazy.total.brotli)} kB |`,
+    );
   } else {
     p('Not measured — see notes.');
   }
@@ -757,11 +952,17 @@ function renderReadme(results) {
 
   p('## Method');
   p();
-  p('- Every number is min/median/max over 10 runs after 1 discarded warm-up, except a cold-cache pass, which cannot be repeated and stay cold.');
+  p(
+    '- Every number is min/median/max over 10 runs after 1 discarded warm-up, except a cold-cache pass, which cannot be repeated and stay cold.',
+  );
   p('- "4x CPU" is Chrome DevTools Protocol `Emulation.setCPUThrottlingRate({rate: 4})`.');
   p('- "Fast 3G" is `Network.emulateNetworkConditions` at 1.6 Mbps down, 150ms latency.');
-  p('- Render time is measured inside the page (`performance.now()` around the call), not around the Node round trip, so Playwright IPC overhead is excluded.');
-  p('- The mermaid baseline and its bundle size use the same "static-import closure from one entry point" method `packages/geekchart/build.mjs` uses for Geekchart\'s own lazy chunk, so the two numbers are comparable.');
+  p(
+    '- Render time is measured inside the page (`performance.now()` around the call), not around the Node round trip, so Playwright IPC overhead is excluded.',
+  );
+  p(
+    '- The mermaid baseline and its bundle size use the same "static-import closure from one entry point" method `packages/geekchart/build.mjs` uses for Geekchart\'s own lazy chunk, so the two numbers are comparable.',
+  );
   p();
   return lines.join('\n');
 }
@@ -793,11 +994,18 @@ async function main() {
     const b = await chromium.launch();
     chromiumVersion = b.version();
     await b.close();
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   const results = {
     generatedAt: new Date().toISOString(),
-    machine: { ...machineSpec(), nodeVersion: process.version, chromiumVersion, pnpmWorkspace: true },
+    machine: {
+      ...machineSpec(),
+      nodeVersion: process.version,
+      chromiumVersion,
+      pnpmWorkspace: true,
+    },
     config: { runs: N, warmup: WARMUP, renderOptions: RENDER_OPTS },
     fixtureCount: fixtures.length,
     heaviestCharts: heaviest.map((f) => f.id),

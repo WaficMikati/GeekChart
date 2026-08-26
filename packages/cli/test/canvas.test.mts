@@ -84,14 +84,18 @@ async function measure() {
       };
     };
     let ink: { left: number; right: number; top: number; bottom: number } | null = null;
-    for (const el of svg.querySelectorAll('.gc-node, .gc-cluster, .gc-edge, text, rect, path, circle, polygon')) {
+    for (const el of svg.querySelectorAll(
+      '.gc-node, .gc-cluster, .gc-edge, text, rect, path, circle, polygon',
+    )) {
       const r = (el as SVGGraphicsElement).getBoundingClientRect();
       if (!r.width && !r.height) continue;
       const u = toUnits(r);
       ink = ink
         ? {
-            left: Math.min(ink.left, u.left), right: Math.max(ink.right, u.right),
-            top: Math.min(ink.top, u.top), bottom: Math.max(ink.bottom, u.bottom),
+            left: Math.min(ink.left, u.left),
+            right: Math.max(ink.right, u.right),
+            top: Math.min(ink.top, u.top),
+            bottom: Math.max(ink.bottom, u.bottom),
           }
         : u;
     }
@@ -120,10 +124,28 @@ describe('canvas', () => {
     // gave consistent type while every chart was shown at the same pixel width;
     // responsive charts lose type size to padding instead.
     const all = [
-      'flow', 'subgraphs', '4geeks-journey', 'state', 'class', 'er',
-      'sequence', 'sequence-rich', 'control-plane', 'architecture', 'org-chart',
-      'timeline', 'gantt', 'gantt-states', 'journey',
-      'xy', 'radar', 'quadrant', 'sankey', 'treemap', 'kanban', 'messy',
+      'flow',
+      'subgraphs',
+      '4geeks-journey',
+      'state',
+      'class',
+      'er',
+      'sequence',
+      'sequence-rich',
+      'control-plane',
+      'architecture',
+      'org-chart',
+      'timeline',
+      'gantt',
+      'gantt-states',
+      'journey',
+      'xy',
+      'radar',
+      'quadrant',
+      'sankey',
+      'treemap',
+      'kanban',
+      'messy',
     ];
     for (const name of all) {
       await mount(named(name));
@@ -140,18 +162,37 @@ describe('canvas', () => {
   });
 
   test('content keeps the 48 margin and is not clipped', async () => {
-    for (const name of ['flow', 'control-plane', 'er', 'timeline', 'kanban', 'gantt', 'journey', 'xy', 'radar', 'quadrant', 'sankey', 'treemap']) {
+    for (const name of [
+      'flow',
+      'control-plane',
+      'er',
+      'timeline',
+      'kanban',
+      'gantt',
+      'journey',
+      'xy',
+      'radar',
+      'quadrant',
+      'sankey',
+      'treemap',
+    ]) {
       await mount(named(name));
       const m = await measure();
       const ink = m.ink!;
       // Half a unit of slack: a 1.25 hairline is drawn centred on its path, so
       // the outermost ink sits a fraction outside the geometry it belongs to.
-      assert.ok(ink.left > -0.5 && ink.right < m.width + 0.5,
-        `${name}: content runs off the canvas (DESIGN 7.5)`);
-      assert.ok(ink.top > -0.5 && ink.bottom < m.height + 0.5,
-        `${name}: content runs off the canvas (DESIGN 7.5)`);
-      assert.ok(ink.top >= MARGIN - 2 && m.height - ink.bottom >= MARGIN - 2,
-        `${name}: content is inside the ${MARGIN} margin (DESIGN 1.3)`);
+      assert.ok(
+        ink.left > -0.5 && ink.right < m.width + 0.5,
+        `${name}: content runs off the canvas (DESIGN 7.5)`,
+      );
+      assert.ok(
+        ink.top > -0.5 && ink.bottom < m.height + 0.5,
+        `${name}: content runs off the canvas (DESIGN 7.5)`,
+      );
+      assert.ok(
+        ink.top >= MARGIN - 2 && m.height - ink.bottom >= MARGIN - 2,
+        `${name}: content is inside the ${MARGIN} margin (DESIGN 1.3)`,
+      );
     }
   });
 
@@ -162,14 +203,25 @@ describe('canvas', () => {
     // mismatch (unstyled measurement text, a presentation attribute a CSS
     // class was silently overriding, a gutter sized for content that never
     // landed on that side).
-    for (const name of ['flow', '4geeks-journey', 'control-plane', 'journey', 'xy', 'radar', 'quadrant', 'sankey']) {
+    for (const name of [
+      'flow',
+      '4geeks-journey',
+      'control-plane',
+      'journey',
+      'xy',
+      'radar',
+      'quadrant',
+      'sankey',
+    ]) {
       await mount(named(name));
       const m = await measure();
       const ink = m.ink!;
       const leftMargin = ink.left;
       const rightMargin = m.width - ink.right;
-      assert.ok(Math.abs(leftMargin - rightMargin) <= 8,
-        `${name}: left margin ${leftMargin.toFixed(1)} vs right margin ${rightMargin.toFixed(1)} (DESIGN 7.3)`);
+      assert.ok(
+        Math.abs(leftMargin - rightMargin) <= 8,
+        `${name}: left margin ${leftMargin.toFixed(1)} vs right margin ${rightMargin.toFixed(1)} (DESIGN 7.3)`,
+      );
     }
   });
 
@@ -180,7 +232,10 @@ describe('canvas', () => {
     const m = await measure();
     assert.ok(m.width <= CANVAS, `canvas ${m.width} exceeds ${CANVAS}`);
     const rows = new Set(m.boxes.map((b) => Math.round(b.y / 8)));
-    assert.ok(rows.size >= 3, `expected the run to wrap; every node sits in ${rows.size} row band(s) (DESIGN 1.2)`);
+    assert.ok(
+      rows.size >= 3,
+      `expected the run to wrap; every node sits in ${rows.size} row band(s) (DESIGN 1.2)`,
+    );
   });
 
   test('a tall top-to-bottom stack is laid side by side', async () => {
@@ -189,8 +244,10 @@ describe('canvas', () => {
     await mount(named('class'));
     const m = await measure();
     const ink = m.ink!;
-    assert.ok(ink.bottom - ink.top < ink.right - ink.left,
-      `the stack is still taller than it is wide (DESIGN 1.4)`);
+    assert.ok(
+      ink.bottom - ink.top < ink.right - ink.left,
+      `the stack is still taller than it is wide (DESIGN 1.4)`,
+    );
   });
 
   test('pie is drawn natively, not through the mermaid fallback', async () => {
@@ -198,7 +255,11 @@ describe('canvas', () => {
     // renderer (DESIGN 7.6). The one thing every native chart carries that a
     // raw mermaid SVG never does is this class on the root element.
     const reply = ok(await renderAny(session.page, named('pie'), {}));
-    assert.match(reply.svg, /<svg class="gc-chart"/, 'pie svg should carry class="gc-chart" (DESIGN 7.6)');
+    assert.match(
+      reply.svg,
+      /<svg class="gc-chart"/,
+      'pie svg should carry class="gc-chart" (DESIGN 7.6)',
+    );
   });
 
   test('every pie leader is the same length — 32 radial + 24 to the label', async () => {
@@ -207,30 +268,37 @@ describe('canvas', () => {
     // holds this well when every leader reads the same, not some stretched
     // long to dodge a neighbour).
     await mount(named('pie'));
-    const ds = await session.page.$$eval('.gc-radial-leader', (nodes) => nodes.map((n) => n.getAttribute('d') ?? ''));
+    const ds = await session.page.$$eval('.gc-radial-leader', (nodes) =>
+      nodes.map((n) => n.getAttribute('d') ?? ''),
+    );
     assert.ok(ds.length > 1, 'expected more than one pie leader to compare');
     const lengths = ds.map((d) => {
       // M/L carry an x,y pair; H (the underline) carries only an x — parse
       // by command, not by blindly pairing every number in the string.
       let total = 0;
-      let x = 0, y = 0;
+      let x = 0,
+        y = 0;
       for (const [, cmd, args] of d.matchAll(/([MLH])([^MLH]*)/g)) {
         const nums = (args!.match(/-?[\d.]+/g) ?? []).map(Number);
         if (cmd === 'H') {
           total += Math.abs(nums[0]! - x);
           x = nums[0]!;
         } else {
-          const nx = nums[0]!, ny = nums[1]!;
+          const nx = nums[0]!,
+            ny = nums[1]!;
           if (cmd === 'L') total += Math.hypot(nx - x, ny - y);
-          x = nx; y = ny;
+          x = nx;
+          y = ny;
         }
       }
       return total;
     });
     const first = lengths[0]!;
     for (const [i, len] of lengths.entries()) {
-      assert.ok(Math.abs(len - first) <= 1,
-        `leader ${i} is ${len.toFixed(1)} long against ${first.toFixed(1)} for leader 0: ${ds[i]}`);
+      assert.ok(
+        Math.abs(len - first) <= 1,
+        `leader ${i} is ${len.toFixed(1)} long against ${first.toFixed(1)} for leader 0: ${ds[i]}`,
+      );
     }
   });
 
@@ -242,19 +310,37 @@ describe('canvas', () => {
       const m = await measure();
       const ink = m.ink!;
       const covered = ((ink.right - ink.left) * (ink.bottom - ink.top)) / (m.width * m.height);
-      assert.ok(covered > 0.35,
-        `${name}: content covers ${Math.round(covered * 100)}% of the canvas (DESIGN 7.4)`);
+      assert.ok(
+        covered > 0.35,
+        `${name}: content covers ${Math.round(covered * 100)}% of the canvas (DESIGN 7.4)`,
+      );
     }
   });
 });
 
 describe('type', () => {
   test('nothing is set below 11 units, on any chart', async () => {
-    for (const name of ['flow', '4geeks-journey', 'er', 'sequence', 'timeline', 'gantt', 'xy', 'radar', 'quadrant', 'sankey', 'treemap', 'kanban']) {
+    for (const name of [
+      'flow',
+      '4geeks-journey',
+      'er',
+      'sequence',
+      'timeline',
+      'gantt',
+      'xy',
+      'radar',
+      'quadrant',
+      'sankey',
+      'treemap',
+      'kanban',
+    ]) {
       await mount(named(name));
       const m = await measure();
       const smallest = Math.min(...m.texts.map((t) => t.size));
-      assert.ok(smallest >= 11, `${name}: "${m.texts.find((t) => t.size === smallest)?.text}" is set at ${smallest} (DESIGN 3.1)`);
+      assert.ok(
+        smallest >= 11,
+        `${name}: "${m.texts.find((t) => t.size === smallest)?.text}" is set at ${smallest} (DESIGN 3.1)`,
+      );
     }
   });
 
@@ -285,12 +371,19 @@ describe('type', () => {
     const m = await measure();
     const allowed = new Set(Object.values(TYPE));
     for (const t of m.texts) {
-      assert.ok(allowed.has(t.size), `"${t.text}" is set at ${t.size}, which is not in the DESIGN §3 table`);
+      assert.ok(
+        allowed.has(t.size),
+        `"${t.text}" is set at ${t.size}, which is not in the DESIGN §3 table`,
+      );
     }
-    assert.ok(m.texts.some((t) => t.cls.includes('gc-title') && t.size === TYPE.name),
-      'a node name should be 13 (DESIGN §3)');
-    assert.ok(m.texts.some((t) => t.cls.includes('gc-caption') && t.size === TYPE.caption),
-      'a node caption should be 11 mono (DESIGN §3)');
+    assert.ok(
+      m.texts.some((t) => t.cls.includes('gc-title') && t.size === TYPE.name),
+      'a node name should be 13 (DESIGN §3)',
+    );
+    assert.ok(
+      m.texts.some((t) => t.cls.includes('gc-caption') && t.size === TYPE.caption),
+      'a node caption should be 11 mono (DESIGN §3)',
+    );
   });
 
   test('a panel title is 22 and its kicker 11, on the same canvas as the names', async () => {
@@ -299,7 +392,8 @@ describe('type', () => {
     const title = m.texts.find((t) => t.cls.includes('gc-cluster-title'));
     assert.equal(title?.size, TYPE.title, 'panel title should be 22 (DESIGN §3)');
     const kicker = m.texts.find((t) => t.cls.includes('gc-cluster-kicker'));
-    if (kicker) assert.equal(kicker.size, TYPE.kicker, 'panel kicker should be 11 mono (DESIGN §3)');
+    if (kicker)
+      assert.equal(kicker.size, TYPE.kicker, 'panel kicker should be 11 mono (DESIGN §3)');
   });
 });
 
@@ -313,7 +407,8 @@ describe('rotation', () => {
       const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
       let n = 0;
       for (const t of svg.querySelectorAll('text')) {
-        const tr = (t.getAttribute('transform') ?? '') + (t.parentElement?.getAttribute('transform') ?? '');
+        const tr =
+          (t.getAttribute('transform') ?? '') + (t.parentElement?.getAttribute('transform') ?? '');
         if (/rotate\(\s*-?(?!0[\s)])\d/.test(tr)) n++;
       }
       return n;
@@ -331,7 +426,8 @@ describe('rotation', () => {
       const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
       let n = 0;
       for (const t of svg.querySelectorAll('text')) {
-        const tr = (t.getAttribute('transform') ?? '') + (t.parentElement?.getAttribute('transform') ?? '');
+        const tr =
+          (t.getAttribute('transform') ?? '') + (t.parentElement?.getAttribute('transform') ?? '');
         if (/rotate\(\s*-?(?!0[\s)])\d/.test(tr)) n++;
       }
       return n;
@@ -349,7 +445,10 @@ describe('baselines', () => {
     await mount(CAPTIONED);
     const m = await measure();
     const tall = m.boxes.filter((b) => b.height === 56);
-    assert.ok(tall.length >= 3, `expected 56-high boxes, got heights ${m.boxes.map((b) => b.height).join()}`);
+    assert.ok(
+      tall.length >= 3,
+      `expected 56-high boxes, got heights ${m.boxes.map((b) => b.height).join()}`,
+    );
     for (const box of tall) {
       const name = box.rows.find((r) => r.cls.includes('gc-title'))!;
       const caption = box.rows.find((r) => r.cls.includes('gc-caption'))!;
@@ -361,8 +460,13 @@ describe('baselines', () => {
   test('in a 48-high box the single name sits at y+28', async () => {
     await mount(named('flow'));
     const m = await measure();
-    const short = m.boxes.filter((b) => b.height === 48 && b.rows.length === 1 && ['rect', 'round'].includes(b.kind));
-    assert.ok(short.length >= 3, `expected 48-high boxes, got heights ${m.boxes.map((b) => b.height).join()}`);
+    const short = m.boxes.filter(
+      (b) => b.height === 48 && b.rows.length === 1 && ['rect', 'round'].includes(b.kind),
+    );
+    assert.ok(
+      short.length >= 3,
+      `expected 48-high boxes, got heights ${m.boxes.map((b) => b.height).join()}`,
+    );
     for (const box of short) {
       assert.equal(Math.round(box.rows[0]!.baseline - box.y), 28, 'name baseline should be y + 28');
     }
@@ -375,7 +479,13 @@ describe('baselines', () => {
     await mount(named('flow'));
     const m = await measure();
     const rects = m.boxes.filter((b) => b.rows.length === 1 && ['rect', 'round'].includes(b.kind));
-    assert.ok(rects.length >= 3, `expected plain boxes, got kinds ${m.boxes.map((b) => b.kind).join()}`);
-    assert.ok(rects.every((b) => b.height === 48), `captionless boxes are ${[...new Set(rects.map((b) => b.height))].join()} high`);
+    assert.ok(
+      rects.length >= 3,
+      `expected plain boxes, got kinds ${m.boxes.map((b) => b.kind).join()}`,
+    );
+    assert.ok(
+      rects.every((b) => b.height === 48),
+      `captionless boxes are ${[...new Set(rects.map((b) => b.height))].join()} high`,
+    );
   });
 });

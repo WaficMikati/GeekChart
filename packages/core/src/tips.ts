@@ -89,7 +89,10 @@ export function tipPath(
     // association is the whole point of the notation.
     case 'open': {
       const half = width * 0.62;
-      return { fill: '', line: `M${at(side(length, half))} L${at(tip)} L${at(side(length, -half))}` };
+      return {
+        fill: '',
+        line: `M${at(side(length, half))} L${at(tip)} L${at(side(length, -half))}`,
+      };
     }
 
     // Inheritance: a hollow triangle, deliberately larger than an arrowhead so
@@ -116,11 +119,17 @@ export function tipPath(
     case 'many':
       return { fill: '', line: foot(length, width * 0.72) };
     case 'zero-many':
-      return { fill: '', line: `${foot(length, width * 0.72)} ${ring(length * 1.55, length * 0.28)}` };
+      return {
+        fill: '',
+        line: `${foot(length, width * 0.72)} ${ring(length * 1.55, length * 0.28)}`,
+      };
     case 'one':
       return { fill: '', line: `${foot(length, width * 0.72)} ${bar(length * 1.5, width * 0.62)}` };
     case 'only-one':
-      return { fill: '', line: `${bar(length * 0.35, width * 0.62)} ${bar(length * 0.95, width * 0.62)}` };
+      return {
+        fill: '',
+        line: `${bar(length * 0.35, width * 0.62)} ${bar(length * 0.95, width * 0.62)}`,
+      };
     case 'zero-one':
       return {
         fill: '',
@@ -134,18 +143,27 @@ export function tipPath(
 /** How far back from the shape a tip reaches, so the line can stop short of it. */
 export function tipReach(kind: EdgeTip, length: number): number {
   switch (kind) {
-    case 'none': return 0;
-    case 'arrow': return 0;
-    case 'cross': return length * 0.5;
-    case 'open': return length * 0.5;
+    case 'none':
+      return 0;
+    case 'arrow':
+      return 0;
+    case 'cross':
+      return length * 0.5;
+    case 'open':
+      return length * 0.5;
     case 'triangle':
     case 'diamond':
-    case 'diamond-filled': return length;
-    case 'many': return length;
+    case 'diamond-filled':
+      return length;
+    case 'many':
+      return length;
     case 'zero-many':
-    case 'one': return length * 1.8;
+    case 'one':
+      return length * 1.8;
     case 'only-one':
-    case 'zero-one': return length * 1.55;
-    default: return 0;
+    case 'zero-one':
+      return length * 1.55;
+    default:
+      return 0;
   }
 }

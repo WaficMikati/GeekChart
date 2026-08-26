@@ -109,8 +109,14 @@ const blueprint: StyleSpec = {
 
   layout: { engine: 'elk', nodeSpacing: 44, rankSpacing: 66, padding: 14, wrappingWidth: 150 },
   geometry: {
-    uniformNodes: true, grid: 8, maxNodeWidth: 268, gutter: 26,
-    edgeRouting: 'ports', edgeGap: 3, arrowLength: 8, arrowWidth: 6,
+    uniformNodes: true,
+    grid: 8,
+    maxNodeWidth: 268,
+    gutter: 26,
+    edgeRouting: 'ports',
+    edgeGap: 3,
+    arrowLength: 8,
+    arrowWidth: 6,
   },
 };
 
@@ -150,8 +156,14 @@ const surface: StyleSpec = {
 
   layout: { engine: 'elk', nodeSpacing: 52, rankSpacing: 80, padding: 16, wrappingWidth: 175 },
   geometry: {
-    uniformNodes: true, grid: 8, maxNodeWidth: 280, gutter: 30,
-    edgeRouting: 'ports', edgeGap: 5, arrowLength: 8, arrowWidth: 6,
+    uniformNodes: true,
+    grid: 8,
+    maxNodeWidth: 280,
+    gutter: 30,
+    edgeRouting: 'ports',
+    edgeGap: 5,
+    arrowLength: 8,
+    arrowWidth: 6,
   },
 };
 
@@ -191,8 +203,14 @@ const press: StyleSpec = {
 
   layout: { engine: 'elk', nodeSpacing: 40, rankSpacing: 58, padding: 13, wrappingWidth: 140 },
   geometry: {
-    uniformNodes: true, grid: 8, maxNodeWidth: 250, gutter: 24,
-    edgeRouting: 'ports', edgeGap: 3, arrowLength: 8, arrowWidth: 6.5,
+    uniformNodes: true,
+    grid: 8,
+    maxNodeWidth: 250,
+    gutter: 24,
+    edgeRouting: 'ports',
+    edgeGap: 3,
+    arrowLength: 8,
+    arrowWidth: 6.5,
   },
 };
 

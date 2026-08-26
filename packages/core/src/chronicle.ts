@@ -81,18 +81,40 @@ const time = (v: string | Date | undefined): number =>
 function formatDate(ms: number, pattern: string): string {
   const d = new Date(ms);
   const pad = (n: number) => String(n).padStart(2, '0');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   return pattern.replace(/%[a-zA-Z]/g, (token) => {
     switch (token) {
-      case '%Y': return String(d.getFullYear());
-      case '%y': return pad(d.getFullYear() % 100);
-      case '%m': return pad(d.getMonth() + 1);
-      case '%b': return months[d.getMonth()]!;
-      case '%d': return pad(d.getDate());
-      case '%e': return String(d.getDate());
-      case '%H': return pad(d.getHours());
-      case '%M': return pad(d.getMinutes());
-      default: return token;
+      case '%Y':
+        return String(d.getFullYear());
+      case '%y':
+        return pad(d.getFullYear() % 100);
+      case '%m':
+        return pad(d.getMonth() + 1);
+      case '%b':
+        return months[d.getMonth()]!;
+      case '%d':
+        return pad(d.getDate());
+      case '%e':
+        return String(d.getDate());
+      case '%H':
+        return pad(d.getHours());
+      case '%M':
+        return pad(d.getMinutes());
+      default:
+        return token;
     }
   });
 }
@@ -131,8 +153,7 @@ export async function toChronicle(source: string, kind: ChronicleKind): Promise<
     clean(db.getDiagramTitle?.()) ||
     clean(/^[ \t]*title[ \t]+(.+)$/m.exec(source.split(/^[ \t]*section\b/m)[0] ?? '')?.[1]);
   const lanes: Lane[] = (sections.length ? sections : ['']).map((name) => ({ name, items: [] }));
-  const laneOf = (name: string) =>
-    lanes.find((l) => l.name === clean(name)) ?? lanes[0]!;
+  const laneOf = (name: string) => lanes.find((l) => l.name === clean(name)) ?? lanes[0]!;
 
   let ticks: { at: number; label: string }[] = [];
 
@@ -191,7 +212,10 @@ export async function toChronicle(source: string, kind: ChronicleKind): Promise<
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const esc = (t: string) =>
-  t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  t.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 const round = (n: number) => Number(n.toFixed(2));
 
 /**
@@ -229,11 +253,19 @@ export interface ChronicleDrawing {
  */
 function easedTimeFor(fraction: number): number {
   const v = Math.min(1, Math.max(0, fraction));
-  const x1 = 0.61, y1 = 0, x2 = 0.39, y2 = 1;
+  const x1 = 0.61,
+    y1 = 0,
+    x2 = 0.39,
+    y2 = 1;
   const bx = (t: number) => 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t ** 2 * x2 + t ** 3;
   const by = (t: number) => 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t ** 2 * y2 + t ** 3;
-  let lo = 0, hi = 1;
-  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (by(mid) < v) lo = mid; else hi = mid; }
+  let lo = 0,
+    hi = 1;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (by(mid) < v) lo = mid;
+    else hi = mid;
+  }
   return bx((lo + hi) / 2);
 }
 
@@ -282,12 +314,24 @@ export function drawChronicle(
     `<svg class="gc-chart" viewBox="0 0 ${frame.width} ${frame.height}" ` +
     `width="${frame.width}" height="${frame.height}" role="img" xmlns="${SVGNS}">` +
     `<g class="gc-frame" transform="${frameTransform(frame)}">` +
-    bands.join('') + parts.join('') + beats.map((b) => b.markup).join('') + title +
+    bands.join('') +
+    parts.join('') +
+    beats.map((b) => b.markup).join('') +
+    title +
     `</g></svg>`;
 
-  const timeline_ = animate(chronicle, beats, bands.length, Boolean(chronicle.title), Boolean(built.legend), scene);
+  const timeline_ = animate(
+    chronicle,
+    beats,
+    bands.length,
+    Boolean(chronicle.title),
+    Boolean(built.legend),
+    scene,
+  );
 
-  const noun = { gantt: 'Gantt chart', timeline: 'Timeline', journey: 'User journey' }[chronicle.kind];
+  const noun = { gantt: 'Gantt chart', timeline: 'Timeline', journey: 'User journey' }[
+    chronicle.kind
+  ];
   const summary =
     `${noun}${chronicle.title ? `: ${chronicle.title}` : ''}. ` +
     `${chronicle.lanes.length} section${chronicle.lanes.length === 1 ? '' : 's'}, ` +
@@ -313,10 +357,19 @@ type Measure = (t: string, font: string, size: number, tracking?: string) => num
  * plot without stepping over headings.
  */
 function gantt(
-  c: Chronicle, scene: Scene, width: Measure, pad: number, titleH: number,
-  parts: string[], beats: Beat[], bands: string[],
+  c: Chronicle,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  titleH: number,
+  parts: string[],
+  beats: Beat[],
+  bands: string[],
 ): { width: number; height: number; legend?: boolean } {
-  const gutter = Math.max(90, ...c.lanes.map((l) => width(l.name, scene.titleFont, scene.type.name) + 28));
+  const gutter = Math.max(
+    90,
+    ...c.lanes.map((l) => width(l.name, scene.titleFont, scene.type.name) + 28),
+  );
   // The date axis is given every unit the canvas has left rather than the width
   // the longest label happens to want. DESIGN 1.1 and 7.4: the plot is the chart,
   // so it is the thing that fills the stage.
@@ -332,7 +385,11 @@ function gantt(
   // plain gantt with no states or milestones has nothing to explain.
   const legendItems: { key: 'done' | 'active' | 'crit' | 'milestone'; label: string }[] = [];
   (['done', 'active', 'crit'] as const).forEach((s) => {
-    if (all.some((i) => i.state === s)) legendItems.push({ key: s, label: s === 'crit' ? 'Critical' : s === 'active' ? 'Active' : 'Done' });
+    if (all.some((i) => i.state === s))
+      legendItems.push({
+        key: s,
+        label: s === 'crit' ? 'Critical' : s === 'active' ? 'Active' : 'Done',
+      });
   });
   if (all.some((i) => i.milestone)) legendItems.push({ key: 'milestone', label: 'Milestone' });
   const legendH = legendItems.length ? scene.type.label * 3 : 0;
@@ -360,7 +417,11 @@ function gantt(
     const bx = at(item.start);
     const w = item.milestone
       ? Math.max(6, at(item.end ?? item.start) - bx)
-      : Math.max(6, at(item.end ?? item.start) - bx, width(item.label, scene.titleFont, scene.type.name) + 24);
+      : Math.max(
+          6,
+          at(item.end ?? item.start) - bx,
+          width(item.label, scene.titleFont, scene.type.name) + 24,
+        );
     bw.set(item.id, w);
     maxRight = Math.max(maxRight, bx + w);
   }
@@ -394,7 +455,8 @@ function gantt(
       beats.push({
         id: item.id,
         markup:
-          `<g class="gc-chron-item" data-id="${esc(item.id)}">` + shape +
+          `<g class="gc-chron-item" data-id="${esc(item.id)}">` +
+          shape +
           `<text class="gc-chron-label${inside ? ' gc-on-bar' : ''}${overflows ? ' gc-before' : ''}" ` +
           `x="${round(inside ? bx + 12 : overflows ? bx - 12 : bx + w + 12)}" ` +
           `y="${round(iy + scene.barHeight / 2 + scene.type.name * 0.36)}">${esc(item.label)}</text>` +
@@ -420,7 +482,10 @@ function gantt(
  */
 function ganttLegend(
   items: { key: 'done' | 'active' | 'crit' | 'milestone'; label: string }[],
-  scene: Scene, width: Measure, x0: number, y: number,
+  scene: Scene,
+  width: Measure,
+  x0: number,
+  y: number,
 ): string {
   const gap = 20;
   const swatchCy = y - scene.type.label * 0.9 + 4;
@@ -444,17 +509,24 @@ function ganttLegend(
  * part of the picture that says where one phase ends and the next begins.
  */
 function timeline(
-  c: Chronicle, scene: Scene, width: Measure, pad: number, titleH: number,
-  parts: string[], beats: Beat[], bands: string[],
+  c: Chronicle,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  titleH: number,
+  parts: string[],
+  beats: Beat[],
+  bands: string[],
 ): { width: number; height: number; legend?: boolean } {
   const all = c.lanes.flatMap((l) => l.items);
-  const cardW = Math.max(
-    140,
-    ...all.flatMap((i) => [
-      width(i.label, scene.titleFont, scene.type.name),
-      ...(i.detail ?? []).map((d) => width(d, scene.rowFont, scene.type.caption)),
-    ]),
-  ) + 28;
+  const cardW =
+    Math.max(
+      140,
+      ...all.flatMap((i) => [
+        width(i.label, scene.titleFont, scene.type.name),
+        ...(i.detail ?? []).map((d) => width(d, scene.rowFont, scene.type.caption)),
+      ]),
+    ) + 28;
   // Periods are spread across the whole canvas rather than packed at their own
   // minimum width, which is what left the timeline a strip on an empty stage.
   const plot = Math.max(scene.plotWidth, scene.canvas.width - pad * 2 - cardW);
@@ -471,7 +543,9 @@ function timeline(
   // overlap, which says two sections share a week.
   const reach = Math.min(cardW, all.length > 1 ? plot / (all.length - 1) : cardW) / 2 - 4;
 
-  parts.push(`<path class="gc-chron-axis" d="M${round(pad)},${round(axisY)} H${round(x0 + plot + cardW / 2)}"/>`);
+  parts.push(
+    `<path class="gc-chron-axis" d="M${round(pad)},${round(axisY)} H${round(x0 + plot + cardW / 2)}"/>`,
+  );
   // One dot travels left to right and leaves a dot behind at each period as it
   // passes, rather than every dot popping in on its own — DESIGN 5.4: colour
   // (and the one thing moving) carries motion, not decoration.
@@ -520,7 +594,8 @@ function timeline(
         `<g class="gc-chron-item" data-id="${esc(item.id)}">` +
         `<circle class="gc-chron-dot" cx="${round(x)}" cy="${round(axisY)}" r="6"/>` +
         `<text class="gc-chron-period" x="${round(x)}" y="${round(axisY + 34)}">${esc(label)}</text>` +
-        rows.join('') + `</g>`,
+        rows.join('') +
+        `</g>`,
     });
   }
 
@@ -535,24 +610,35 @@ function timeline(
  * falls. Plotting it makes the shape of the week readable at a glance.
  */
 function journey(
-  c: Chronicle, scene: Scene, width: Measure, pad: number, titleH: number,
-  parts: string[], beats: Beat[], bands: string[],
+  c: Chronicle,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  titleH: number,
+  parts: string[],
+  beats: Beat[],
+  bands: string[],
 ): { width: number; height: number; legend?: boolean } {
   const all = c.lanes.flatMap((l) => l.items);
-  const cardW = Math.max(
-    120,
-    ...all.flatMap((i) => [
-      width(i.label, scene.titleFont, scene.type.name),
-      width((i.people ?? []).join(' · '), scene.rowFont, scene.type.caption),
-    ]),
-  ) + 26;
+  const cardW =
+    Math.max(
+      120,
+      ...all.flatMap((i) => [
+        width(i.label, scene.titleFont, scene.type.name),
+        width((i.people ?? []).join(' · '), scene.rowFont, scene.type.caption),
+      ]),
+    ) + 26;
   // The score-axis gutter, sized to what the "1".."5" ticks actually need
   // rather than a guessed constant — DESIGN 7.3: a guess that runs wider than
   // the label leaves dead space fitCanvas has no way to see, which reads as
   // the whole block sitting off-centre once it's centred on that overstated
   // width.
   const tickGap = 12; // clearance between a tick label and the grid line
-  const tickW = Math.max(...[1, 2, 3, 4, 5].map((s) => width(String(s), scene.rowFont, scene.type.label, scene.type.labelTracking)));
+  const tickW = Math.max(
+    ...[1, 2, 3, 4, 5].map((s) =>
+      width(String(s), scene.rowFont, scene.type.label, scene.type.labelTracking),
+    ),
+  );
   const axisGutter = tickW + tickGap + 6;
   const plot = Math.max(scene.plotWidth, scene.canvas.width - pad * 2 - axisGutter - cardW);
   const x0 = pad + axisGutter + cardW / 2;
@@ -578,7 +664,10 @@ function journey(
   // draws a box roughly twice the width of a section with one, which reads as
   // "this phase matters twice as much" rather than "this phase happens to
   // hold two entries" (DESIGN 2.3: siblings in a row share a size).
-  const tagW = Math.max(...c.lanes.map((lane) => width(lane.name, scene.titleFont, scene.type.name) + 32), cardW * 0.7);
+  const tagW = Math.max(
+    ...c.lanes.map((lane) => width(lane.name, scene.titleFont, scene.type.name) + 32),
+    cardW * 0.7,
+  );
   c.lanes.forEach((lane, li) => {
     const meanX = lane.items.reduce((s, i) => s + at(i.start), 0) / lane.items.length;
     const from = meanX - tagW / 2;
@@ -598,7 +687,10 @@ function journey(
   // length): the line draws on with pathLength 1, so a step appears exactly as
   // the line's head touches it, not on an index cadence.
   const cumulative: number[] = [0];
-  for (let n = 1; n < pts.length; n++) cumulative.push(cumulative[n - 1]! + Math.hypot(pts[n]!.x - pts[n - 1]!.x, pts[n]!.y - pts[n - 1]!.y));
+  for (let n = 1; n < pts.length; n++)
+    cumulative.push(
+      cumulative[n - 1]! + Math.hypot(pts[n]!.x - pts[n - 1]!.x, pts[n]!.y - pts[n - 1]!.y),
+    );
   const lineLength = cumulative[cumulative.length - 1] || 1;
 
   // Steps sit at fixed, evenly spaced points along a fixed-width axis, same as
@@ -637,7 +729,12 @@ function journey(
  * what, which is the only reason to draw one.
  */
 function animate(
-  c: Chronicle, beats: Beat[], bandCount: number, hasTitle: boolean, hasLegend: boolean, scene: Scene,
+  c: Chronicle,
+  beats: Beat[],
+  bandCount: number,
+  hasTitle: boolean,
+  hasLegend: boolean,
+  scene: Scene,
 ): { css: string; cycle: number } {
   const m = scene.motion;
   const tracks = new Map<string, Track>();
@@ -716,7 +813,8 @@ function animate(
 
   beats.forEach((beat, i) => {
     const portion = beats.length > 1 ? i / (beats.length - 1) : 0;
-    const lineStart = scaffold + 0.02, lineEnd = last;
+    const lineStart = scaffold + 0.02,
+      lineEnd = last;
     const start =
       c.kind === 'timeline'
         ? travelStart + easedTimeFor(beat.at ?? portion) * (travelEnd - travelStart)
@@ -749,7 +847,9 @@ function animate(
       dot.at(start, { opacity: '1' });
       dot.at(start + 0.15, { r: '6', opacity: '1' });
       dot.at(cycle, { r: '6', opacity: '1' });
-      const text = track(`.gc-chron-item[data-id="${beat.id}"] text, .gc-chron-item[data-id="${beat.id}"] rect`);
+      const text = track(
+        `.gc-chron-item[data-id="${beat.id}"] text, .gc-chron-item[data-id="${beat.id}"] rect`,
+      );
       text.at(0, { opacity: '0', transform: 'translateY(6px)' });
       text.at(start + 0.05, { opacity: '0', transform: 'translateY(6px)' });
       text.at(start + 0.05 + m.build, { opacity: '1', transform: 'translateY(0)' });

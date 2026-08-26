@@ -21,14 +21,34 @@ import type { Point } from './geometry.ts';
 
 /** Mermaid's `LINETYPE`, confirmed against the parser rather than assumed. */
 const LINE = {
-  SOLID: 0, DOTTED: 1, NOTE: 2, SOLID_CROSS: 3, DOTTED_CROSS: 4,
-  SOLID_OPEN: 5, DOTTED_OPEN: 6,
-  LOOP_START: 10, LOOP_END: 11, ALT_START: 12, ALT_ELSE: 13, ALT_END: 14,
-  OPT_START: 15, OPT_END: 16, ACTIVE_START: 17, ACTIVE_END: 18,
-  PAR_START: 19, PAR_AND: 20, PAR_END: 21, RECT_START: 22, RECT_END: 23,
-  SOLID_POINT: 24, DOTTED_POINT: 25,
-  CRITICAL_START: 27, CRITICAL_OPTION: 28, CRITICAL_END: 29,
-  BREAK_START: 30, BREAK_END: 31,
+  SOLID: 0,
+  DOTTED: 1,
+  NOTE: 2,
+  SOLID_CROSS: 3,
+  DOTTED_CROSS: 4,
+  SOLID_OPEN: 5,
+  DOTTED_OPEN: 6,
+  LOOP_START: 10,
+  LOOP_END: 11,
+  ALT_START: 12,
+  ALT_ELSE: 13,
+  ALT_END: 14,
+  OPT_START: 15,
+  OPT_END: 16,
+  ACTIVE_START: 17,
+  ACTIVE_END: 18,
+  PAR_START: 19,
+  PAR_AND: 20,
+  PAR_END: 21,
+  RECT_START: 22,
+  RECT_END: 23,
+  SOLID_POINT: 24,
+  DOTTED_POINT: 25,
+  CRITICAL_START: 27,
+  CRITICAL_OPTION: 28,
+  CRITICAL_END: 29,
+  BREAK_START: 30,
+  BREAK_END: 31,
 } as const;
 
 /** Mermaid's `PLACEMENT` for notes. */
@@ -45,8 +65,13 @@ const OPENS: Record<number, string> = {
   [LINE.RECT_START]: '',
 };
 const CLOSES = new Set<number>([
-  LINE.LOOP_END, LINE.ALT_END, LINE.OPT_END, LINE.PAR_END,
-  LINE.CRITICAL_END, LINE.BREAK_END, LINE.RECT_END,
+  LINE.LOOP_END,
+  LINE.ALT_END,
+  LINE.OPT_END,
+  LINE.PAR_END,
+  LINE.CRITICAL_END,
+  LINE.BREAK_END,
+  LINE.RECT_END,
 ]);
 const DIVIDES: Record<number, string> = {
   [LINE.ALT_ELSE]: 'else',
@@ -55,7 +80,10 @@ const DIVIDES: Record<number, string> = {
 };
 
 const DOTTED = new Set<number>([
-  LINE.DOTTED, LINE.DOTTED_CROSS, LINE.DOTTED_OPEN, LINE.DOTTED_POINT,
+  LINE.DOTTED,
+  LINE.DOTTED_CROSS,
+  LINE.DOTTED_OPEN,
+  LINE.DOTTED_POINT,
 ]);
 
 function tipFor(type: number): EdgeTip {
@@ -106,7 +134,10 @@ interface Beat {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const esc = (t: string) =>
-  t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  t.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 const round = (n: number) => Number(n.toFixed(2));
 const at = (p: Point) => `${round(p.x)},${round(p.y)}`;
 
@@ -132,7 +163,11 @@ const WRAP_MAX_LINES = 2;
 // lines' boxes 1+ unit into each other, failing DESIGN 6.5's "plates never
 // overlap". 16 clears it with margin.
 const LABEL_LINE_STEP = 16;
-function wrapMessageLabel(text: string, target = WRAP_TARGET_CHARS, tokenMax = Math.min(target, WRAP_TOKEN_MAX)): string[] {
+function wrapMessageLabel(
+  text: string,
+  target = WRAP_TARGET_CHARS,
+  tokenMax = Math.min(target, WRAP_TOKEN_MAX),
+): string[] {
   const words = text
     .split(/\s+/)
     .filter(Boolean)
@@ -242,7 +277,11 @@ export async function drawSequence(
   const widestMessage = messages.reduce((most, m) => {
     if (m.type === LINE.NOTE || !m.message) return most;
     const lineWidth = wrapMessageLabel(m.message, wrapTarget).reduce(
-      (w, line) => Math.max(w, textWidth(line, scene.edgeLabelFont, scene.type.label, scene.type.labelTracking)),
+      (w, line) =>
+        Math.max(
+          w,
+          textWidth(line, scene.edgeLabelFont, scene.type.label, scene.type.labelTracking),
+        ),
       0,
     );
     return Math.max(most, lineWidth);
@@ -283,10 +322,18 @@ export async function drawSequence(
   const top = pad + boxH;
   let cursor = top + 38;
 
-  interface OpenFrame { kind: string; label: string; top: number; dividers: { y: number; label: string }[] }
+  interface OpenFrame {
+    kind: string;
+    label: string;
+    top: number;
+    dividers: { y: number; label: string }[];
+  }
   const stack: OpenFrame[] = [];
   const frames: (OpenFrame & { bottom: number })[] = [];
-  interface OpenBar { key: string; top: number }
+  interface OpenBar {
+    key: string;
+    top: number;
+  }
   const bars: OpenBar[] = [];
   const activations: { key: string; top: number; bottom: number; depth: number }[] = [];
   const beats: Beat[] = [];
@@ -330,7 +377,12 @@ export async function drawSequence(
     const type = message.type;
 
     if (type in OPENS) {
-      stack.push({ kind: OPENS[type]!, label: String(message.message ?? ''), top: cursor - 16, dividers: [] });
+      stack.push({
+        kind: OPENS[type]!,
+        label: String(message.message ?? ''),
+        top: cursor - 16,
+        dividers: [],
+      });
       cursor += 34;
       continue;
     }
@@ -420,15 +472,24 @@ export async function drawSequence(
       const d =
         `M${at({ x, y: cursor })} C${at({ x: x + reach, y: cursor })} ` +
         `${at({ x: x + reach, y: cursor + drop })} ${at({ x: x + 2, y: cursor + drop })}`;
-      const marks = tipPath({ x: x + 2, y: cursor + drop }, { x: -1, y: 0 },
-        tip, tip === 'arrow' ? headLength : tipLen, tip === 'arrow' ? headWidth : tipLen * 0.85);
+      const marks = tipPath(
+        { x: x + 2, y: cursor + drop },
+        { x: -1, y: 0 },
+        tip,
+        tip === 'arrow' ? headLength : tipLen,
+        tip === 'arrow' ? headWidth : tipLen * 0.85,
+      );
       // Left-anchored beside the lobe rather than centred, so the plate has to
       // match that anchor: its left edge sits 6 short of the text, DESIGN 6.5.
       const tx = x + reach + 14;
       const ty = cursor + drop / 2;
       const lines = wrapMessageLabel(text, wrapTarget);
       const lineW = lines.reduce(
-        (w, line) => Math.max(w, textWidth(line, scene.edgeLabelFont, scene.type.label, scene.type.labelTracking)),
+        (w, line) =>
+          Math.max(
+            w,
+            textWidth(line, scene.edgeLabelFont, scene.type.label, scene.type.labelTracking),
+          ),
         0,
       );
       const plateW = text ? lineW + 12 : 0;
@@ -455,7 +516,9 @@ export async function drawSequence(
               `width="${round(plateW)}" height="${round(plateH)}" rx="3"/>`
             : '') +
           (marks.fill ? `<path class="gc-arrow" data-id="${id}" d="${marks.fill}"/>` : '') +
-          (marks.line ? `<path class="gc-arrow gc-tip-line" data-id="${id}" d="${marks.line}"/>` : '') +
+          (marks.line
+            ? `<path class="gc-arrow gc-tip-line" data-id="${id}" d="${marks.line}"/>`
+            : '') +
           labelMarkup,
       });
       cursor += drop + 44 + (wrapped ? LABEL_LINE_STEP : 0);
@@ -466,11 +529,20 @@ export async function drawSequence(
     const x1 = xOf(fromKey) + dir * barHalf * depthAt(fromKey);
     const x2 = xOf(toKey) - dir * (barHalf * depthAt(toKey) + 2);
     const d = `M${at({ x: x1, y: cursor })} L${at({ x: x2, y: cursor })}`;
-    const marks = tipPath({ x: x2, y: cursor }, { x: dir, y: 0 },
-      tip, tip === 'arrow' ? headLength : tipLen, tip === 'arrow' ? headWidth : tipLen * 0.85);
+    const marks = tipPath(
+      { x: x2, y: cursor },
+      { x: dir, y: 0 },
+      tip,
+      tip === 'arrow' ? headLength : tipLen,
+      tip === 'arrow' ? headWidth : tipLen * 0.85,
+    );
     const lines = wrapMessageLabel(text);
     const lineW = lines.reduce(
-      (w, line) => Math.max(w, textWidth(line, scene.edgeLabelFont, scene.type.label, scene.type.labelTracking)),
+      (w, line) =>
+        Math.max(
+          w,
+          textWidth(line, scene.edgeLabelFont, scene.type.label, scene.type.labelTracking),
+        ),
       0,
     );
     // DESIGN 6.5: the label sits on a knockout plate centred on the segment's
@@ -481,7 +553,8 @@ export async function drawSequence(
     const plateH = wrapped ? scene.type.label * 2 + LABEL_LINE_STEP : scene.type.label * 2;
     const labelMarkup = lines
       .map((line, li) => {
-        const ly = cursor + scene.type.label * 0.36 + (li - (lines.length - 1) / 2) * LABEL_LINE_STEP;
+        const ly =
+          cursor + scene.type.label * 0.36 + (li - (lines.length - 1) / 2) * LABEL_LINE_STEP;
         return `<text class="gc-msg-label" data-id="${id}" x="${round(lx)}" y="${round(ly)}">${esc(line)}</text>`;
       })
       .join('');
@@ -504,7 +577,9 @@ export async function drawSequence(
             `width="${round(plateW)}" height="${round(plateH)}" rx="3"/>`
           : '') +
         (marks.fill ? `<path class="gc-arrow" data-id="${id}" d="${marks.fill}"/>` : '') +
-        (marks.line ? `<path class="gc-arrow gc-tip-line" data-id="${id}" d="${marks.line}"/>` : '') +
+        (marks.line
+          ? `<path class="gc-arrow gc-tip-line" data-id="${id}" d="${marks.line}"/>`
+          : '') +
         labelMarkup,
     });
     cursor += scene.laneStep - 12 + (wrapped ? LABEL_LINE_STEP : 0);
@@ -607,7 +682,10 @@ export async function drawSequence(
     `<g class="gc-frame" transform="${frameTransform(frame)}">` +
     // Activation bars sit below the arrowheads: a head is never covered.
     // DESIGN 8.5.
-    frameMarkup + lifelines + barsMarkup + heads +
+    frameMarkup +
+    lifelines +
+    barsMarkup +
+    heads +
     beats.map((b) => b.markup).join('') +
     `</g></svg>`;
 
@@ -647,7 +725,12 @@ function animateSequence(
   activeBars: number,
   beats: Beat[],
   scene: Scene,
-  frame: { view: { width: number; height: number }; offset: { x: number; y: number }; top: number; bottom: number },
+  frame: {
+    view: { width: number; height: number };
+    offset: { x: number; y: number };
+    top: number;
+    bottom: number;
+  },
 ): { css: string; cycle: number } {
   // Insets are given in user units against the viewport, not as percentages of
   // the element. A straight line's bounding box is zero in one dimension, so a

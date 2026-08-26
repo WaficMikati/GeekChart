@@ -37,12 +37,18 @@ function segmentsCross(a0: Point, a1: Point, b0: Point, b1: Point): boolean {
 /** One earlier forward edge's committed segment, kept with its own overall
  * ends so a shared start or end — a fan leaving one port, or two edges into
  * one arrival — can be told apart from a real coincidental overlap. */
-export interface PlacedSeg { a: Point; b: Point; edgeStart: Point; edgeEnd: Point }
+export interface PlacedSeg {
+  a: Point;
+  b: Point;
+  edgeStart: Point;
+  edgeEnd: Point;
+}
 
 export function crossingCost(points: Point[], placed: readonly PlacedSeg[]): number {
   let hits = 0;
   for (let i = 1; i < points.length; i++) {
-    const a0 = points[i - 1]!, a1 = points[i]!;
+    const a0 = points[i - 1]!,
+      a1 = points[i]!;
     for (const { a: b0, b: b1 } of placed) {
       if (segmentsCross(a0, a1, b0, b1)) hits++;
     }
@@ -70,30 +76,37 @@ const near = (p: Point, q: Point) => Math.abs(p.x - q.x) < 1.5 && Math.abs(p.y -
  */
 export function sharedRunCost(points: Point[], placed: readonly PlacedSeg[]): number {
   if (!points.length) return 0;
-  const start = points[0]!, end = points[points.length - 1]!;
+  const start = points[0]!,
+    end = points[points.length - 1]!;
   const sharesEndpoint = (seg: PlacedSeg) =>
-    near(start, seg.edgeStart) || near(start, seg.edgeEnd) ||
-    near(end, seg.edgeStart) || near(end, seg.edgeEnd);
+    near(start, seg.edgeStart) ||
+    near(start, seg.edgeEnd) ||
+    near(end, seg.edgeStart) ||
+    near(end, seg.edgeEnd);
   let worst = 0;
   for (let i = 1; i < points.length; i++) {
-    const a0 = points[i - 1]!, a1 = points[i]!;
+    const a0 = points[i - 1]!,
+      a1 = points[i]!;
     const vertA = Math.abs(a0.x - a1.x) < 0.5 && Math.abs(a0.y - a1.y) > 8;
     const horizA = Math.abs(a0.y - a1.y) < 0.5 && Math.abs(a0.x - a1.x) > 8;
     if (!vertA && !horizA) continue;
     for (const seg of placed) {
-      const b0 = seg.a, b1 = seg.b;
+      const b0 = seg.a,
+        b1 = seg.b;
       if (vertA) {
         if (Math.abs(b0.x - b1.x) >= 0.5 || Math.abs(a0.x - b0.x) > 1.5) continue;
         const sameDir = (a1.y - a0.y) * (b1.y - b0.y) >= 0;
         if (sameDir && sharesEndpoint(seg)) continue;
-        const overlap = Math.min(Math.max(a0.y, a1.y), Math.max(b0.y, b1.y)) -
+        const overlap =
+          Math.min(Math.max(a0.y, a1.y), Math.max(b0.y, b1.y)) -
           Math.max(Math.min(a0.y, a1.y), Math.min(b0.y, b1.y));
         if (overlap > 8) worst = Math.max(worst, overlap);
       } else {
         if (Math.abs(b0.y - b1.y) >= 0.5 || Math.abs(a0.y - b0.y) > 1.5) continue;
         const sameDir = (a1.x - a0.x) * (b1.x - b0.x) >= 0;
         if (sameDir && sharesEndpoint(seg)) continue;
-        const overlap = Math.min(Math.max(a0.x, a1.x), Math.max(b0.x, b1.x)) -
+        const overlap =
+          Math.min(Math.max(a0.x, a1.x), Math.max(b0.x, b1.x)) -
           Math.max(Math.min(a0.x, a1.x), Math.min(b0.x, b1.x));
         if (overlap > 8) worst = Math.max(worst, overlap);
       }
@@ -133,9 +146,17 @@ export function intrusion(points: Point[], obstacles: Extent[]): number {
     const b = points[i]!;
     for (const box of obstacles) {
       const w = span(
-        Math.min(a.x, b.x), Math.max(a.x, b.x), box.x - HUG_CLEAR, box.x + box.width + HUG_CLEAR);
+        Math.min(a.x, b.x),
+        Math.max(a.x, b.x),
+        box.x - HUG_CLEAR,
+        box.x + box.width + HUG_CLEAR,
+      );
       const h = span(
-        Math.min(a.y, b.y), Math.max(a.y, b.y), box.y - HUG_CLEAR, box.y + box.height + HUG_CLEAR);
+        Math.min(a.y, b.y),
+        Math.max(a.y, b.y),
+        box.y - HUG_CLEAR,
+        box.y + box.height + HUG_CLEAR,
+      );
       if (w > 0 && h > 0) worst += Math.min(w, h) + 1;
     }
   }
@@ -162,10 +183,18 @@ export function selfPierce(points: readonly Point[], ownBoxes: readonly Extent[]
   for (let i = 2; i < points.length - 1; i++) {
     const a = points[i - 1]!;
     const b = points[i]!;
-    const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
-    const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
+    const x1 = Math.min(a.x, b.x),
+      x2 = Math.max(a.x, b.x);
+    const y1 = Math.min(a.y, b.y),
+      y2 = Math.max(a.y, b.y);
     for (const box of ownBoxes) {
-      if (x1 < box.x + box.width - 2 && x2 > box.x + 2 && y1 < box.y + box.height - 2 && y2 > box.y + 2) hits++;
+      if (
+        x1 < box.x + box.width - 2 &&
+        x2 > box.x + 2 &&
+        y1 < box.y + box.height - 2 &&
+        y2 > box.y + 2
+      )
+        hits++;
     }
   }
   return hits;
@@ -186,7 +215,8 @@ export function selfPierce(points: readonly Point[], ownBoxes: readonly Extent[]
 export function tightCornerCost(points: readonly Point[]): number {
   let cost = 0;
   for (let i = 2; i <= points.length - 2; i++) {
-    const a = points[i - 1]!, b = points[i]!;
+    const a = points[i - 1]!,
+      b = points[i]!;
     const len = Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
     if (len > 0.5 && len < 32) cost += 300;
   }

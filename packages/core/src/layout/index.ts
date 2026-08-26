@@ -43,7 +43,11 @@ export interface LayoutResult {
  * that genuinely need more room (a diamond has to hold its label inside a
  * rhombus) get a proportional allowance rather than breaking the rhythm.
  */
-export async function layout(graph: Graph, scene: Scene, measureWith?: string): Promise<LayoutResult> {
+export async function layout(
+  graph: Graph,
+  scene: Scene,
+  measureWith?: string,
+): Promise<LayoutResult> {
   const measurer = makeMeasurer(measureWith);
   const flow = graph.direction === 'LR' || graph.direction === 'RL' ? 'horizontal' : 'vertical';
 
@@ -85,7 +89,12 @@ export async function layout(graph: Graph, scene: Scene, measureWith?: string): 
   // A panel's title and kicker are content it has to hug too (DESIGN 2.6) —
   // measured here, alongside everything else, while the measurer is live.
   for (const cluster of graph.clusters) {
-    const t = measurer.measure(cluster.title, scene.titleFont, scene.type.title, scene.type.titleTracking);
+    const t = measurer.measure(
+      cluster.title,
+      scene.titleFont,
+      scene.type.title,
+      scene.type.titleTracking,
+    );
     const k = cluster.kicker
       ? measurer.measure(
           cluster.kicker.toUpperCase(),
@@ -129,7 +138,9 @@ export async function layout(graph: Graph, scene: Scene, measureWith?: string): 
     );
     if (!wrapped) continue;
     node.titleLines = wrapped;
-    item.label.width = Math.max(...wrapped.map((l) => measurer.measure(l, scene.titleFont, scene.titleSize)));
+    item.label.width = Math.max(
+      ...wrapped.map((l) => measurer.measure(l, scene.titleFont, scene.titleSize)),
+    );
   }
   measurer.done();
 
@@ -249,7 +260,10 @@ export async function layout(graph: Graph, scene: Scene, measureWith?: string): 
           'elk.spacing.nodeNode': '32',
           'elk.layered.spacing.nodeNodeBetweenLayers': '32',
         },
-        children: cluster.nodes.map((id) => byId.get(id)).filter(Boolean).map((n) => asElkNode(n!)),
+        children: cluster.nodes
+          .map((id) => byId.get(id))
+          .filter(Boolean)
+          .map((n) => asElkNode(n!)),
       };
     }),
     ...graph.nodes.filter((n) => !claimed.has(n.id) && !satelliteIds.has(n.id)).map(asElkNode),
@@ -267,7 +281,11 @@ export async function layout(graph: Graph, scene: Scene, measureWith?: string): 
   // marks end up sitting on the text.
   const tipLen = scene.edgeStroke * scene.tipLength;
   const reach = graph.edges.reduce(
-    (most, e) => Math.max(most, tipReach(e.tipEnd ?? 'arrow', tipLen) + tipReach(e.tipStart ?? 'none', tipLen)),
+    (most, e) =>
+      Math.max(
+        most,
+        tipReach(e.tipEnd ?? 'arrow', tipLen) + tipReach(e.tipStart ?? 'none', tipLen),
+      ),
     0,
   );
 
@@ -292,7 +310,9 @@ export async function layout(graph: Graph, scene: Scene, measureWith?: string): 
         'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
         'elk.layered.cycleBreaking.strategy': 'DEPTH_FIRST',
         'elk.spacing.nodeNode': String(scene.gapNode),
-        'elk.layered.spacing.nodeNodeBetweenLayers': String(Math.round(scene.gapLayer + reach + labelRoom)),
+        'elk.layered.spacing.nodeNodeBetweenLayers': String(
+          Math.round(scene.gapLayer + reach + labelRoom),
+        ),
         'elk.spacing.edgeNode': String(scene.gapNode * 0.5),
         'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
         // We draw our own curves between ports, so ELK's routes are never read.

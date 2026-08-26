@@ -25,14 +25,20 @@ if (!existsSync(resultsPath)) {
   process.exit(2);
 }
 if (!existsSync(serverModPath)) {
-  console.error('packages/geekchart/dist/server.js missing — run `pnpm --filter geekchart build` first');
+  console.error(
+    'packages/geekchart/dist/server.js missing — run `pnpm --filter geekchart build` first',
+  );
   process.exit(2);
 }
 
 const results = JSON.parse(readFileSync(resultsPath, 'utf8'));
 const { renderToHtml, closeServer } = await import(serverModPath);
 
-const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const esc = (t) =>
+  String(t).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
 const round1 = (x) => Math.round(x * 10) / 10;
 const kb = (bytes) => (bytes / 1024).toFixed(1);
 
@@ -63,7 +69,8 @@ async function chart(source, width = 860) {
 // ------------------------------------------------------------- data prep
 
 const families = Object.keys(results.renderTime.perFamily).sort(
-  (a, b) => results.renderTime.perFamily[b].desktopMedian - results.renderTime.perFamily[a].desktopMedian,
+  (a, b) =>
+    results.renderTime.perFamily[b].desktopMedian - results.renderTime.perFamily[a].desktopMedian,
 );
 const mermaidByFamily = {};
 for (const c of results.mermaidBaseline.perChart) {
@@ -86,7 +93,10 @@ const renderByFamilySource = xy(
   `Render time by family (desktop, median, top ${CHART_FAMILY_LIMIT})`,
   chartFamilies,
   [
-    { name: 'Geekchart', values: chartFamilies.map((f) => results.renderTime.perFamily[f].desktopMedian) },
+    {
+      name: 'Geekchart',
+      values: chartFamilies.map((f) => results.renderTime.perFamily[f].desktopMedian),
+    },
     { name: 'mermaid', values: chartFamilies.map((f) => mermaidFamilyMedian(f)) },
   ],
   'ms',
@@ -95,7 +105,15 @@ const renderByFamilySource = xy(
 const downloadSource = xy(
   'What a browser fetches before the first chart can draw',
   ['Geekchart lazy chunk', 'mermaid bundle'],
-  [{ name: 'brotli', values: [results.bundle?.lazyChunk?.total.brotli ?? 0, results.mermaidBaseline.bundle.brotli].map((b) => b / 1024) }],
+  [
+    {
+      name: 'brotli',
+      values: [
+        results.bundle?.lazyChunk?.total.brotli ?? 0,
+        results.mermaidBaseline.bundle.brotli,
+      ].map((b) => b / 1024),
+    },
+  ],
   'kB brotli',
 );
 
@@ -112,7 +130,12 @@ const fpsSource = xy(
 const timelineSource = xy(
   'First chart over Fast 3G + 4x CPU',
   ['Cold', 'Warm'],
-  [{ name: 'ms', values: [results.firstChart.timeline.cold.median, results.firstChart.timeline.warm.median] }],
+  [
+    {
+      name: 'ms',
+      values: [results.firstChart.timeline.cold.median, results.firstChart.timeline.warm.median],
+    },
+  ],
   'ms',
 );
 
@@ -138,27 +161,58 @@ const overallMedian = (() => {
 const overallWorst = Math.max(...results.renderTime.perChart.map((c) => c.desktop.max));
 
 const tiles = [
-  { label: 'Render, median', value: `${round1(overallMedian)}ms`, sub: `${results.fixtureCount} charts, desktop` },
+  {
+    label: 'Render, median',
+    value: `${round1(overallMedian)}ms`,
+    sub: `${results.fixtureCount} charts, desktop`,
+  },
   { label: 'Render, worst sample', value: `${round1(overallWorst)}ms`, sub: 'desktop, any chart' },
-  { label: 'First chart, cold', value: `${round1(results.firstChart.timeline.cold.median)}ms`, sub: 'Fast 3G + 4x CPU' },
-  { label: 'First chart, warm', value: `${round1(results.firstChart.timeline.warm.median)}ms`, sub: '2nd navigation, disk cache' },
-  { label: 'Lazy chunk', value: results.bundle ? `${kb(results.bundle.lazyChunk.total.brotli)} kB` : '—', sub: 'brotli, first mount' },
-  { label: 'Server throughput', value: results.server ? `${results.server.throughput['8'].median.toFixed(0)}/s` : '—', sub: 'concurrency 8' },
-  { label: 'RSS after run', value: results.server ? `${(results.server.rss.browserKb / 1024).toFixed(0)} MB` : '—', sub: 'Chromium, server path' },
-  { label: '60fps', value: `${results.animation.filter((a) => a.desktop.fps.median >= 55).length}/${results.animation.length}`, sub: 'heaviest charts, desktop' },
+  {
+    label: 'First chart, cold',
+    value: `${round1(results.firstChart.timeline.cold.median)}ms`,
+    sub: 'Fast 3G + 4x CPU',
+  },
+  {
+    label: 'First chart, warm',
+    value: `${round1(results.firstChart.timeline.warm.median)}ms`,
+    sub: '2nd navigation, disk cache',
+  },
+  {
+    label: 'Lazy chunk',
+    value: results.bundle ? `${kb(results.bundle.lazyChunk.total.brotli)} kB` : '—',
+    sub: 'brotli, first mount',
+  },
+  {
+    label: 'Server throughput',
+    value: results.server ? `${results.server.throughput['8'].median.toFixed(0)}/s` : '—',
+    sub: 'concurrency 8',
+  },
+  {
+    label: 'RSS after run',
+    value: results.server ? `${(results.server.rss.browserKb / 1024).toFixed(0)} MB` : '—',
+    sub: 'Chromium, server path',
+  },
+  {
+    label: '60fps',
+    value: `${results.animation.filter((a) => a.desktop.fps.median >= 55).length}/${results.animation.length}`,
+    sub: 'heaviest charts, desktop',
+  },
 ];
 
 // --------------------------------------------------------------- markup
 
 function table(headers, rows) {
-  return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>` +
-    `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return (
+    `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>` +
+    `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+  );
 }
 
 const renderTable = table(
   ['chart', 'family', 'desktop min/median/max (ms)', '4x CPU min/median/max (ms)'],
   results.renderTime.perChart.map((c) => [
-    esc(c.id), esc(c.family),
+    esc(c.id),
+    esc(c.family),
     `${round1(c.desktop.min)} / ${round1(c.desktop.median)} / ${round1(c.desktop.max)}`,
     `${round1(c.cpu4x.min)} / ${round1(c.cpu4x.median)} / ${round1(c.cpu4x.max)}`,
   ]),
@@ -167,13 +221,20 @@ const renderTable = table(
 const mermaidTable = table(
   ['chart', 'family', 'desktop min/median/max (ms)'],
   results.mermaidBaseline.perChart.map((c) => [
-    esc(c.id), esc(c.family),
+    esc(c.id),
+    esc(c.family),
     `${round1(c.desktop.min)} / ${round1(c.desktop.median)} / ${round1(c.desktop.max)}`,
   ]),
 );
 
 const fpsTable = table(
-  ['chart', 'desktop fps (min/median/max)', 'desktop worst frame (ms)', '4x CPU fps (min/median/max)', '4x CPU worst frame (ms)'],
+  [
+    'chart',
+    'desktop fps (min/median/max)',
+    'desktop worst frame (ms)',
+    '4x CPU fps (min/median/max)',
+    '4x CPU worst frame (ms)',
+  ],
   results.animation.map((a) => [
     esc(a.id),
     `${round1(a.desktop.fps.min)} / ${round1(a.desktop.fps.median)} / ${round1(a.desktop.fps.max)}`,
@@ -186,7 +247,12 @@ const fpsTable = table(
 const throughputTable = results.server
   ? table(
       ['concurrency', 'renders/s min', 'median', 'max'],
-      [1, 4, 8].map((c) => [c, results.server.throughput[c].min.toFixed(1), results.server.throughput[c].median.toFixed(1), results.server.throughput[c].max.toFixed(1)]),
+      [1, 4, 8].map((c) => [
+        c,
+        results.server.throughput[c].min.toFixed(1),
+        results.server.throughput[c].median.toFixed(1),
+        results.server.throughput[c].max.toFixed(1),
+      ]),
     )
   : '<p class="dim">Not measured — see notes.</p>';
 
@@ -194,9 +260,21 @@ const bundleTable = results.bundle
   ? table(
       ['file', 'raw', 'brotli'],
       [
-        ...Object.entries(results.bundle.entries).map(([name, s]) => [esc(name), `${kb(s.raw)} kB`, `${kb(s.brotli)} kB`]),
-        [`<strong>lazy chunk (${results.bundle.lazyChunk.files.length} files)</strong>`, `<strong>${kb(results.bundle.lazyChunk.total.raw)} kB</strong>`, `<strong>${kb(results.bundle.lazyChunk.total.brotli)} kB</strong>`],
-        [`further lazy (${results.bundle.furtherLazy.count} files)`, `${kb(results.bundle.furtherLazy.total.raw)} kB`, `${kb(results.bundle.furtherLazy.total.brotli)} kB`],
+        ...Object.entries(results.bundle.entries).map(([name, s]) => [
+          esc(name),
+          `${kb(s.raw)} kB`,
+          `${kb(s.brotli)} kB`,
+        ]),
+        [
+          `<strong>lazy chunk (${results.bundle.lazyChunk.files.length} files)</strong>`,
+          `<strong>${kb(results.bundle.lazyChunk.total.raw)} kB</strong>`,
+          `<strong>${kb(results.bundle.lazyChunk.total.brotli)} kB</strong>`,
+        ],
+        [
+          `further lazy (${results.bundle.furtherLazy.count} files)`,
+          `${kb(results.bundle.furtherLazy.total.raw)} kB`,
+          `${kb(results.bundle.furtherLazy.total.brotli)} kB`,
+        ],
       ],
     )
   : '<p class="dim">Not measured — see notes.</p>';

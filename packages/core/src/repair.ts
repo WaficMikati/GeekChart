@@ -98,7 +98,8 @@ function codeFenceRule(): Rule {
     describe: () => {
       const parts: string[] = [];
       if (opened && closed) parts.push('removed the wrapping markdown code fence');
-      else if (opened) parts.push('removed an opening markdown code fence (no closing fence found)');
+      else if (opened)
+        parts.push('removed an opening markdown code fence (no closing fence found)');
       else if (closed) parts.push('removed a stray closing markdown code fence');
       if (stray) {
         parts.push(
@@ -167,12 +168,7 @@ const rules: Rule[] = [
     '---',
     (n) => `replaced ${n} em dash link${n === 1 ? '' : 's'} with ---`,
   ),
-  sub(
-    'br-tag',
-    /<br\s*>/gi,
-    '<br/>',
-    (n) => `closed ${n} <br> tag${n === 1 ? '' : 's'}`,
-  ),
+  sub('br-tag', /<br\s*>/gi, '<br/>', (n) => `closed ${n} <br> tag${n === 1 ? '' : 's'}`),
   sub(
     'leading-tabs',
     /^\t+/gm,
@@ -203,7 +199,8 @@ const rules: Rule[] = [
   },
   {
     id: 'missing-header',
-    describe: () => 'added a `flowchart TD` header, since the snippet did not declare a diagram type',
+    describe: () =>
+      'added a `flowchart TD` header, since the snippet did not declare a diagram type',
     apply: (src) => {
       // Front-matter and %%{init}%% directives may legally precede the header.
       const body = src

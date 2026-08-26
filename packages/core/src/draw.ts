@@ -1,8 +1,16 @@
 import type { EdgeStroke, EdgeTip, Graph, GraphEdge, GraphNode } from './graph.ts';
 import { clusterHeadroom, type Scene } from './scene.ts';
 import {
-  ellipseShape, endOf, rectShape, rhombusShape, roundedPath, shortenEnd,
-  shortenStart, startOf, type Point, type Shape,
+  ellipseShape,
+  endOf,
+  rectShape,
+  rhombusShape,
+  roundedPath,
+  shortenEnd,
+  shortenStart,
+  startOf,
+  type Point,
+  type Shape,
 } from './geometry.ts';
 import { planRoutes, type Extent } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
@@ -21,7 +29,10 @@ import { tipPath, tipReach } from './tips.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const esc = (t: string) =>
-  t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  t.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 
 const round = (n: number) => Number(n.toFixed(2));
 
@@ -131,7 +142,11 @@ function shapeOf(node: Placed): Shape {
     case 'circle':
     case 'dot':
     case 'ring':
-      return ellipseShape(centre, Math.min(node.width, node.height) / 2, Math.min(node.width, node.height) / 2);
+      return ellipseShape(
+        centre,
+        Math.min(node.width, node.height) / 2,
+        Math.min(node.width, node.height) / 2,
+      );
     default:
       return rectShape(box);
   }
@@ -181,7 +196,9 @@ export interface Drawing {
  * frame-by-frame video capture depends on.
  */
 function fingerprint(graph: Graph): string {
-  const text = graph.nodes.map((n) => n.id).join('\u0000') + '\u0001' +
+  const text =
+    graph.nodes.map((n) => n.id).join('\u0000') +
+    '\u0001' +
     graph.edges.map((e) => `${e.from}>${e.to}`).join('\u0000');
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
@@ -344,9 +361,7 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     // Off the primary path is 'quiet' by default (DESIGN 5.1/5.3), not 'alt' —
     // 'alt' is a hue a chart has to earn with a legend-explained category.
     const role = onPath.has(node.id) ? 'path' : 'quiet';
-    const label = node.rows?.length
-      ? panelLabel(node, scene)
-      : centredLabel(node, cx, cy);
+    const label = node.rows?.length ? panelLabel(node, scene) : centredLabel(node, cx, cy);
 
     // The end state is a ring with a filled core, which is the only way to tell
     // it from the start state at a glance. Drawn as a second element rather than
@@ -364,9 +379,10 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     // A card inside a panel is filled rather than outlined, so it needs the wash
     // element even when its kind would not otherwise have one — without it the
     // inverted styling has nothing to paint and the card disappears.
-    const wash = FILLED.has(node.kind) || SOLID.has(node.shape) || inPanel.has(node.id)
-      ? `<path class="gc-fill" d="${path}"/>`
-      : '';
+    const wash =
+      FILLED.has(node.kind) || SOLID.has(node.shape) || inPanel.has(node.id)
+        ? `<path class="gc-fill" d="${path}"/>`
+        : '';
 
     parts.push(
       `<g class="gc-node gc-role-${role} gc-kind-${node.kind} gc-shape-${node.shape}` +
@@ -437,9 +453,16 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
         `data-from="${esc(edge.from)}" data-to="${esc(edge.to)}" pathLength="1" d="${d}"/>`,
     );
     arrows.push(marks);
-    drawnEdges.push({ id: edge.id, from: edge.from, to: edge.to, onPath: role === 'path',
-                      backward: Boolean(edge.backward),
-                      hasLabel: Boolean(edge.label), d, stroke: edge.stroke });
+    drawnEdges.push({
+      id: edge.id,
+      from: edge.from,
+      to: edge.to,
+      onPath: role === 'path',
+      backward: Boolean(edge.backward),
+      hasLabel: Boolean(edge.label),
+      d,
+      stroke: edge.stroke,
+    });
 
     // A pulse travels the spine during the emphasis pass. Drawn last so it sits
     // above the line it runs along, and inert until the motion layer times it.
@@ -496,7 +519,9 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
 function tipMarkup(drawing: { fill: string; line: string }, id: string): string {
   return (
     (drawing.fill ? `<path class="gc-arrow" data-id="${esc(id)}" d="${drawing.fill}"/>` : '') +
-    (drawing.line ? `<path class="gc-arrow gc-tip-line" data-id="${esc(id)}" d="${drawing.line}"/>` : '')
+    (drawing.line
+      ? `<path class="gc-arrow gc-tip-line" data-id="${esc(id)}" d="${drawing.line}"/>`
+      : '')
   );
 }
 
@@ -606,10 +631,18 @@ interface LabelRequest {
   height: number;
 }
 
-interface Box { x: number; y: number; width: number; height: number }
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /** One edge's own routed points, kept for the "not on another edge" check. */
-interface EdgeSegments { id: string; points: Point[] }
+interface EdgeSegments {
+  id: string;
+  points: Point[];
+}
 
 const overlap = (a: Box, b: Box): number => {
   const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
@@ -626,7 +659,8 @@ const overlap = (a: Box, b: Box): number => {
 const segmentBoxes = (points: Point[]): Box[] => {
   const boxes: Box[] = [];
   for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!, b = points[i]!;
+    const a = points[i - 1]!,
+      b = points[i]!;
     const half = 1;
     boxes.push({
       x: Math.min(a.x, b.x) - half,
@@ -783,7 +817,10 @@ function placeLabels(
         // Tested with a little air around it, so two labels end up clearly
         // apart rather than exactly touching.
         const padded: Box = {
-          x: box.x - 3, y: box.y - 3, width: box.width + 6, height: box.height + 6,
+          x: box.x - 3,
+          y: box.y - 3,
+          width: box.width + 6,
+          height: box.height + 6,
         };
         // Nodes count for less than other labels: a label brushing a box edge is
         // survivable, one sitting on another label — or another edge's own line

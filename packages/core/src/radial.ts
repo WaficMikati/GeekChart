@@ -47,11 +47,12 @@ export async function toRadial(source: string, kind: RadialKind): Promise<Radial
     return { kind, ...(title ? { title } : {}), slices };
   }
 
-  const raw = db.getMindmap?.() as { descr?: string; nodeId?: string; children?: unknown[] } | null | undefined;
+  const raw = db.getMindmap?.() as
+    { descr?: string; nodeId?: string; children?: unknown[] } | null | undefined;
   if (!raw) throw new Error('Nothing to draw — this mindmap is empty.');
   const toNode = (n: { descr?: string; nodeId?: string; children?: unknown[] }): MindNode => ({
     name: clean(n.descr || n.nodeId),
-    children: ((n.children ?? []) as typeof n[]).map(toNode),
+    children: ((n.children ?? []) as (typeof n)[]).map(toNode),
   });
   const root = toNode(raw);
   return { kind, ...(title ? { title } : {}), root };
@@ -61,7 +62,10 @@ export async function toRadial(source: string, kind: RadialKind): Promise<Radial
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const esc = (t: string) =>
-  t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  t.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 const round = (n: number) => Number(n.toFixed(2));
 
 export interface RadialDrawing {
@@ -84,7 +88,12 @@ interface Mark {
   parent?: string;
   depth?: number;
 }
-interface Built { width: number; height: number; groups: number; items: number }
+interface Built {
+  width: number;
+  height: number;
+  groups: number;
+  items: number;
+}
 
 /** Shorten a label to fit a box, rather than widening the box. DESIGN 2.2. */
 function fitLabel(text: string, maxW: number, font: string, size: number, width: Measure): string {
@@ -102,7 +111,9 @@ export function drawRadial(radial: Radial, scene: Scene, measureWith?: string): 
   const marks: Mark[] = [];
 
   const built =
-    radial.kind === 'pie' ? pie(radial, scene, width, pad, parts, marks) : mindmap(radial, scene, width, pad, parts, marks);
+    radial.kind === 'pie'
+      ? pie(radial, scene, width, pad, parts, marks)
+      : mindmap(radial, scene, width, pad, parts, marks);
   measurer.done();
 
   const frame = fitCanvas({ x: 0, y: 0, width: built.width, height: built.height }, scene.canvas);
@@ -110,7 +121,9 @@ export function drawRadial(radial: Radial, scene: Scene, measureWith?: string): 
     `<svg class="gc-chart" viewBox="0 0 ${frame.width} ${frame.height}" ` +
     `width="${frame.width}" height="${frame.height}" role="img" xmlns="${SVGNS}">` +
     `<g class="gc-frame" transform="${frameTransform(frame)}">` +
-    parts.join('') + marks.map((m) => m.markup).join('') + `</g></svg>`;
+    parts.join('') +
+    marks.map((m) => m.markup).join('') +
+    `</g></svg>`;
 
   const motion = animate(marks, Boolean(radial.title), scene);
   const noun = radial.kind === 'pie' ? 'Pie chart' : 'Mindmap';
@@ -135,10 +148,18 @@ function sliceClass(i: number, seriesLen: number): string {
  * the ring rather than crammed inside it — a wedge under 20° has nowhere to set
  * a two-line label without escaping its own slice.
  */
-function pie(radial: Radial, scene: Scene, width: Measure, pad: number, parts: string[], marks: Mark[]): Built {
+function pie(
+  radial: Radial,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  parts: string[],
+  marks: Mark[],
+): Built {
   const slices = radial.slices ?? [];
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
-  const outerR = 168, innerR = 104;
+  const outerR = 168,
+    innerR = 104;
   const titleH = radial.title ? scene.type.title * 1.9 : 0;
   const top = pad + titleH + 10;
   const cy = top + outerR + 8;
@@ -175,7 +196,8 @@ function pie(radial: Radial, scene: Scene, width: Measure, pad: number, parts: s
       width(label, scene.titleFont, scene.type.name),
       width(`${pct}%`, scene.rowFont, scene.type.caption),
     );
-    const rx = Math.cos(mid) * (outerR + leaderOut) + (rightSide ? sideGap + textW : -sideGap - textW);
+    const rx =
+      Math.cos(mid) * (outerR + leaderOut) + (rightSide ? sideGap + textW : -sideGap - textW);
     const oyRel = Math.sin(mid) * (outerR + leaderOut);
     return { i, a0, a1, mid, rightSide, pct, label, oyRel, finalOyRel: oyRel, rx };
   });
@@ -187,7 +209,9 @@ function pie(radial: Radial, scene: Scene, width: Measure, pad: number, parts: s
   // cascading toward one edge. A few passes because separating one pair can
   // pull it back into range of its other neighbour.
   for (const side of [true, false]) {
-    const flank = laid.filter((l) => l.rightSide === side).sort((a, b) => a.finalOyRel - b.finalOyRel);
+    const flank = laid
+      .filter((l) => l.rightSide === side)
+      .sort((a, b) => a.finalOyRel - b.finalOyRel);
     for (let pass = 0; pass < 4; pass++) {
       for (let k = 1; k < flank.length; k++) {
         const gap = flank[k]!.finalOyRel - flank[k - 1]!.finalOyRel;
@@ -213,7 +237,8 @@ function pie(radial: Radial, scene: Scene, width: Measure, pad: number, parts: s
 
   laid.forEach(({ i, a0, a1, mid, rightSide, pct, label, oyRel, finalOyRel }) => {
     const cls = sliceClass(i, scene.series.length);
-    const at = (a: number) => `${round(cx + Math.cos(a) * ringR)},${round(cy + Math.sin(a) * ringR)}`;
+    const at = (a: number) =>
+      `${round(cx + Math.cos(a) * ringR)},${round(cy + Math.sin(a) * ringR)}`;
     const half = (a0 + a1) / 2;
     const flag = (from: number, to: number) => (to - from > Math.PI ? 1 : 0);
     const arc = `M${at(a0)} A${ringR},${ringR} 0 ${flag(a0, half)} 1 ${at(half)} A${ringR},${ringR} 0 ${flag(half, a1)} 1 ${at(a1)}`;
@@ -249,7 +274,10 @@ function pie(radial: Radial, scene: Scene, width: Measure, pad: number, parts: s
     });
   });
 
-  const maxOy = Math.max(cy + outerR, ...laid.map((l) => cy + l.finalOyRel + scene.type.caption + 5));
+  const maxOy = Math.max(
+    cy + outerR,
+    ...laid.map((l) => cy + l.finalOyRel + scene.type.caption + 5),
+  );
   const legendY = maxOy + scene.type.label * 2 + 14;
   parts.push(legendRow(slices, scene, width, pad, round(legendY)));
 
@@ -299,7 +327,13 @@ function hvh(x1: number, y1: number, x2: number, y2: number, r = 8): string {
 }
 
 interface Placed {
-  name: string; depth: number; side: 'l' | 'r'; x: number; y: number; w: number; children: Placed[];
+  name: string;
+  depth: number;
+  side: 'l' | 'r';
+  x: number;
+  y: number;
+  w: number;
+  children: Placed[];
   /** Which top-level branch this node descends from — its colour, when the
    *  chart has few enough branches to spare one each (DESIGN 5.3: a second hue
    *  earned by a category the reader already has, which a branch's own root
@@ -316,11 +350,20 @@ interface Placed {
  * list. Row position within a side is assigned leaf-first, bottom-up, so a
  * parent always centres on the vertical span of its own children.
  */
-function mindmap(radial: Radial, scene: Scene, width: Measure, pad: number, parts: string[], marks: Mark[]): Built {
+function mindmap(
+  radial: Radial,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  parts: string[],
+  marks: Mark[],
+): Built {
   const root = radial.root ?? { name: '', children: [] };
   const rowStep = 72; // 48-high box + 24 gutter, on the 8-grid.
   const colStep = 160 + 32; // 160 box + 32 gutter, on the 8-grid.
-  const rootW = 200, childW = 160, boxH = 48;
+  const rootW = 200,
+    childW = 160,
+    boxH = 48;
 
   const rows: Record<'l' | 'r', { n: number }> = { l: { n: 0 }, r: { n: 0 } };
   function place(node: MindNode, depth: number, side: 'l' | 'r', branch: number): Placed {
@@ -335,8 +378,12 @@ function mindmap(radial: Radial, scene: Scene, width: Measure, pad: number, part
   }
 
   const kidsSource = root.children ?? [];
-  const rightKids = kidsSource.filter((_, i) => i % 2 === 0).map((c, ri) => place(c, 1, 'r', ri * 2));
-  const leftKids = kidsSource.filter((_, i) => i % 2 === 1).map((c, li) => place(c, 1, 'l', li * 2 + 1));
+  const rightKids = kidsSource
+    .filter((_, i) => i % 2 === 0)
+    .map((c, ri) => place(c, 1, 'r', ri * 2));
+  const leftKids = kidsSource
+    .filter((_, i) => i % 2 === 1)
+    .map((c, li) => place(c, 1, 'l', li * 2 + 1));
 
   const topYs = [...rightKids, ...leftKids].map((k) => k.y);
   const rootYLocal = topYs.length ? topYs.reduce((a, b) => a + b, 0) / topYs.length : 0;
@@ -344,7 +391,10 @@ function mindmap(radial: Radial, scene: Scene, width: Measure, pad: number, part
   const flat: Placed[] = [];
   const shift = (n: Placed) => {
     n.y -= rootYLocal;
-    n.x = n.side === 'r' ? rootW / 2 + 32 + (n.depth - 1) * colStep + childW / 2 : -(rootW / 2) - 32 - (n.depth - 1) * colStep - childW / 2;
+    n.x =
+      n.side === 'r'
+        ? rootW / 2 + 32 + (n.depth - 1) * colStep + childW / 2
+        : -(rootW / 2) - 32 - (n.depth - 1) * colStep - childW / 2;
     flat.push(n);
     n.children.forEach(shift);
   };
@@ -367,11 +417,19 @@ function mindmap(radial: Radial, scene: Scene, width: Measure, pad: number, part
     );
   }
 
-  const rootX = offX, rootY = offY;
-  const anchorOut = (x: number, y: number, w: number, side: 'l' | 'r') => ({ x: side === 'r' ? x + w / 2 : x - w / 2, y });
-  const anchorIn = (n: Placed) => ({ x: n.side === 'r' ? n.x + offX - n.w / 2 : n.x + offX + n.w / 2, y: n.y + offY });
+  const rootX = offX,
+    rootY = offY;
+  const anchorOut = (x: number, y: number, w: number, side: 'l' | 'r') => ({
+    x: side === 'r' ? x + w / 2 : x - w / 2,
+    y,
+  });
+  const anchorIn = (n: Placed) => ({
+    x: n.side === 'r' ? n.x + offX - n.w / 2 : n.x + offX + n.w / 2,
+    y: n.y + offY,
+  });
 
-  const linkClass = (depth: number) => (depth <= 1 ? 'gc-mind-link-d1' : depth === 2 ? 'gc-mind-link-d2' : 'gc-mind-link-d3');
+  const linkClass = (depth: number) =>
+    depth <= 1 ? 'gc-mind-link-d1' : depth === 2 ? 'gc-mind-link-d2' : 'gc-mind-link-d3';
   // Each top-level branch gets its own hue, cycling through the categorical
   // palette — the branch's own label is the legend (DESIGN 5.3).
   const branchClass = (n: number) => ` gc-series-${n % scene.series.length}`;
@@ -405,7 +463,8 @@ function mindmap(radial: Radial, scene: Scene, width: Measure, pad: number, part
         // the spark that walks this link in the live phase (hidden at rest)
         `<circle class="gc-spark gc-mind-spark" data-id="s-${id}" r="3" style="offset-path:path('${d}')"/>`,
     });
-    const nx = n.x + offX, ny = n.y + offY;
+    const nx = n.x + offX,
+      ny = n.y + offY;
     const label = fitLabel(n.name, childW - 32, scene.titleFont, scene.type.name, width);
     marks.push({
       id: `n-${id}`,
@@ -449,7 +508,14 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
   const mindLinks = marks.filter((mk) => mk.id.startsWith('m-')).length;
   const mindDepth = Math.max(0, ...marks.map((mk) => mk.depth ?? 0));
   const cycle = marks.some((mk) => mk.id === 'root')
-    ? scaffold + m.build * 0.5 + mindDepth * (m.build * 0.9 + m.build * 0.6 * 0.6 + 0.36) + 0.4 + mindLinks * 0.45 * 0.8 + 0.45 + 0.6 + m.hold
+    ? scaffold +
+      m.build * 0.5 +
+      mindDepth * (m.build * 0.9 + m.build * 0.6 * 0.6 + 0.36) +
+      0.4 +
+      mindLinks * 0.45 * 0.8 +
+      0.45 +
+      0.6 +
+      m.hold
     : last + m.hold;
 
   const fade = (sel: string, from: number, over = m.build * 0.8) => {
@@ -470,17 +536,24 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
   if (isMind) {
     const done = new Map<string, number>();
     const siblings = new Map<string, number>();
-    const linkDur = m.build * 0.9, boxDur = m.build * 0.6, lag = 0.12;
+    const linkDur = m.build * 0.9,
+      boxDur = m.build * 0.6,
+      lag = 0.12;
     const root = track('[data-id="root"]');
     root.at(0, { opacity: '0', transform: 'scale(0.9)' });
     root.at(scaffold, { opacity: '0', transform: 'scale(0.9)' });
-    root.at(scaffold + m.build * 0.7, { opacity: '1', transform: 'scale(1)', 'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)' });
+    root.at(scaffold + m.build * 0.7, {
+      opacity: '1',
+      transform: 'scale(1)',
+      'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)',
+    });
     root.at(cycle, { opacity: '1', transform: 'scale(1)' });
     done.set('root', scaffold + m.build * 0.5);
     for (const mark of marks) {
       if (mark.id === 'root' || !mark.parent) continue;
       if (mark.id.startsWith('m-')) {
-        const k = siblings.get(mark.parent) ?? 0; siblings.set(mark.parent, k + 1);
+        const k = siblings.get(mark.parent) ?? 0;
+        siblings.set(mark.parent, k + 1);
         const start = (done.get(mark.parent) ?? scaffold) + k * lag;
         const t = track(`[data-id="${mark.id}"]`);
         t.at(0, { opacity: '0', 'stroke-dashoffset': '1' });
@@ -521,7 +594,10 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
       spark.at(cycle, { opacity: '0', 'offset-distance': '100%', r: '1' });
       const node = track(`[data-id="n-${mark.id}"]`);
       node.at(at + walk - 0.02, { transform: 'scale(1)' });
-      node.at(at + walk + 0.18, { transform: 'scale(1.03)', 'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)' });
+      node.at(at + walk + 0.18, {
+        transform: 'scale(1.03)',
+        'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)',
+      });
       node.at(at + walk + 0.5, { transform: 'scale(1)' });
       node.at(cycle, { transform: 'scale(1)' });
       const outline = track(`[data-id="n-${mark.id}"] rect`);
@@ -550,7 +626,9 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
       // A slice's label follows its own wedge finishing its sweep — not the
       // flat per-mark stagger — so the name never reads before its slice has
       // finished drawing itself.
-      const ownWedge = mark.id.startsWith('l-') ? wedgeDone.get(`w-${mark.id.slice(2)}`) : undefined;
+      const ownWedge = mark.id.startsWith('l-')
+        ? wedgeDone.get(`w-${mark.id.slice(2)}`)
+        : undefined;
       fade(`[data-id="${mark.id}"]`, Math.max(start, ownWedge ?? 0));
     }
   });
@@ -572,7 +650,10 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
 
 export function radialCss(scene: Scene): string {
   const series = scene.series
-    .map((c, i) => `.gc-series-${i} { --gc-mark: var(--gc-series-${i + 1}, ${c}); fill: var(--gc-mark); }`)
+    .map(
+      (c, i) =>
+        `.gc-series-${i} { --gc-mark: var(--gc-series-${i + 1}, ${c}); fill: var(--gc-mark); }`,
+    )
     .concat(['.gc-pie-arc { fill: none; stroke: var(--gc-mark); stroke-dasharray: 1; }'])
     .join('\n');
   return `

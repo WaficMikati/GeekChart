@@ -204,8 +204,10 @@ function stableStringify(value: unknown): string {
  */
 function cacheKey(source: string, options: RenderRequest): string {
   return createHash('sha256')
-    .update(PACKAGE_VERSION).update(' ')
-    .update(source).update(' ')
+    .update(PACKAGE_VERSION)
+    .update(' ')
+    .update(source)
+    .update(' ')
     .update(stableStringify(options))
     .digest('hex');
 }
@@ -312,9 +314,9 @@ export async function renderToSvg(
   const inflight = inflightByKey.get(key || source);
   if (inflight) return inflight as Promise<RenderToSvgResult>;
   const run = queue.then(async () => {
-  // `session.page` is a real Playwright `Page` at runtime (it came from the
-  // same `openSession()` `renderAny` expects it from) — `ChromiumSession`
-  // just doesn't say so statically, per the note at the top of this file.
+    // `session.page` is a real Playwright `Page` at runtime (it came from the
+    // same `openSession()` `renderAny` expects it from) — `ChromiumSession`
+    // just doesn't say so statically, per the note at the top of this file.
     const reply = await renderAny(session.page as never, source, request);
     if (!reply.ok) throw new GeekchartRenderError(reply.error);
 
@@ -335,9 +337,16 @@ export async function renderToSvg(
     if (cache) await cache.set(key, result);
     return result;
   });
-  queue = run.then(() => undefined, () => undefined);
+  queue = run.then(
+    () => undefined,
+    () => undefined,
+  );
   if (key) inflightByKey.set(key, run);
-  try { return await run; } finally { if (key) inflightByKey.delete(key); }
+  try {
+    return await run;
+  } finally {
+    if (key) inflightByKey.delete(key);
+  }
 }
 
 /**
@@ -346,12 +355,17 @@ export async function renderToSvg(
  * match. Two charts on the same page cannot collide, because each gets its own
  * id and its own renamed keyframes.
  */
-export async function renderToHtml(source: string, options: RenderToSvgOptions = {}): Promise<string> {
+export async function renderToHtml(
+  source: string,
+  options: RenderToSvgOptions = {},
+): Promise<string> {
   const result = await renderToSvg(source, options);
   const { scopeCss } = await import('../../core/src/scope.ts');
   const id = `gc-${cacheKey(source, stripCache(options)).slice(0, 12)}`;
-  return `<div id="${id}" role="img" aria-label="${result.summary.replace(/"/g, '&quot;')}">` +
-    `<style>${scopeCss(result.css, id)}</style>${result.svg}</div>`;
+  return (
+    `<div id="${id}" role="img" aria-label="${result.summary.replace(/"/g, '&quot;')}">` +
+    `<style>${scopeCss(result.css, id)}</style>${result.svg}</div>`
+  );
 }
 
 // ---------------------------------------------------------------- disk cache

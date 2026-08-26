@@ -14,10 +14,14 @@ import type { Scene } from '../scene.ts';
  * element inherits from this host, so naming the page's stack once makes every
  * inherited measurement match what the chart will meet when it gets there.
  */
-export function makeMeasurer(measureWith?: string): { measure: (text: string, font: string, size: number, tracking?: string) => number; done: () => void } {
+export function makeMeasurer(measureWith?: string): {
+  measure: (text: string, font: string, size: number, tracking?: string) => number;
+  done: () => void;
+} {
   const host = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   host.setAttribute('aria-hidden', 'true');
-  host.style.cssText = 'position:fixed;left:-99999px;top:0;width:10px;height:10px;overflow:visible;';
+  host.style.cssText =
+    'position:fixed;left:-99999px;top:0;width:10px;height:10px;overflow:visible;';
   if (measureWith) host.style.fontFamily = measureWith;
   const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
   host.appendChild(text);
@@ -95,8 +99,7 @@ export function fitShape(
       // at perpendicular distance (ab - bw/2 - ah/2) / hypot(a, b). Setting that
       // to the pad and fixing the aspect a = r*b leaves one equation in b.
       const r = 1.85; // matches the reference proportion
-      const b =
-        (pad * Math.hypot(r, 1) + label.width / 2 + (r * label.height) / 2) / r;
+      const b = (pad * Math.hypot(r, 1) + label.width / 2 + (r * label.height) / 2) / r;
       return { width: 2 * r * b, height: 2 * b };
     }
     case 'circle': {
@@ -121,9 +124,7 @@ export function fitShape(
     // either clip the longest or leave the shortest mostly empty.
     case 'panel': {
       const header = scene.titleSize * 1.16 + scene.padY * 2;
-      const body = rows.count
-        ? rows.count * scene.rowStep + rows.groups * scene.padY
-        : 0;
+      const body = rows.count ? rows.count * scene.rowStep + rows.groups * scene.padY : 0;
       // 200 is DESIGN 2.2's "wide" box, and a record is what it is for: a class
       // or entity table holds a column of declarations, so it is the one node
       // that is always the wide size rather than the 160 default.
@@ -152,17 +153,32 @@ export function fitShape(
   }
 }
 
-interface Rect { x: number; y: number; width: number; height: number }
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /** Everything that has been placed, as one box. */
 export function extentOf(graph: Graph): Rect {
   const boxes: Rect[] = [
-    ...graph.nodes.filter((n) => n.x !== undefined).map((n) => ({
-      x: n.x!, y: n.y!, width: n.width!, height: n.height!,
-    })),
-    ...graph.clusters.filter((c) => c.x !== undefined).map((c) => ({
-      x: c.x!, y: c.y!, width: c.width!, height: c.height!,
-    })),
+    ...graph.nodes
+      .filter((n) => n.x !== undefined)
+      .map((n) => ({
+        x: n.x!,
+        y: n.y!,
+        width: n.width!,
+        height: n.height!,
+      })),
+    ...graph.clusters
+      .filter((c) => c.x !== undefined)
+      .map((c) => ({
+        x: c.x!,
+        y: c.y!,
+        width: c.width!,
+        height: c.height!,
+      })),
   ];
   if (!boxes.length) return { x: 0, y: 0, width: 0, height: 0 };
   const x1 = Math.max(...boxes.map((b) => b.x + b.width));

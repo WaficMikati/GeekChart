@@ -131,21 +131,24 @@ export function rectShape(box: Box): Shape {
   const halfHeight = Math.max(box.height / 2, 0.001);
   return {
     centre,
-    at: (p) => Math.max(Math.abs(p.x - centre.x) / halfWidth, Math.abs(p.y - centre.y) / halfHeight),
+    at: (p) =>
+      Math.max(Math.abs(p.x - centre.x) / halfWidth, Math.abs(p.y - centre.y) / halfHeight),
   };
 }
 
 export function rhombusShape(centre: Point, a: number, b: number): Shape {
   return {
     centre,
-    at: (p) => Math.abs(p.x - centre.x) / Math.max(a, 0.001) + Math.abs(p.y - centre.y) / Math.max(b, 0.001),
+    at: (p) =>
+      Math.abs(p.x - centre.x) / Math.max(a, 0.001) + Math.abs(p.y - centre.y) / Math.max(b, 0.001),
   };
 }
 
 export function ellipseShape(centre: Point, a: number, b: number): Shape {
   return {
     centre,
-    at: (p) => Math.hypot((p.x - centre.x) / Math.max(a, 0.001), (p.y - centre.y) / Math.max(b, 0.001)),
+    at: (p) =>
+      Math.hypot((p.x - centre.x) / Math.max(a, 0.001), (p.y - centre.y) / Math.max(b, 0.001)),
   };
 }
 
@@ -170,7 +173,10 @@ export function boundaryPoint(shape: Shape, outside: Point, inner: Point = shape
   let high = 1;
   for (let i = 0; i < 30; i++) {
     const mid = (low + high) / 2;
-    const p = { x: outside.x + (inner.x - outside.x) * mid, y: outside.y + (inner.y - outside.y) * mid };
+    const p = {
+      x: outside.x + (inner.x - outside.x) * mid,
+      y: outside.y + (inner.y - outside.y) * mid,
+    };
     if (shape.at(p) > 1) low = mid;
     else high = mid;
   }
@@ -194,7 +200,10 @@ export function attachToShapes(points: Point[], from: Shape | null, to: Shape | 
     const first = route[0];
     if (first) route.unshift(boundaryPoint(from, first));
     // A point exactly on the border produces a zero-length opening segment.
-    if (route.length > 2 && Math.hypot(route[1]!.x - route[0]!.x, route[1]!.y - route[0]!.y) < 0.5) {
+    if (
+      route.length > 2 &&
+      Math.hypot(route[1]!.x - route[0]!.x, route[1]!.y - route[0]!.y) < 0.5
+    ) {
       route.splice(1, 1);
     }
   }
@@ -204,7 +213,10 @@ export function attachToShapes(points: Point[], from: Shape | null, to: Shape | 
     const last = route[route.length - 1];
     if (last) route.push(boundaryPoint(to, last));
     const n = route.length;
-    if (n > 2 && Math.hypot(route[n - 1]!.x - route[n - 2]!.x, route[n - 1]!.y - route[n - 2]!.y) < 0.5) {
+    if (
+      n > 2 &&
+      Math.hypot(route[n - 1]!.x - route[n - 2]!.x, route[n - 1]!.y - route[n - 2]!.y) < 0.5
+    ) {
       route.splice(n - 2, 1);
     }
   }
@@ -238,7 +250,6 @@ export function shortenEnd(points: Point[], gap: number): Point[] {
   return route.length >= 2 ? route : points;
 }
 
-
 /** Round to the nearest multiple of `step`. DESIGN 2.1's 8-grid. */
 export const onGrid = (value: number, step = 8): number => Math.round(value / step) * step;
 
@@ -260,7 +271,7 @@ export function tidyOrtho(points: Point[], epsilon = 0.5): Point[] {
     if (last && Math.abs(last.x - p.x) < epsilon && Math.abs(last.y - p.y) < epsilon) continue;
     out.push(p);
   }
-  for (let i = 1; i < out.length - 1; ) {
+  for (let i = 1; i < out.length - 1;) {
     const a = out[i - 1]!;
     const b = out[i]!;
     const c = out[i + 1]!;

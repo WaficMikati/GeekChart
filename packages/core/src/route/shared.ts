@@ -20,10 +20,19 @@ export const NORMALS: Record<Side, Point> = {
 export const isVertical = (side: Side): boolean => side === 'top' || side === 'bottom';
 
 /** The axis-aligned box an edge attaches to, or has to clear. */
-export interface Extent { x: number; y: number; width: number; height: number }
+export interface Extent {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /** Something a route must not run through. `holds` names a panel's children. */
-export interface Obstacle { id: string; box: Extent; holds?: readonly string[] }
+export interface Obstacle {
+  id: string;
+  box: Extent;
+  holds?: readonly string[];
+}
 
 /** Where a face sits, centred on its own axis. */
 export const faceMiddle = (box: Extent, side: Side): number =>

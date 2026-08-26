@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  closeServer, diskCache, renderToHtml, renderToSvg, setPageRecycleEvery, warm,
+  closeServer,
+  diskCache,
+  renderToHtml,
+  renderToSvg,
+  setPageRecycleEvery,
+  warm,
   type RenderToSvgResult,
 } from '../src/server.ts';
 
@@ -43,7 +48,11 @@ test('renders flow.mmd to a scoped chart and hits the cache on the second call',
   assert.equal(store.size, 1);
 
   const second = await renderToSvg(flow, { cache, scene: 'geeks' });
-  assert.equal(second, first, 'the second call should return the cached object, not a fresh render');
+  assert.equal(
+    second,
+    first,
+    'the second call should return the cached object, not a fresh render',
+  );
   assert.equal(hits, 1);
   assert.equal(store.size, 1, 'one cache entry, not one per call');
 });
@@ -70,11 +79,15 @@ test('concurrent renders of different sources each get their own chart', async (
   // The shared page once handed back the wrong chart under concurrency (seen in
   // the throughput benchmark). Renders are serialised through a queue now; this
   // fires eight distinct sources at once and checks each result carries its own label.
-  const sources = Array.from({ length: 8 }, (_, i) => `flowchart LR\n  A${i}["Only-${i}"] --> B${i}["Done-${i}"]`);
+  const sources = Array.from(
+    { length: 8 },
+    (_, i) => `flowchart LR\n  A${i}["Only-${i}"] --> B${i}["Done-${i}"]`,
+  );
   const results = await Promise.all(sources.map((s) => renderToSvg(s, { cache: false })));
   results.forEach((r, i) => {
     assert.ok(r.svg.includes(`Only-${i}`), `render ${i} lost its own label`);
-    for (let j = 0; j < sources.length; j++) if (j !== i) assert.ok(!r.svg.includes(`Only-${j}`), `render ${i} contains chart ${j}`);
+    for (let j = 0; j < sources.length; j++)
+      if (j !== i) assert.ok(!r.svg.includes(`Only-${j}`), `render ${i} contains chart ${j}`);
   });
 });
 
@@ -119,7 +132,10 @@ test('warm renders a list of sources, then reports cache hits on a second pass',
     get: (key: string) => store.get(key),
     set: (key: string, value: RenderToSvgResult) => void store.set(key, value),
   };
-  const sources = Array.from({ length: 6 }, (_, i) => `flowchart LR\n  W${i}["Warm-${i}"] --> D${i}["Done-${i}"]`);
+  const sources = Array.from(
+    { length: 6 },
+    (_, i) => `flowchart LR\n  W${i}["Warm-${i}"] --> D${i}["Done-${i}"]`,
+  );
 
   const first = await warm(sources, { cache }, 3);
   assert.deepEqual(first, { rendered: 6, cached: 0, failed: 0 });

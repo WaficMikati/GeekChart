@@ -12,8 +12,12 @@ export const specFor = (style: StyleName): StyleSpec => styles[style];
 function resolve(spec: StyleSpec, theme: ThemeName) {
   const at = (c: { light: Hsl; dark: Hsl }) => pick(c, theme);
   return {
-    paper: at(spec.paper), fill: at(spec.fill), border: at(spec.border),
-    line: at(spec.line), ink: at(spec.ink), quiet: at(spec.quiet),
+    paper: at(spec.paper),
+    fill: at(spec.fill),
+    border: at(spec.border),
+    line: at(spec.line),
+    ink: at(spec.ink),
+    quiet: at(spec.quiet),
   };
 }
 
@@ -25,7 +29,10 @@ function resolve(spec: StyleSpec, theme: ThemeName) {
  * step with the pack means a diagram type we have never rendered still lands
  * close to the mark.
  */
-export function themeVariables(theme: ThemeName, style: StyleName = 'blueprint'): Record<string, string> {
+export function themeVariables(
+  theme: ThemeName,
+  style: StyleName = 'blueprint',
+): Record<string, string> {
   const spec = styles[style];
   const c = resolve(spec, theme);
   const p = paletteFor(theme);

@@ -27,7 +27,9 @@ function run(command: string, args: string[]): Promise<void> {
       reject(new Error(`${command} could not be started: ${err.message}`)),
     );
     child.on('close', (code) =>
-      code === 0 ? resolve() : reject(new Error(`${command} exited ${code}\n${stderr.slice(-2000)}`)),
+      code === 0
+        ? resolve()
+        : reject(new Error(`${command} exited ${code}\n${stderr.slice(-2000)}`)),
     );
   });
 }
@@ -121,7 +123,9 @@ async function assertFramesDiffer(dir: string, frames: number): Promise<void> {
  * always is — and a figure that does not fit is clipped by the screenshot rather
  * than scaled, so the bottom of the diagram silently goes missing.
  */
-async function frameBox(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
+async function frameBox(
+  page: Page,
+): Promise<{ x: number; y: number; width: number; height: number }> {
   const wanted = await page.evaluate(() => {
     const figure = document.querySelector('.gc-figure') ?? document.body;
     const r = figure.getBoundingClientRect();
@@ -160,29 +164,79 @@ export async function captureVideo(
     if (format === 'gif') {
       const palette = join(dir, 'palette.png');
       await run('ffmpeg', [
-        '-y', '-framerate', String(options.fps), '-i', pattern,
-        '-vf', `${EVEN},palettegen=stats_mode=diff`, palette,
+        '-y',
+        '-framerate',
+        String(options.fps),
+        '-i',
+        pattern,
+        '-vf',
+        `${EVEN},palettegen=stats_mode=diff`,
+        palette,
       ]);
       await run('ffmpeg', [
-        '-y', '-framerate', String(options.fps), '-i', pattern, '-i', palette,
-        '-lavfi', `${EVEN}[x];[x][1:v]paletteuse=dither=sierra2_4a`,
-        '-loop', '0', output,
+        '-y',
+        '-framerate',
+        String(options.fps),
+        '-i',
+        pattern,
+        '-i',
+        palette,
+        '-lavfi',
+        `${EVEN}[x];[x][1:v]paletteuse=dither=sierra2_4a`,
+        '-loop',
+        '0',
+        output,
       ]);
     } else if (format === 'webm') {
       // VP9 defaults to its slowest search, which takes minutes on a long
       // sequence of large frames. `good` with a mid cpu-used and row threading
       // is the usual quality-per-second sweet spot.
       await run('ffmpeg', [
-        '-y', '-framerate', String(options.fps), '-i', pattern,
-        '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '32',
-        '-deadline', 'good', '-cpu-used', '4', '-row-mt', '1', '-threads', '0',
-        '-vf', EVEN, output,
+        '-y',
+        '-framerate',
+        String(options.fps),
+        '-i',
+        pattern,
+        '-c:v',
+        'libvpx-vp9',
+        '-pix_fmt',
+        'yuva420p',
+        '-b:v',
+        '0',
+        '-crf',
+        '32',
+        '-deadline',
+        'good',
+        '-cpu-used',
+        '4',
+        '-row-mt',
+        '1',
+        '-threads',
+        '0',
+        '-vf',
+        EVEN,
+        output,
       ]);
     } else {
       await run('ffmpeg', [
-        '-y', '-framerate', String(options.fps), '-i', pattern,
-        '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p',
-        '-vf', EVEN, '-movflags', '+faststart', output,
+        '-y',
+        '-framerate',
+        String(options.fps),
+        '-i',
+        pattern,
+        '-c:v',
+        'libx264',
+        '-preset',
+        'slow',
+        '-crf',
+        '18',
+        '-pix_fmt',
+        'yuv420p',
+        '-vf',
+        EVEN,
+        '-movflags',
+        '+faststart',
+        output,
       ]);
     }
     return { frames, seconds: frames / options.fps };

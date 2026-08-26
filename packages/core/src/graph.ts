@@ -14,12 +14,25 @@ import mermaid from 'mermaid';
  */
 
 export type NodeShape =
-  | 'rect' | 'round' | 'stadium' | 'diamond' | 'circle' | 'cylinder'
-  | 'hexagon' | 'subroutine' | 'parallelogram' | 'trapezoid' | 'doc'
+  | 'rect'
+  | 'round'
+  | 'stadium'
+  | 'diamond'
+  | 'circle'
+  | 'cylinder'
+  | 'hexagon'
+  | 'subroutine'
+  | 'parallelogram'
+  | 'trapezoid'
+  | 'doc'
   // State, class and ER contribute their own shapes. They are drawn by the same
   // code as the flowchart shapes, so nothing downstream needs to know which
   // diagram type produced them.
-  | 'panel' | 'dot' | 'ring' | 'bar' | 'note';
+  | 'panel'
+  | 'dot'
+  | 'ring'
+  | 'bar'
+  | 'note';
 
 export type EdgeStroke = 'normal' | 'dotted' | 'thick';
 
@@ -32,7 +45,7 @@ export type EdgeStroke = 'normal' | 'dotted' | 'thick';
  * a fill, a weight or a dash — a second channel that survives being small.
  */
 export type NodeKind =
-  | 'process' | 'decision' | 'terminal' | 'datastore' | 'external' | 'note' | 'marker';
+  'process' | 'decision' | 'terminal' | 'datastore' | 'external' | 'note' | 'marker';
 
 /**
  * How a line ends.
@@ -44,8 +57,18 @@ export type NodeKind =
  * aligned to its true direction.
  */
 export type EdgeTip =
-  | 'none' | 'arrow' | 'open' | 'cross' | 'triangle' | 'diamond' | 'diamond-filled'
-  | 'one' | 'many' | 'zero-one' | 'zero-many' | 'only-one';
+  | 'none'
+  | 'arrow'
+  | 'open'
+  | 'cross'
+  | 'triangle'
+  | 'diamond'
+  | 'diamond-filled'
+  | 'one'
+  | 'many'
+  | 'zero-one'
+  | 'zero-many'
+  | 'only-one';
 
 /** One line inside a compartmented node. */
 export interface NodeRow {
@@ -163,17 +186,24 @@ export function kindOf(shape: NodeShape, classes: string[] = []): NodeKind {
   );
   if (named) return named as NodeKind;
   switch (shape) {
-    case 'diamond': return 'decision';
+    case 'diamond':
+      return 'decision';
     case 'stadium':
-    case 'circle': return 'terminal';
-    case 'cylinder': return 'datastore';
+    case 'circle':
+      return 'terminal';
+    case 'cylinder':
+      return 'datastore';
     case 'subroutine':
-    case 'doc': return 'external';
-    case 'note': return 'note';
+    case 'doc':
+      return 'external';
+    case 'note':
+      return 'note';
     case 'dot':
     case 'ring':
-    case 'bar': return 'marker';
-    default: return 'process';
+    case 'bar':
+      return 'marker';
+    default:
+      return 'process';
   }
 }
 
@@ -291,8 +321,9 @@ export async function parseWith(source: string): Promise<MermaidDb> {
     initialised = true;
   }
 
-  const api = (mermaid as unknown as { mermaidAPI: { getDiagramFromText(t: string): Promise<unknown> } })
-    .mermaidAPI;
+  const api = (
+    mermaid as unknown as { mermaidAPI: { getDiagramFromText(t: string): Promise<unknown> } }
+  ).mermaidAPI;
   const diagram = (await api.getDiagramFromText(source)) as {
     db?: MermaidDb;
     getDB?: () => MermaidDb;
@@ -309,7 +340,8 @@ export async function toGraph(source: string): Promise<Graph> {
     throw new Error('This diagram type is not a flowchart.');
   }
 
-  const rawVertices = db.getVertices() as Map<string, Record<string, unknown>> | Record<string, unknown>;
+  const rawVertices = db.getVertices() as
+    Map<string, Record<string, unknown>> | Record<string, unknown>;
   const vertexList =
     rawVertices instanceof Map ? [...rawVertices.values()] : Object.values(rawVertices);
 

@@ -1,7 +1,14 @@
 import { repair } from './repair.ts';
 import {
-  renderBoard, renderChronicle, renderCommits, renderFlow, renderPlot, renderRadial, renderSequence,
-  type DrawnType, type FlowOptions,
+  renderBoard,
+  renderChronicle,
+  renderCommits,
+  renderFlow,
+  renderPlot,
+  renderRadial,
+  renderSequence,
+  type DrawnType,
+  type FlowOptions,
 } from './flow.ts';
 import { ChartError } from './chart-error.ts';
 import type { RenderInput } from './render.ts';
@@ -61,10 +68,16 @@ export interface RenderResult {
 /** Name the diagram by what is actually in it, for screen readers. */
 function describe(kind: string, titles: string[], edges: number): string {
   const named = titles.filter(Boolean);
-  const noun = kind === 'flowchart' ? 'Flowchart' :
-    kind === 'state' ? 'State diagram' :
-    kind === 'class' ? 'Class diagram' :
-    kind === 'er' ? 'Entity relationship diagram' : 'Diagram';
+  const noun =
+    kind === 'flowchart'
+      ? 'Flowchart'
+      : kind === 'state'
+        ? 'State diagram'
+        : kind === 'class'
+          ? 'Class diagram'
+          : kind === 'er'
+            ? 'Entity relationship diagram'
+            : 'Diagram';
   if (!named.length) return `${noun} with ${edges} connection${edges === 1 ? '' : 's'}.`;
   const shown = named.slice(0, 8);
   const rest = named.length - shown.length;
@@ -142,18 +155,38 @@ export async function render(source: string, options: RenderOptions = {}): Promi
   if (useFlow && BOARDS.has(kind)) {
     const b = await renderBoard(cleaned, kind as 'sankey' | 'treemap' | 'kanban', options);
     return {
-      path: 'flow', svg: b.svg, svgFile: svgDocument(b.svg, b.css), html: b.html, css: b.css,
-      repairs: notes, cycle: b.cycle, diagram: kind, nodes: b.items, edges: b.lanes,
-      primaryPath: [], summary: b.summary, warnings: b.warnings,
+      path: 'flow',
+      svg: b.svg,
+      svgFile: svgDocument(b.svg, b.css),
+      html: b.html,
+      css: b.css,
+      repairs: notes,
+      cycle: b.cycle,
+      diagram: kind,
+      nodes: b.items,
+      edges: b.lanes,
+      primaryPath: [],
+      summary: b.summary,
+      warnings: b.warnings,
     };
   }
 
   if (useFlow && PLOTS.has(kind)) {
     const p = await renderPlot(cleaned, kind as 'quadrant' | 'radar' | 'xy', options);
     return {
-      path: 'flow', svg: p.svg, svgFile: svgDocument(p.svg, p.css), html: p.html, css: p.css,
-      repairs: notes, cycle: p.cycle, diagram: kind, nodes: p.items, edges: p.lanes,
-      primaryPath: [], summary: p.summary, warnings: p.warnings,
+      path: 'flow',
+      svg: p.svg,
+      svgFile: svgDocument(p.svg, p.css),
+      html: p.html,
+      css: p.css,
+      repairs: notes,
+      cycle: p.cycle,
+      diagram: kind,
+      nodes: p.items,
+      edges: p.lanes,
+      primaryPath: [],
+      summary: p.summary,
+      warnings: p.warnings,
     };
   }
 
@@ -179,18 +212,38 @@ export async function render(source: string, options: RenderOptions = {}): Promi
   if (useFlow && RADIAL.has(kind)) {
     const rad = await renderRadial(cleaned, kind as 'pie' | 'mindmap', options);
     return {
-      path: 'flow', svg: rad.svg, svgFile: svgDocument(rad.svg, rad.css), html: rad.html, css: rad.css,
-      repairs: notes, cycle: rad.cycle, diagram: kind, nodes: rad.items, edges: rad.lanes,
-      primaryPath: [], summary: rad.summary, warnings: rad.warnings,
+      path: 'flow',
+      svg: rad.svg,
+      svgFile: svgDocument(rad.svg, rad.css),
+      html: rad.html,
+      css: rad.css,
+      repairs: notes,
+      cycle: rad.cycle,
+      diagram: kind,
+      nodes: rad.items,
+      edges: rad.lanes,
+      primaryPath: [],
+      summary: rad.summary,
+      warnings: rad.warnings,
     };
   }
 
   if (useFlow && kind === 'gitgraph') {
     const commits = await renderCommits(cleaned, options);
     return {
-      path: 'flow', svg: commits.svg, svgFile: svgDocument(commits.svg, commits.css), html: commits.html, css: commits.css,
-      repairs: notes, cycle: commits.cycle, diagram: kind, nodes: commits.items, edges: commits.lanes,
-      primaryPath: [], summary: commits.summary, warnings: commits.warnings,
+      path: 'flow',
+      svg: commits.svg,
+      svgFile: svgDocument(commits.svg, commits.css),
+      html: commits.html,
+      css: commits.css,
+      repairs: notes,
+      cycle: commits.cycle,
+      diagram: kind,
+      nodes: commits.items,
+      edges: commits.lanes,
+      primaryPath: [],
+      summary: commits.summary,
+      warnings: commits.warnings,
     };
   }
 

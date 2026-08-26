@@ -1,10 +1,22 @@
 import { squareOff, tidyOrtho, type Point, type Shape } from '../geometry.ts';
-import { NORMALS, faceMiddle, isVertical, type Extent, type Obstacle, type Side } from './shared.ts';
+import {
+  NORMALS,
+  faceMiddle,
+  isVertical,
+  type Extent,
+  type Obstacle,
+  type Side,
+} from './shared.ts';
 import { alignEnds, facesFor, faceRange, portOn, sideToward } from './ports.ts';
 import { contact, curve, isBoxy, elbows } from './elbows.ts';
 import { corridorGaps, detours, loopSide, marginShortfall, selfLoop } from './loops.ts';
 import {
-  crossingCost, intrusion, pathLength, selfPierce, sharedRunCost, tightCornerCost,
+  crossingCost,
+  intrusion,
+  pathLength,
+  selfPierce,
+  sharedRunCost,
+  tightCornerCost,
   type PlacedSeg,
 } from './cost.ts';
 
@@ -51,24 +63,33 @@ export function routeEdges(
   }));
 
   // Group by the face each end lands on, then spread the ports across it.
-  const buckets = new Map<string, { assignment: Assignment; end: 'start' | 'end'; sort: number }[]>();
+  const buckets = new Map<
+    string,
+    { assignment: Assignment; end: 'start' | 'end'; sort: number }[]
+  >();
   for (const assignment of assignments) {
     if (assignment.edge.from === assignment.edge.to) continue;
-    const key = (node: SVGElement, side: Side) => `${node.getAttribute("id") ?? "n"}:${side}`;
+    const key = (node: SVGElement, side: Side) => `${node.getAttribute('id') ?? 'n'}:${side}`;
 
     const startKey = key(assignment.edge.from, assignment.startSide);
     const startCross =
       assignment.startSide === 'left' || assignment.startSide === 'right'
         ? assignment.edge.toShape.centre.y
         : assignment.edge.toShape.centre.x;
-    buckets.set(startKey, [...(buckets.get(startKey) ?? []), { assignment, end: 'start', sort: startCross }]);
+    buckets.set(startKey, [
+      ...(buckets.get(startKey) ?? []),
+      { assignment, end: 'start', sort: startCross },
+    ]);
 
     const endKey = key(assignment.edge.to, assignment.endSide);
     const endCross =
       assignment.endSide === 'left' || assignment.endSide === 'right'
         ? assignment.edge.fromShape.centre.y
         : assignment.edge.fromShape.centre.x;
-    buckets.set(endKey, [...(buckets.get(endKey) ?? []), { assignment, end: 'end', sort: endCross }]);
+    buckets.set(endKey, [
+      ...(buckets.get(endKey) ?? []),
+      { assignment, end: 'end', sort: endCross },
+    ]);
   }
 
   for (const members of buckets.values()) {
@@ -159,7 +180,10 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
   // other node" (not just every edge's *from*, which drops a leaf that is
   // only ever a *to*, and double-counts a node with several outgoing edges).
   const nodeIds = new Set<string>();
-  for (const edge of edges) { nodeIds.add(edge.from); nodeIds.add(edge.to); }
+  for (const edge of edges) {
+    nodeIds.add(edge.from);
+    nodeIds.add(edge.to);
+  }
   const nodeCentres = new Map<string, Point>();
   for (const id of nodeIds) {
     const box = boxOf(id);
@@ -201,9 +225,13 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     if (!a || !b) continue;
     if (edge.from === edge.to) {
       pending.push({
-        edge, startSide: 'top', endSide: 'top',
-        startAlong: a.x + a.width * 0.34, endAlong: a.x + a.width * 0.66,
-        channel: false, loop: true,
+        edge,
+        startSide: 'top',
+        endSide: 'top',
+        startAlong: a.x + a.width * 0.34,
+        endAlong: a.x + a.width * 0.66,
+        channel: false,
+        loop: true,
       });
       continue;
     }
@@ -238,14 +266,21 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       // down, which is what actually lands it on the matching left face and
       // a real, straight corridor.
       const startSideChoice = loopSide(
-        fromShape, toShape, others,
+        fromShape,
+        toShape,
+        others,
         isVertical(endSideChoice) ? 'vertical' : 'horizontal',
-        usedSides.get(edge.from), usedSides.get(edge.to),
+        usedSides.get(edge.from),
+        usedSides.get(edge.to),
       );
       pending.push({
-        edge, startSide: startSideChoice, endSide: endSideChoice,
-        startAlong: faceMiddle(a, startSideChoice), endAlong: faceMiddle(b, endSideChoice),
-        channel: false, loop: true,
+        edge,
+        startSide: startSideChoice,
+        endSide: endSideChoice,
+        startAlong: faceMiddle(a, startSideChoice),
+        endAlong: faceMiddle(b, endSideChoice),
+        channel: false,
+        loop: true,
       });
       markUsed(edge.from, startSideChoice);
       markUsed(edge.to, endSideChoice);
@@ -273,7 +308,10 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
   // "never converging on one pixel" whether the edges are going the same way
   // or not (`state.mmd`'s Running→Graduated arrival and Graduated→root_end
   // departure, both dead centre on Graduated's top face).
-  interface Member { item: Pending<T>; end: boolean }
+  interface Member {
+    item: Pending<T>;
+    end: boolean;
+  }
   const buckets = new Map<string, Member[]>();
   const key = (node: string, side: Side) => `${node}:${side}`;
   for (const item of pending) {
@@ -432,9 +470,13 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     // Nothing an edge does not connect to may sit on its route. A cluster
     // holding either end is not an obstacle — the edge is meant to be inside it.
     const blockers = obstacles
-      .filter((o) =>
-        o.id !== item.edge.from && o.id !== item.edge.to &&
-        !o.holds?.includes(item.edge.from) && !o.holds?.includes(item.edge.to))
+      .filter(
+        (o) =>
+          o.id !== item.edge.from &&
+          o.id !== item.edge.to &&
+          !o.holds?.includes(item.edge.from) &&
+          !o.holds?.includes(item.edge.to),
+      )
       .map((o) => o.box);
 
     // Where a detour actually needs to swing out to. A retry has to clear the
@@ -460,8 +502,12 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
           return {
             x: Math.min(...boxes.map((box) => box.x)),
             y: Math.min(...boxes.map((box) => box.y)),
-            width: Math.max(...boxes.map((box) => box.x + box.width)) - Math.min(...boxes.map((box) => box.x)),
-            height: Math.max(...boxes.map((box) => box.y + box.height)) - Math.min(...boxes.map((box) => box.y)),
+            width:
+              Math.max(...boxes.map((box) => box.x + box.width)) -
+              Math.min(...boxes.map((box) => box.x)),
+            height:
+              Math.max(...boxes.map((box) => box.y + box.height)) -
+              Math.min(...boxes.map((box) => box.y)),
           };
         })();
 
@@ -470,7 +516,11 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     // face is charged for, so a route only leaves the side it should leave from
     // when the alternative genuinely clears a box the first one ran through.
     const build = (
-      ss: Side, es: Side, sAlong: number, eAlong: number, mustGoRound: boolean,
+      ss: Side,
+      es: Side,
+      sAlong: number,
+      eAlong: number,
+      mustGoRound: boolean,
     ): { points: Point[]; cost: number } | null => {
       const s0 = contact(fromShape, a, ss, sAlong);
       const e0 = contact(toShape, b, es, eAlong);
@@ -501,7 +551,9 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       if (!mustGoRound) {
         for (const mid of elbows(pp, nA, qq, nB, wallBoxes)) {
           const candidate = [s0, pp, ...mid, qq, e0];
-          const cost = intrusion(candidate, blockers) + crossPenalty(candidate) +
+          const cost =
+            intrusion(candidate, blockers) +
+            crossPenalty(candidate) +
             selfPierce(candidate, [a, b]) * 2000;
           if (!best || cost < best.cost) best = { points: candidate, cost };
           if (cost === 0) break;
@@ -516,8 +568,14 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       // clean corridor on its own, and far shorter. Offered alongside the
       // margin lanes below; the cost search picks by resulting path length,
       // not by which lane comes first (DESIGN 6.7's "nearest corridor").
-      const yRange: [number, number] = [Math.min(s0.y, e0.y, pp.y, qq.y), Math.max(s0.y, e0.y, pp.y, qq.y)];
-      const xRange: [number, number] = [Math.min(s0.x, e0.x, pp.x, qq.x), Math.max(s0.x, e0.x, pp.x, qq.x)];
+      const yRange: [number, number] = [
+        Math.min(s0.y, e0.y, pp.y, qq.y),
+        Math.max(s0.y, e0.y, pp.y, qq.y),
+      ];
+      const xRange: [number, number] = [
+        Math.min(s0.x, e0.x, pp.x, qq.x),
+        Math.max(s0.x, e0.x, pp.x, qq.x),
+      ];
       const extraLanes = item.loop
         ? {
             y: corridorGaps('y', content, blockers, clear, xRange),
@@ -532,9 +590,13 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       // that goes all the way round, same as a loop-back would. Offered
       // alongside the local lanes, not instead of them, so it only wins when
       // it is genuinely the sole clean option — same 400 flat cost either way.
-      const rounds = detourBounds === content
-        ? detours(s0, ss, e0, es, pp, qq, detourBounds, clear, extraLanes)
-        : [...detours(s0, ss, e0, es, pp, qq, detourBounds, clear), ...detours(s0, ss, e0, es, pp, qq, content, clear, extraLanes)];
+      const rounds =
+        detourBounds === content
+          ? detours(s0, ss, e0, es, pp, qq, detourBounds, clear, extraLanes)
+          : [
+              ...detours(s0, ss, e0, es, pp, qq, detourBounds, clear),
+              ...detours(s0, ss, e0, es, pp, qq, content, clear, extraLanes),
+            ];
       for (const round of rounds) {
         // Detours offers every lane a face can reach at all, including ones
         // at right angles to a same-side loop — a lane in the *same* axis as
@@ -558,21 +620,40 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
         // clearer face). Loops keep the old, unpenalised cost — going round
         // is the route DESIGN 6.7 asks for, not a fallback.
         const cost =
-          intrusion(round.points, blockers) + (mustGoRound ? 0 : 400) + crossAxisCharge +
-          crossPenalty(round.points) + marginShortfall(round.points, content, clear) * 50 +
+          intrusion(round.points, blockers) +
+          (mustGoRound ? 0 : 400) +
+          crossAxisCharge +
+          crossPenalty(round.points) +
+          marginShortfall(round.points, content, clear) * 50 +
           selfPierce(round.points, [a, b]) * 2000 +
           (item.loop ? tightCornerCost(round.points) : 0) +
           Math.max(0, pathLength(round.points) - loopBudget) * 10;
         if ((globalThis as Record<string, unknown>).__DEBUG_EDGE === item.edge.id) {
-          console.error('ROUND', round.side, JSON.stringify(round.points), 'cost', cost,
-            'selfPierce', selfPierce(round.points, [a, b]), 'intrusion', intrusion(round.points, blockers),
-            'len', pathLength(round.points), 'budget', loopBudget);
+          console.error(
+            'ROUND',
+            round.side,
+            JSON.stringify(round.points),
+            'cost',
+            cost,
+            'selfPierce',
+            selfPierce(round.points, [a, b]),
+            'intrusion',
+            intrusion(round.points, blockers),
+            'len',
+            pathLength(round.points),
+            'budget',
+            loopBudget,
+          );
         }
         // Among routes that cost the same (almost always two or more clean
         // lanes), the nearest corridor wins — the shortest resulting path,
         // not whichever lane was offered first.
         const len = pathLength(round.points);
-        if (!best || cost < best.cost - 0.5 || (Math.abs(cost - best.cost) < 0.5 && len < (best.len ?? Infinity))) {
+        if (
+          !best ||
+          cost < best.cost - 0.5 ||
+          (Math.abs(cost - best.cost) < 0.5 && len < (best.len ?? Infinity))
+        ) {
           best = { points: round.points, cost, len };
         }
       }
@@ -583,8 +664,22 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     // fan pass below (after every edge has picked its route) can tell what a
     // route actually settled on — which, once the alternate-pair search below
     // kicks in, can differ from `item.startSide`/`endSide`.
-    interface Attempt { points: Point[]; cost: number; ss: Side; es: Side; sAlong: number; eAlong: number; mustGoRound: boolean }
-    const attempt = (ss: Side, es: Side, sAlong: number, eAlong: number, mustGoRound: boolean): Attempt | null => {
+    interface Attempt {
+      points: Point[];
+      cost: number;
+      ss: Side;
+      es: Side;
+      sAlong: number;
+      eAlong: number;
+      mustGoRound: boolean;
+    }
+    const attempt = (
+      ss: Side,
+      es: Side,
+      sAlong: number,
+      eAlong: number,
+      mustGoRound: boolean,
+    ): Attempt | null => {
       const r = build(ss, es, sAlong, eAlong, mustGoRound);
       return r ? { ...r, ss, es, sAlong, eAlong, mustGoRound } : null;
     };
@@ -611,12 +706,16 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
         if (ss === item.startSide) continue;
         const [sl, sh] = faceRange(a, ss, sharpA);
         const alt = attempt(
-          ss, item.endSide,
+          ss,
+          item.endSide,
           Math.max(sl, Math.min(sh, faceMiddle(a, ss))),
           endAlong,
           true,
         );
-        if (alt && alt.cost === 0) { best = alt; break; }
+        if (alt && alt.cost === 0) {
+          best = alt;
+          break;
+        }
       }
     }
     // A loop already spends its own side-mismatch budget in loopSide
@@ -654,7 +753,8 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
           for (const sAlongTry of sCandidates) {
             for (const eAlongTry of eCandidates) {
               const alt = attempt(
-                ss, es,
+                ss,
+                es,
                 Math.max(sl, Math.min(sh, sAlongTry)),
                 Math.max(el, Math.min(eh, eAlongTry)),
                 item.loop,
@@ -672,9 +772,12 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
                 (es === item.endSide ? 0 : (faceLoad.get(loadKey(item.edge.to, es)) ?? 0));
               const offCentre = (sAlongTry === sMid ? 0 : 6) + (eAlongTry === eMid ? 0 : 6);
               const charge =
-                (ss === item.startSide ? 0 : mismatchCost) + (es === item.endSide ? 0 : mismatchCost) +
-                congestion * 20 + offCentre;
-              if (!best || alt.cost + charge < best.cost) best = { ...alt, cost: alt.cost + charge };
+                (ss === item.startSide ? 0 : mismatchCost) +
+                (es === item.endSide ? 0 : mismatchCost) +
+                congestion * 20 +
+                offCentre;
+              if (!best || alt.cost + charge < best.cost)
+                best = { ...alt, cost: alt.cost + charge };
             }
           }
         }
@@ -688,12 +791,19 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     const finalSS = best?.ss ?? item.startSide;
     const finalES = best?.es ?? item.endSide;
     const finalMustGoRound = best?.mustGoRound ?? item.loop;
-    faceLoad.set(loadKey(item.edge.from, finalSS), (faceLoad.get(loadKey(item.edge.from, finalSS)) ?? 0) + 1);
-    faceLoad.set(loadKey(item.edge.to, finalES), (faceLoad.get(loadKey(item.edge.to, finalES)) ?? 0) + 1);
+    faceLoad.set(
+      loadKey(item.edge.from, finalSS),
+      (faceLoad.get(loadKey(item.edge.from, finalSS)) ?? 0) + 1,
+    );
+    faceLoad.set(
+      loadKey(item.edge.to, finalES),
+      (faceLoad.get(loadKey(item.edge.to, finalES)) ?? 0) + 1,
+    );
     // Committed, in source order, for the next forward edge's crossingCost
     // and sharedRunCost.
     if (!item.loop) {
-      const edgeStart = points[0]!, edgeEnd = points[points.length - 1]!;
+      const edgeStart = points[0]!,
+        edgeEnd = points[points.length - 1]!;
       for (let i = 1; i < points.length; i++) {
         placedForwardSegs.push({ a: points[i - 1]!, b: points[i]!, edgeStart, edgeEnd });
       }
@@ -710,7 +820,8 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       points,
       // Only the along-coordinate ever needs to move after this: the fan pass
       // below never changes which face won, only where on it the edge lands.
-      rebuild: (sAlong, eAlong) => attempt(finalSS, finalES, sAlong, eAlong, finalMustGoRound)?.points ?? points,
+      rebuild: (sAlong, eAlong) =>
+        attempt(finalSS, finalES, sAlong, eAlong, finalMustGoRound)?.points ?? points,
     });
   }
 
@@ -737,7 +848,11 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
   // moves — that is the point of it being a channel — but it still has to be
   // *seen* here, or the edge fighting it for the face has nothing to move
   // away from and both stay dead centre.
-  interface Member2 { r: Resolved; end: boolean; fixed: boolean }
+  interface Member2 {
+    r: Resolved;
+    end: boolean;
+    fixed: boolean;
+  }
   const buckets2 = new Map<string, Member2[]>();
   const key2 = (node: string, side: Side) => `${node}:${side}`;
   for (const r of resolved) {
@@ -807,13 +922,15 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     // *either* side of one, not just whichever side a single forward sweep
     // happens to push it toward.
     for (let i = 1; i < order.length; i++) {
-      const prev = order[i - 1]!, cur = order[i]!;
+      const prev = order[i - 1]!,
+        cur = order[i]!;
       if (cur.fixed) continue;
       const need = at.get(prev)! + step;
       if (at.get(cur)! < need) at.set(cur, need);
     }
     for (let i = order.length - 2; i >= 0; i--) {
-      const next = order[i + 1]!, cur = order[i]!;
+      const next = order[i + 1]!,
+        cur = order[i]!;
       if (cur.fixed) continue;
       const need = at.get(next)! - step;
       if (at.get(cur)! > need) at.set(cur, need);
@@ -864,17 +981,39 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
   const obstacleBoxes = obstacles.map((o) => o.box);
   const backwardIds = new Set(resolved.filter((r) => r.item.edge.backward).map((r) => r.edgeId));
 
-  interface Run { edgeId: string; idx: number; vert: boolean; c: number; lo: number; hi: number }
+  interface Run {
+    edgeId: string;
+    idx: number;
+    vert: boolean;
+    c: number;
+    lo: number;
+    hi: number;
+  }
   const findRuns = (): Run[] => {
     const runs: Run[] = [];
     for (const [edgeId, route] of routes) {
       const pts = route.points;
       for (let i = 2; i < pts.length - 1; i++) {
-        const a = pts[i - 1]!, b = pts[i]!;
+        const a = pts[i - 1]!,
+          b = pts[i]!;
         if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) > 8) {
-          runs.push({ edgeId, idx: i, vert: true, c: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
+          runs.push({
+            edgeId,
+            idx: i,
+            vert: true,
+            c: a.x,
+            lo: Math.min(a.y, b.y),
+            hi: Math.max(a.y, b.y),
+          });
         } else if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 8) {
-          runs.push({ edgeId, idx: i, vert: false, c: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
+          runs.push({
+            edgeId,
+            idx: i,
+            vert: false,
+            c: a.y,
+            lo: Math.min(a.x, b.x),
+            hi: Math.max(a.x, b.x),
+          });
         }
       }
     }
@@ -885,7 +1024,8 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
     for (let i = 0; i < runs.length; i++) {
       for (let j = i + 1; j < runs.length; j++) {
-        const ra = runs[i]!, rb = runs[j]!;
+        const ra = runs[i]!,
+          rb = runs[j]!;
         if (ra.vert !== rb.vert || ra.edgeId === rb.edgeId) continue;
         const gap = Math.abs(ra.c - rb.c);
         if (gap < 0.5 || gap >= 16) continue; // a bus, or already clear
@@ -912,7 +1052,8 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     if (backwardIds.has(run.edgeId)) continue;
     const pts = routes.get(run.edgeId)!.points;
     if (pts.length !== 4 || run.idx !== 2) continue;
-    const p0 = pts[1]!, p1 = pts[2]!;
+    const p0 = pts[1]!,
+      p1 = pts[2]!;
     const near = run.vert
       ? obstacleBoxes.filter((o) => o.y + o.height > run.lo && o.y < run.hi)
       : obstacleBoxes.filter((o) => o.x + o.width > run.lo && o.x < run.hi);
@@ -926,7 +1067,13 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     const want = (Math.max(...before) + Math.min(...after)) / 2;
     const delta = want - run.c;
     if (Math.abs(delta) < 3.5) continue;
-    if (run.vert) { p0.x += delta; p1.x += delta; } else { p0.y += delta; p1.y += delta; }
+    if (run.vert) {
+      p0.x += delta;
+      p1.x += delta;
+    } else {
+      p0.y += delta;
+      p1.y += delta;
+    }
   }
 
   // Every interior run (never the stub at a node's own face — that stays
@@ -954,8 +1101,15 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       const delta = start + i * 16 - r.c;
       if (Math.abs(delta) < 0.5) return;
       const pts = routes.get(r.edgeId)!.points;
-      const p0 = pts[r.idx - 1]!, p1 = pts[r.idx]!;
-      if (r.vert) { p0.x += delta; p1.x += delta; } else { p0.y += delta; p1.y += delta; }
+      const p0 = pts[r.idx - 1]!,
+        p1 = pts[r.idx]!;
+      if (r.vert) {
+        p0.x += delta;
+        p1.x += delta;
+      } else {
+        p0.y += delta;
+        p1.y += delta;
+      }
     });
   }
 

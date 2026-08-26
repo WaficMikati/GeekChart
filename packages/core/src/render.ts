@@ -65,7 +65,8 @@ function toParseError(err: unknown, source: string): ParseError {
   const excerpt = line ? source.split('\n')[line - 1]?.trim() : undefined;
   // Mermaid's own messages carry the whole expectation grammar; the first
   // paragraph is the part a human can act on.
-  const message = raw.split('\n').slice(0, 3).join('\n').trim() || 'Mermaid could not parse this diagram.';
+  const message =
+    raw.split('\n').slice(0, 3).join('\n').trim() || 'Mermaid could not parse this diagram.';
   return {
     message,
     ...(line !== undefined ? { line } : {}),

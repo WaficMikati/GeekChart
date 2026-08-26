@@ -88,7 +88,13 @@ export interface Connection {
  * Forcing the tangent to the normal is what made every arrow axis-aligned;
  * forcing the contact to the chord is what made them land on corners.
  */
-export function connect(start: Point, end: Point, gapStart: number, gapEnd: number, bow = 0): Connection {
+export function connect(
+  start: Point,
+  end: Point,
+  gapStart: number,
+  gapEnd: number,
+  bow = 0,
+): Connection {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const span = Math.hypot(dx, dy) || 1;
@@ -112,9 +118,7 @@ export function connect(start: Point, end: Point, gapStart: number, gapEnd: numb
     tail,
     // Pointing back at the source, so a marker at this end is built exactly the
     // same way as one at the tip.
-    tailDir: bow === 0
-      ? { x: -u.x, y: -u.y }
-      : normalise({ x: tail.x - c1.x, y: tail.y - c1.y }),
+    tailDir: bow === 0 ? { x: -u.x, y: -u.y } : normalise({ x: tail.x - c1.x, y: tail.y - c1.y }),
   };
 }
 
@@ -218,7 +222,13 @@ export function contact(shape: Shape, box: Extent, side: Side, along: number): P
  * single corner and no choice. Anything that would have to double back returns
  * nothing, which is the caller's signal to route it around instead.
  */
-export function elbows(p: Point, a: Point, q: Point, b: Point, obstacles: readonly Extent[] = []): Point[][] {
+export function elbows(
+  p: Point,
+  a: Point,
+  q: Point,
+  b: Point,
+  obstacles: readonly Extent[] = [],
+): Point[][] {
   const vertA = a.x === 0;
   const vertB = b.x === 0;
   const near = (u: number, v: number) => Math.abs(u - v) < 1;
@@ -239,10 +249,16 @@ export function elbows(p: Point, a: Point, q: Point, b: Point, obstacles: readon
   // on the other axis, that a wall must overlap to count. Mirrors the gate's
   // `offChannel` check in gate.mjs so a route that passes it here passes there.
   const channelMid = (
-    wallAxis: 'x' | 'y', from: number, to: number, extentLo: number, extentHi: number,
+    wallAxis: 'x' | 'y',
+    from: number,
+    to: number,
+    extentLo: number,
+    extentHi: number,
   ): number | null => {
-    const lo = Math.min(from, to), hi = Math.max(from, to);
-    let leftWall = -Infinity, rightWall = Infinity;
+    const lo = Math.min(from, to),
+      hi = Math.max(from, to);
+    let leftWall = -Infinity,
+      rightWall = Infinity;
     for (const box of obstacles) {
       const spanLo = wallAxis === 'x' ? box.y : box.x;
       const spanHi = spanLo + (wallAxis === 'x' ? box.height : box.width);
@@ -268,13 +284,19 @@ export function elbows(p: Point, a: Point, q: Point, b: Point, obstacles: readon
     if (!((q.y - p.y) * a.y > 0 && (q.y - p.y) * -b.y > 0)) return [];
     if (near(p.x, q.x)) return [[]];
     const want = channelMid('y', p.y, q.y, Math.min(p.x, q.x), Math.max(p.x, q.x));
-    return centred(lanes(p.y, q.y), want).map((y) => [{ x: p.x, y }, { x: q.x, y }]);
+    return centred(lanes(p.y, q.y), want).map((y) => [
+      { x: p.x, y },
+      { x: q.x, y },
+    ]);
   }
   if (!vertA && !vertB) {
     if (!((q.x - p.x) * a.x > 0 && (q.x - p.x) * -b.x > 0)) return [];
     if (near(p.y, q.y)) return [[]];
     const want = channelMid('x', p.x, q.x, Math.min(p.y, q.y), Math.max(p.y, q.y));
-    return centred(lanes(p.x, q.x), want).map((x) => [{ x, y: p.y }, { x, y: q.y }]);
+    return centred(lanes(p.x, q.x), want).map((x) => [
+      { x, y: p.y },
+      { x, y: q.y },
+    ]);
   }
   // One of each: a single corner, placed so the last segment runs into the face
   // it is aiming at rather than across it.

@@ -37,12 +37,16 @@ export interface AnyRequest {
   width?: number;
   height?: number;
   aspect?: 'auto' | '16:9' | '1:1' | '4:5' | '9:16';
-  fonts?:
-    | 'inherit'
-    | { display?: string; label?: string; mono?: string; measureWith?: string };
+  fonts?: 'inherit' | { display?: string; label?: string; mono?: string; measureWith?: string };
   palette?: {
-    bg?: string; ink?: string; quiet?: string; path?: string;
-    alt?: string; accent?: string; edge?: string; surface?: string;
+    bg?: string;
+    ink?: string;
+    quiet?: string;
+    path?: string;
+    alt?: string;
+    accent?: string;
+    edge?: string;
+    surface?: string;
   };
 }
 

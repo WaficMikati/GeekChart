@@ -140,7 +140,8 @@ export function bake(
     runtime = Math.max(runtime, begin + o.duration);
 
     if (element.kind === 'edge') {
-      const drawable = element.length !== undefined && !isDashed(element.el) && o.preset !== 'reveal';
+      const drawable =
+        element.length !== undefined && !isDashed(element.el) && o.preset !== 'reveal';
       element.el.classList.add(drawable ? 'gc-edge' : 'gc-fade');
       element.el.style.setProperty('--gc-t', `${begin.toFixed(3)}s`);
       if (drawable) {

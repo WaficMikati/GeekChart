@@ -4,8 +4,17 @@ import { layout } from './layout.ts';
 import { draw, type Drawing } from './draw.ts';
 import { animate } from './motion.ts';
 import {
-  fitCanvas, frameTransform, inheritsFonts, scenes, withFonts, withPalette,
-  type Canvas, type FontOptions, type Palette, type Scene, type SceneName,
+  fitCanvas,
+  frameTransform,
+  inheritsFonts,
+  scenes,
+  withFonts,
+  withPalette,
+  type Canvas,
+  type FontOptions,
+  type Palette,
+  type Scene,
+  type SceneName,
 } from './scene.ts';
 import { ensureFonts } from './fonts.ts';
 import { drawSequence, sequenceCss } from './sequence.ts';
@@ -164,7 +173,8 @@ function fitToCanvas(svg: string, canvas: Canvas, css: string): string {
   if (typeof document === 'undefined') return svg;
   const host = document.createElement('div');
   host.setAttribute('aria-hidden', 'true');
-  host.style.cssText = 'position:fixed;left:-99999px;top:0;width:4000px;opacity:0;pointer-events:none;';
+  host.style.cssText =
+    'position:fixed;left:-99999px;top:0;width:4000px;opacity:0;pointer-events:none;';
   // The static scene rules, so text measures at its real font and size instead
   // of the browser default — otherwise the bbox this centres on is the wrong
   // shape (DESIGN 7.3).
@@ -201,7 +211,14 @@ function fitToCanvas(svg: string, canvas: Canvas, css: string): string {
 
 /** Every diagram type the drawn pipeline handles. */
 export type DrawnType =
-  | 'flowchart' | UnifiedType | 'sequence' | ChronicleKind | PlotKind | BoardKind | RadialKind | CommitKind;
+  | 'flowchart'
+  | UnifiedType
+  | 'sequence'
+  | ChronicleKind
+  | PlotKind
+  | BoardKind
+  | RadialKind
+  | CommitKind;
 
 /**
  * Frames a social post is actually published in.
@@ -270,8 +287,18 @@ function measurementStack(options: FlowOptions): string | undefined {
 }
 
 const GENERIC = new Set([
-  'serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui',
-  'ui-sans-serif', 'ui-serif', 'ui-monospace', 'ui-rounded', 'inherit', 'initial',
+  'serif',
+  'sans-serif',
+  'monospace',
+  'cursive',
+  'fantasy',
+  'system-ui',
+  'ui-sans-serif',
+  'ui-serif',
+  'ui-monospace',
+  'ui-rounded',
+  'inherit',
+  'initial',
 ]);
 
 /**
@@ -312,7 +339,10 @@ function fontPresent(family: string): boolean {
  */
 function checkMeasurementFont(stack: string | undefined): string[] {
   if (!stack || typeof document === 'undefined') return [];
-  const first = stack.split(',')[0]?.trim().replace(/^["']|["']$/g, '');
+  const first = stack
+    .split(',')[0]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
   if (!first || GENERIC.has(first.toLowerCase())) return [];
   if (fontPresent(first)) return [];
   return [
@@ -432,10 +462,14 @@ export async function renderBoard(
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + boardCss(scene) + motion;
   return {
-    svg: drawn.svg, css, html: page(drawn.svg, css, scene, options),
-    lanes: drawn.groups, items: drawn.items,
+    svg: drawn.svg,
+    css,
+    html: page(drawn.svg, css, scene, options),
+    lanes: drawn.groups,
+    items: drawn.items,
     cycle: options.motion === false ? 0 : drawn.cycle,
-    summary: drawn.summary, warnings: checkMeasurementFont(measureWith),
+    summary: drawn.summary,
+    warnings: checkMeasurementFont(measureWith),
   };
 }
 
@@ -476,15 +510,22 @@ export async function renderRadial(
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + radialCss(scene) + motion;
   return {
-    svg: drawn.svg, css, html: page(drawn.svg, css, scene, options),
-    lanes: drawn.groups, items: drawn.items,
+    svg: drawn.svg,
+    css,
+    html: page(drawn.svg, css, scene, options),
+    lanes: drawn.groups,
+    items: drawn.items,
     cycle: options.motion === false ? 0 : drawn.cycle,
-    summary: drawn.summary, warnings: checkMeasurementFont(measureWith),
+    summary: drawn.summary,
+    warnings: checkMeasurementFont(measureWith),
   };
 }
 
 /** Git graph. */
-export async function renderCommits(source: string, options: FlowOptions = {}): Promise<ChronicleRender> {
+export async function renderCommits(
+  source: string,
+  options: FlowOptions = {},
+): Promise<ChronicleRender> {
   await ensureFonts(options.fonts);
   const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
   const measureWith = measurementStack(options);
@@ -492,10 +533,14 @@ export async function renderCommits(source: string, options: FlowOptions = {}): 
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + commitsCss(scene) + motion;
   return {
-    svg: drawn.svg, css, html: page(drawn.svg, css, scene, options),
-    lanes: drawn.groups, items: drawn.items,
+    svg: drawn.svg,
+    css,
+    html: page(drawn.svg, css, scene, options),
+    lanes: drawn.groups,
+    items: drawn.items,
     cycle: options.motion === false ? 0 : drawn.cycle,
-    summary: drawn.summary, warnings: checkMeasurementFont(measureWith),
+    summary: drawn.summary,
+    warnings: checkMeasurementFont(measureWith),
   };
 }
 
@@ -551,5 +596,13 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   const html = page(framed.svg, css, scene, options);
   const warnings = checkMeasurementFont(measureWith);
 
-  return { svg: framed.svg, css, html, graph, drawing: framed, cycle: timeline?.cycle ?? 0, warnings };
+  return {
+    svg: framed.svg,
+    css,
+    html,
+    graph,
+    drawing: framed,
+    cycle: timeline?.cycle ?? 0,
+    warnings,
+  };
 }

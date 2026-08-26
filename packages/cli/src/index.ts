@@ -251,7 +251,8 @@ export async function main(argv: string[]): Promise<void> {
       process.stderr.write(
         `\ngeekchart: could not draw this chart${where}\n\n  ${reply.error.message.replace(/\n/g, '\n  ')}\n`,
       );
-      if (reply.error.excerpt) process.stderr.write(`\n  ${reply.error.line}: ${reply.error.excerpt}\n`);
+      if (reply.error.excerpt)
+        process.stderr.write(`\n  ${reply.error.line}: ${reply.error.excerpt}\n`);
       process.stderr.write('\n');
       process.exit(2);
     }
@@ -286,7 +287,11 @@ export async function main(argv: string[]): Promise<void> {
     } else if (format === 'svg') {
       writeFileSync(output, reply.svgFile);
     } else if (format === 'png') {
-      await captureStill(session.page, { html: reply.html, runtime: reply.cycle, fps, scale, hold, lead }, output);
+      await captureStill(
+        session.page,
+        { html: reply.html, runtime: reply.cycle, fps, scale, hold, lead },
+        output,
+      );
     } else {
       if (reply.cycle <= 0) fail('nothing to capture — motion is off, so use .png or .svg');
       const result = await captureVideo(

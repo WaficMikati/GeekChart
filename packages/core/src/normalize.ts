@@ -1,7 +1,15 @@
 import type { Analysis } from './types.ts';
 import {
-  centreOf, ellipseShape, overlaps, parsePolyline, quantise, rectShape,
-  rhombusShape, type Box, type Point, type Shape,
+  centreOf,
+  ellipseShape,
+  overlaps,
+  parsePolyline,
+  quantise,
+  rectShape,
+  rhombusShape,
+  type Box,
+  type Point,
+  type Shape,
 } from './geometry.ts';
 import { routeEdges, type EdgeEnds } from './route.ts';
 
@@ -86,7 +94,12 @@ function rectBoxInRoot(shape: SVGRectElement): Box | null {
   const width = Number(shape.getAttribute('width') ?? 0);
   const height = Number(shape.getAttribute('height') ?? 0);
   if (!width || !height) return null;
-  return { x: ctm.e + x * ctm.a, y: ctm.f + y * ctm.d, width: width * ctm.a, height: height * ctm.d };
+  return {
+    x: ctm.e + x * ctm.a,
+    y: ctm.f + y * ctm.d,
+    width: width * ctm.a,
+    height: height * ctm.d,
+  };
 }
 
 /**
@@ -182,7 +195,8 @@ function unifyRectNodes(analysis: Analysis, spec: NormalizeSpec): number | null 
 function matchPathHeights(analysis: Analysis, height: number): void {
   for (const element of analysis.elements) {
     if (element.kind !== 'node') continue;
-    if (element.el.querySelector(RESIZABLE) || element.el.querySelector('polygon.label-container')) continue;
+    if (element.el.querySelector(RESIZABLE) || element.el.querySelector('polygon.label-container'))
+      continue;
     // Scale the whole shape container, not the first path inside it. Mermaid's
     // newer shapes are drawn with several stacked paths, and moving only one of
     // them leaves the others behind as a ghost outline.
@@ -205,7 +219,8 @@ function matchPathHeights(analysis: Analysis, height: number): void {
     const current = bbox.height * frame.scale;
     const factor = height / current;
     // Leave anything already close alone; scaling by a hair is only distortion.
-    if (!Number.isFinite(factor) || Math.abs(factor - 1) < 0.12 || factor > 3 || factor < 0.4) continue;
+    if (!Number.isFinite(factor) || Math.abs(factor - 1) < 0.12 || factor > 3 || factor < 0.4)
+      continue;
 
     const cy = bbox.y + bbox.height / 2;
     const existing = container.getAttribute('transform') ?? '';
@@ -217,7 +232,9 @@ function matchPathHeights(analysis: Analysis, height: number): void {
     // vertical ones alone. Pre-dividing by the geometric mean splits the error
     // between them, which reads as even where a raw scale reads as a bug.
     container.setAttribute('data-gc-stroke-scale', Math.sqrt(factor).toFixed(3));
-    for (const stroked of container.querySelectorAll<SVGElement>('path, rect, ellipse, circle, polygon')) {
+    for (const stroked of container.querySelectorAll<SVGElement>(
+      'path, rect, ellipse, circle, polygon',
+    )) {
       stroked.style.strokeWidth = `calc(var(--gc-node-stroke, 1px) / ${Math.sqrt(factor).toFixed(3)})`;
     }
   }
@@ -284,18 +301,24 @@ function refitClusters(svg: SVGSVGElement, analysis: Analysis, padding: number):
   for (const group of svg.querySelectorAll<SVGGElement>('g.cluster')) {
     const rect = group.querySelector<SVGRectElement>('rect');
     if (!rect) continue;
-    const box = rectBoxInRoot(rect) ?? (() => {
-      const ctm = rect.getCTM();
-      const bbox = rect.getBBox?.();
-      if (!ctm || !bbox) return null;
-      return {
-        x: ctm.e + bbox.x * ctm.a, y: ctm.f + bbox.y * ctm.d,
-        width: bbox.width * ctm.a, height: bbox.height * ctm.d,
-      };
-    })();
+    const box =
+      rectBoxInRoot(rect) ??
+      (() => {
+        const ctm = rect.getCTM();
+        const bbox = rect.getBBox?.();
+        if (!ctm || !bbox) return null;
+        return {
+          x: ctm.e + bbox.x * ctm.a,
+          y: ctm.f + bbox.y * ctm.d,
+          width: bbox.width * ctm.a,
+          height: bbox.height * ctm.d,
+        };
+      })();
     if (!box) continue;
     clusters.push({
-      group, rect, box,
+      group,
+      rect,
+      box,
       label: group.querySelector<SVGGraphicsElement>('g.cluster-label, .cluster-label'),
     });
   }
@@ -312,15 +335,20 @@ function refitClusters(svg: SVGSVGElement, analysis: Analysis, padding: number):
       const bbox = (element.el as SVGGraphicsElement).getBBox?.();
       if (ctm && bbox) {
         nodeBoxes.push({
-          x: ctm.e + bbox.x * ctm.a, y: ctm.f + bbox.y * ctm.d,
-          width: bbox.width * ctm.a, height: bbox.height * ctm.d,
+          x: ctm.e + bbox.x * ctm.a,
+          y: ctm.f + bbox.y * ctm.d,
+          width: bbox.width * ctm.a,
+          height: bbox.height * ctm.d,
         });
       }
     }
   }
 
   const contains = (outer: Box, p: Point) =>
-    p.x >= outer.x && p.x <= outer.x + outer.width && p.y >= outer.y && p.y <= outer.y + outer.height;
+    p.x >= outer.x &&
+    p.x <= outer.x + outer.width &&
+    p.y >= outer.y &&
+    p.y <= outer.y + outer.height;
   const area = (b: Box) => b.width * b.height;
 
   // Innermost first, so an enclosing cluster grows around already-fitted ones.
@@ -332,7 +360,8 @@ function refitClusters(svg: SVGSVGElement, analysis: Analysis, padding: number):
     for (const other of clusters) {
       if (other === cluster) continue;
       const inner = fitted.get(other.group) ?? other.box;
-      if (contains(cluster.box, centreOf(inner)) && area(inner) < area(cluster.box)) members.push(inner);
+      if (contains(cluster.box, centreOf(inner)) && area(inner) < area(cluster.box))
+        members.push(inner);
     }
     if (members.length === 0) continue;
 
@@ -403,7 +432,8 @@ function collectShapes(analysis: Analysis): Map<SVGElement, Shape> {
 
     const polygon = element.el.querySelector<SVGPolygonElement>('polygon.label-container');
     if (polygon) {
-      const numbers = (polygon.getAttribute('points') ?? '').match(/[-+]?\d*\.?\d+/g)?.map(Number) ?? [];
+      const numbers =
+        (polygon.getAttribute('points') ?? '').match(/[-+]?\d*\.?\d+/g)?.map(Number) ?? [];
       if (numbers.length >= 8) {
         const xs = numbers.filter((_, i) => i % 2 === 0);
         const ys = numbers.filter((_, i) => i % 2 === 1);
@@ -454,7 +484,8 @@ function installMarker(svg: SVGSVGElement, id: string, spec: NormalizeSpec): str
   if (existing) return markerId;
 
   const defs =
-    svg.querySelector('defs') ?? svg.insertBefore(document.createElementNS(SVG, 'defs'), svg.firstChild);
+    svg.querySelector('defs') ??
+    svg.insertBefore(document.createElementNS(SVG, 'defs'), svg.firstChild);
   const marker = document.createElementNS(SVG, 'marker');
   marker.setAttribute('id', markerId);
   marker.setAttribute('viewBox', '0 0 10 8');
@@ -512,7 +543,10 @@ export function normalize(
       const d = path.getAttribute('d');
       const ctm = path.getCTM();
       if (!d || !ctm) continue;
-      const points = parsePolyline(d).map((p) => ({ x: ctm.e + p.x * ctm.a, y: ctm.f + p.y * ctm.d }));
+      const points = parsePolyline(d).map((p) => ({
+        x: ctm.e + p.x * ctm.a,
+        y: ctm.f + p.y * ctm.d,
+      }));
       if (points.length < 2) continue;
 
       const from = nearestNode(shapes, points[0]!);
@@ -529,7 +563,8 @@ export function normalize(
   }
 
   if (spec.edgeRouting === 'ports' && edges.length > 0) {
-    const flow = analysis.direction === 'LR' || analysis.direction === 'RL' ? 'horizontal' : 'vertical';
+    const flow =
+      analysis.direction === 'LR' || analysis.direction === 'RL' ? 'horizontal' : 'vertical';
     routeEdges(edges, flow, spec.edgeGap, (path, point) => {
       const ctm = path.getCTM();
       if (!ctm) return point;

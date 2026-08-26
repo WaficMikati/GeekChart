@@ -51,8 +51,15 @@ export interface Plot {
 
 const clean = (t: unknown) => String(t ?? '').trim();
 
-interface RawAxis { label?: string; name?: string }
-interface RawCurve { label?: string; name?: string; entries?: number[] }
+interface RawAxis {
+  label?: string;
+  name?: string;
+}
+interface RawCurve {
+  label?: string;
+  name?: string;
+  entries?: number[];
+}
 interface RawXY {
   title?: string;
   xAxis?: { categories?: string[]; title?: string };
@@ -84,12 +91,16 @@ function readQuadrant(source: string): Plot {
   }
   return {
     kind: 'quadrant',
-    ...(clean(line(/^[ \t]*title[ \t]+(.+)$/m)?.[0]) ? { title: clean(line(/^[ \t]*title[ \t]+(.+)$/m)![0]) } : {}),
+    ...(clean(line(/^[ \t]*title[ \t]+(.+)$/m)?.[0])
+      ? { title: clean(line(/^[ \t]*title[ \t]+(.+)$/m)![0]) }
+      : {}),
     series: [{ label: '', type: 'points', points }],
     quadrants,
     axisEnds: {
-      xLeft: axis[0] ?? '', xRight: axis[1] ?? '',
-      yBottom: yAxis[0] ?? '', yTop: yAxis[1] ?? '',
+      xLeft: axis[0] ?? '',
+      xRight: axis[1] ?? '',
+      yBottom: yAxis[0] ?? '',
+      yTop: yAxis[1] ?? '',
     },
   };
 }
@@ -111,10 +122,14 @@ export async function toPlot(source: string, kind: PlotKind): Promise<Plot> {
       type: 'line' as const,
       points: (c.entries ?? []).map((v, i) => ({ x: i, y: v })),
     }));
-    if (!axes.length || !curves.length) throw new Error('Nothing to plot — this radar has no axes or curves.');
+    if (!axes.length || !curves.length)
+      throw new Error('Nothing to plot — this radar has no axes or curves.');
     const options = (db.getOptions?.() ?? {}) as { max?: number; ticks?: number };
     return {
-      kind, ...(title ? { title } : {}), axes, series: curves,
+      kind,
+      ...(title ? { title } : {}),
+      axes,
+      series: curves,
       max: options.max ?? Math.max(...curves.flatMap((c) => c.points.map((p) => p.y)), 1),
       ticks: options.ticks ?? 4,
     };
@@ -125,7 +140,9 @@ export async function toPlot(source: string, kind: PlotKind): Promise<Plot> {
   // `bar "Placed" [...]` parses, and then the name is dropped: the plot objects
   // carry only a type and the numbers. Reading the names from the source is the
   // difference between a legend that says "Placed" and one that says "Series 2".
-  const names = [...source.matchAll(/^[ \t]*(?:bar|line)[ \t]+"([^"]*)"/gm)].map((m) => clean(m[1]));
+  const names = [...source.matchAll(/^[ \t]*(?:bar|line)[ \t]+"([^"]*)"/gm)].map((m) =>
+    clean(m[1]),
+  );
   const series: Series[] = (data.plots ?? []).map((p, i) => ({
     label: names[i] || clean(data.yAxis?.title) || `Series ${i + 1}`,
     type: p.type === 'bar' ? 'bar' : 'line',
@@ -137,8 +154,10 @@ export async function toPlot(source: string, kind: PlotKind): Promise<Plot> {
   if (!series.length) throw new Error('Nothing to plot — this chart has no series.');
   const values = series.flatMap((s) => s.points.map((p) => p.y));
   return {
-    kind, ...(title || data.title ? { title: title || clean(data.title) } : {}),
-    categories, series,
+    kind,
+    ...(title || data.title ? { title: title || clean(data.title) } : {}),
+    categories,
+    series,
     ...(clean(data.xAxis?.title) ? { xTitle: clean(data.xAxis?.title) } : {}),
     ...(clean(data.yAxis?.title) ? { yTitle: clean(data.yAxis?.title) } : {}),
     yMin: data.yAxis?.min ?? Math.min(0, ...values),
@@ -150,7 +169,10 @@ export async function toPlot(source: string, kind: PlotKind): Promise<Plot> {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const esc = (t: string) =>
-  t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  t.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 const round = (n: number) => Number(n.toFixed(2));
 
 export interface PlotDrawing {
@@ -231,9 +253,7 @@ export function drawPlot(plot: Plot, scene: Scene, measureWith?: string): PlotDr
         ? radar(plot, scene, width, pad, titleH, legendH, parts, marks)
         : quadrant(plot, scene, width, pad, titleH, parts, marks);
 
-  const legend = legendH
-    ? legendRow(plot, scene, width, built.left, built.height - pad - 4)
-    : '';
+  const legend = legendH ? legendRow(plot, scene, width, built.left, built.height - pad - 4) : '';
   measurer.done();
 
   const title = plot.title
@@ -245,7 +265,11 @@ export function drawPlot(plot: Plot, scene: Scene, measureWith?: string): PlotDr
     `<svg class="gc-chart" viewBox="0 0 ${frame.width} ${frame.height}" ` +
     `width="${frame.width}" height="${frame.height}" role="img" xmlns="${SVGNS}">` +
     `<g class="gc-frame" transform="${frameTransform(frame)}">` +
-    parts.join('') + marks.map((m) => m.markup).join('') + legend + title + `</g></svg>`;
+    parts.join('') +
+    marks.map((m) => m.markup).join('') +
+    legend +
+    title +
+    `</g></svg>`;
 
   const motion = animate(marks, plot, Boolean(plot.title), Boolean(legendH), scene);
   const points = plot.series.reduce((n, s) => n + s.points.length, 0);
@@ -290,8 +314,14 @@ function legendRow(plot: Plot, scene: Scene, width: Measure, x0: number, y: numb
 
 /** Bars and lines on a band x-axis. */
 function xy(
-  plot: Plot, scene: Scene, width: Measure, pad: number, titleH: number, legendH: number,
-  parts: string[], marks: Mark[],
+  plot: Plot,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  titleH: number,
+  legendH: number,
+  parts: string[],
+  marks: Mark[],
 ): { width: number; height: number; left: number } {
   const cats = plot.categories ?? [];
   const ticks = niceTicks(plot.yMin ?? 0, plot.yMax ?? 1);
@@ -299,7 +329,8 @@ function xy(
   // 10` below), so with a genuinely right-anchored tick (DESIGN 7.3's
   // gc-anchor-end) its own left edge lands flush on `pad`, matching the plot's
   // flush right edge instead of leaving a one-sided gap fitCanvas can't see.
-  const gutter = Math.max(...ticks.map((t) => width(String(t), scene.rowFont, scene.type.label))) + 10;
+  const gutter =
+    Math.max(...ticks.map((t) => width(String(t), scene.rowFont, scene.type.label))) + 10;
   const left = pad + gutter;
   // The plot takes exactly what the canvas has left, never more: a floor here
   // could push the drawing past canvas.width, which would force fitCanvas to
@@ -308,7 +339,8 @@ function xy(
   const top = pad + titleH + 10 + (plot.yTitle ? scene.type.label + 12 : 0);
   const plotH = 340;
   const bottom = top + plotH;
-  const height = bottom + scene.type.label * 3 + (plot.xTitle ? scene.type.label + 12 : 0) + legendH + pad;
+  const height =
+    bottom + scene.type.label * 3 + (plot.xTitle ? scene.type.label + 12 : 0) + legendH + pad;
   const lo = ticks[0]!;
   const hi = ticks[ticks.length - 1]!;
   const y = (v: number) => bottom - ((v - lo) / Math.max(hi - lo, 1e-9)) * plotH;
@@ -356,15 +388,20 @@ function xy(
         });
       });
     } else {
-      const d = s.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${round(cx(p.x))},${round(y(p.y))}`).join(' ');
+      const d = s.points
+        .map((p, i) => `${i === 0 ? 'M' : 'L'}${round(cx(p.x))},${round(y(p.y))}`)
+        .join(' ');
       marks.push({
         id: `s${si}`,
         dots: s.points.length,
         markup:
           `<path class="gc-plot-line gc-series-${si}" data-id="s${si}" pathLength="1" d="${d}"/>` +
           s.points
-            .map((p, pi) => `<circle class="gc-plot-dot gc-series-${si}" data-id="s${si}-d${pi}" ` +
-              `cx="${round(cx(p.x))}" cy="${round(y(p.y))}" r="4.5"/>`)
+            .map(
+              (p, pi) =>
+                `<circle class="gc-plot-dot gc-series-${si}" data-id="s${si}-d${pi}" ` +
+                `cx="${round(cx(p.x))}" cy="${round(y(p.y))}" r="4.5"/>`,
+            )
             .join(''),
       });
     }
@@ -375,14 +412,22 @@ function xy(
 
 /** A radar: one spoke per axis, one closed path per curve. */
 function radar(
-  plot: Plot, scene: Scene, width: Measure, pad: number, titleH: number, legendH: number,
-  parts: string[], marks: Mark[],
+  plot: Plot,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  titleH: number,
+  legendH: number,
+  parts: string[],
+  marks: Mark[],
 ): { width: number; height: number; left: number } {
   const axes = plot.axes ?? [];
   const spokeAngle = (i: number) => (i / axes.length) * Math.PI * 2 - Math.PI / 2;
   // .gc-plot-tick renders in caps (DESIGN); measuring the label as typed
   // under-sizes it, since capitals run wider than the mixed-case source.
-  const labelWidths = axes.map((a) => width(a.toUpperCase(), scene.rowFont, scene.type.label, scene.type.labelTracking));
+  const labelWidths = axes.map((a) =>
+    width(a.toUpperCase(), scene.rowFont, scene.type.label, scene.type.labelTracking),
+  );
   // A spoke label sits out at 1.13x the radius (`out` below), so what a side
   // needs past the circle is that overshoot plus the label's own width, not
   // just the widest label's width — the widest label can easily be the one
@@ -401,7 +446,10 @@ function radar(
       const w = labelWidths[i]!;
       if (c > 0.05) right = Math.max(right, over + w);
       else if (c < -0.05) left = Math.max(left, over + w);
-      else { left = Math.max(left, over + w / 2); right = Math.max(right, over + w / 2); }
+      else {
+        left = Math.max(left, over + w / 2);
+        right = Math.max(right, over + w / 2);
+      }
     });
     return { left, right };
   };
@@ -447,15 +495,21 @@ function radar(
 
   plot.series.forEach((s, si) => {
     const ring = s.points.map((p, i) => at(i, p.y));
-    const d = ring.map((p, i) => `${i === 0 ? 'M' : 'L'}${round(p.x)},${round(p.y)}`).join(' ') + ' Z';
+    const d =
+      ring.map((p, i) => `${i === 0 ? 'M' : 'L'}${round(p.x)},${round(p.y)}`).join(' ') + ' Z';
     marks.push({
       id: `s${si}`,
       dots: ring.length,
       markup:
         `<path class="gc-plot-area gc-series-${si}" data-id="s${si}" d="${d}"/>` +
         `<path class="gc-plot-line gc-series-${si}" data-id="s${si}" pathLength="1" d="${d}"/>` +
-        ring.map((p, pi) => `<circle class="gc-plot-dot gc-series-${si}" data-id="s${si}-d${pi}" ` +
-          `cx="${round(p.x)}" cy="${round(p.y)}" r="4"/>`).join(''),
+        ring
+          .map(
+            (p, pi) =>
+              `<circle class="gc-plot-dot gc-series-${si}" data-id="s${si}-d${pi}" ` +
+              `cx="${round(p.x)}" cy="${round(p.y)}" r="4"/>`,
+          )
+          .join(''),
     });
   });
 
@@ -469,8 +523,13 @@ function radar(
 
 /** Four named regions and a scatter of labelled points. */
 function quadrant(
-  plot: Plot, scene: Scene, width: Measure, pad: number, titleH: number,
-  parts: string[], marks: Mark[],
+  plot: Plot,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  titleH: number,
+  parts: string[],
+  marks: Mark[],
 ): { width: number; height: number; left: number } {
   const ends = plot.axisEnds ?? { xLeft: '', xRight: '', yBottom: '', yTop: '' };
   // Every label along the panel — xLeft/xRight, the corner names — sits flush
@@ -514,11 +573,25 @@ function quadrant(
   // -- which is the centre this comment says to avoid.
   const capTop = 8 + scene.type.name * 0.72;
   const capBottom = side - 8 - scene.type.name * 0.24;
-  const corners: { dx: number; dy: number; label: string; ax: number; ay: number; anchor: string }[] = [
+  const corners: {
+    dx: number;
+    dy: number;
+    label: string;
+    ax: number;
+    ay: number;
+    anchor: string;
+  }[] = [
     { dx: half, dy: 0, label: plot.quadrants?.[0] ?? '', ax: side - 8, ay: capTop, anchor: 'end' },
     { dx: 0, dy: 0, label: plot.quadrants?.[1] ?? '', ax: 8, ay: capTop, anchor: 'start' },
     { dx: 0, dy: half, label: plot.quadrants?.[2] ?? '', ax: 8, ay: capBottom, anchor: 'start' },
-    { dx: half, dy: half, label: plot.quadrants?.[3] ?? '', ax: side - 8, ay: capBottom, anchor: 'end' },
+    {
+      dx: half,
+      dy: half,
+      label: plot.quadrants?.[3] ?? '',
+      ax: side - 8,
+      ay: capBottom,
+      anchor: 'end',
+    },
   ];
   for (const q of corners) {
     if (!q.label) continue;
@@ -591,7 +664,11 @@ function quadrant(
 
 /** Chrome first, then the marks in order. */
 function animate(
-  marks: Mark[], plot: Plot, hasTitle: boolean, hasLegend: boolean, scene: Scene,
+  marks: Mark[],
+  plot: Plot,
+  hasTitle: boolean,
+  hasLegend: boolean,
+  scene: Scene,
 ): { css: string; cycle: number } {
   const m = scene.motion;
   const tracks = new Map<string, Track>();
@@ -656,7 +733,10 @@ function animate(
       dot.at(0, { transform: from, opacity: '0' });
       dot.at(start, { transform: from, opacity: '0' });
       dot.at(start + 0.03, { opacity: '1' });
-      dot.at(start + flight, { transform: 'translate(0, 0) scale(1.15)', 'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)' });
+      dot.at(start + flight, {
+        transform: 'translate(0, 0) scale(1.15)',
+        'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)',
+      });
       dot.at(start + flight + 0.12, { transform: 'translate(0, 0) scale(1)' });
       dot.at(cycle, { transform: 'translate(0, 0) scale(1)', opacity: '1' });
       // A soft, quick ripple where the point lands: a hairline ring swelling
@@ -667,20 +747,29 @@ function animate(
       ripple.at(start + flight, { opacity: '0.6' });
       ripple.at(start + flight + 0.4, { transform: 'scale(3.5)', opacity: '0' });
       ripple.at(cycle, { transform: 'scale(3.5)', opacity: '0' });
-      [['t1', 0.06, 0.35], ['t2', 0.12, 0.18]].forEach(([suffix, lag, peak]) => {
+      [
+        ['t1', 0.06, 0.35],
+        ['t2', 0.12, 0.18],
+      ].forEach(([suffix, lag, peak]) => {
         const ghost = track(`.gc-plot-trail[data-id="${mark.id}-${suffix}"]`);
         ghost.at(0, { transform: from, opacity: '0' });
         ghost.at(start + (lag as number), { transform: from, opacity: '0' });
         ghost.at(start + (lag as number) + 0.03, { opacity: String(peak) });
         ghost.at(start + flight * 0.8 + (lag as number), { opacity: String(peak) });
-        ghost.at(start + flight + (lag as number), { transform: 'translate(0, 0) scale(0.8)', opacity: '0' });
+        ghost.at(start + flight + (lag as number), {
+          transform: 'translate(0, 0) scale(0.8)',
+          opacity: '0',
+        });
         ghost.at(cycle, { transform: 'translate(0, 0) scale(0.8)', opacity: '0' });
       });
     } else {
       dot.at(0, { transform: 'scale(0)', opacity: '0' });
       dot.at(start, { transform: 'scale(0)', opacity: '0' });
       dot.at(start + 0.02, { opacity: '1' });
-      dot.at(start + m.build * 0.6, { transform: 'scale(1.25)', 'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)' });
+      dot.at(start + m.build * 0.6, {
+        transform: 'scale(1.25)',
+        'animation-timing-function': 'cubic-bezier(.22,1.2,.36,1)',
+      });
       dot.at(start + m.build * 0.85, { transform: 'scale(1)' });
       dot.at(cycle, { transform: 'scale(1)', opacity: '1' });
     }
@@ -727,10 +816,7 @@ ${frames.join('\n')}
 /** The stylesheet for all three. */
 export function plotCss(scene: Scene): string {
   const series = scene.series
-    .map(
-      (colour, i) =>
-        `.gc-series-${i} { --gc-mark: var(--gc-series-${i + 1}, ${colour}); }`,
-    )
+    .map((colour, i) => `.gc-series-${i} { --gc-mark: var(--gc-series-${i + 1}, ${colour}); }`)
     .join('\n');
   return `
 .gc-plot-title { fill: var(--gc-ink, ${scene.ink}); font-family: ${scene.titleFont};

@@ -32,7 +32,9 @@ const fixturesBlog = join(fixturesRoot, 'blog');
  */
 const GROUPS = [
   {
-    section: 'Examples', name: 'Graphs', dir: fixturesBlog,
+    section: 'Examples',
+    name: 'Graphs',
+    dir: fixturesBlog,
     note: 'a flow or a conversation, drawn from a real article',
     items: [
       ['incident-response', 'Incident response', 'flowchart'],
@@ -43,7 +45,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Examples', name: 'Panels', dir: fixturesBlog,
+    section: 'Examples',
+    name: 'Panels',
+    dir: fixturesBlog,
     note: 'a subgraph drawn as a container — the composition family',
     items: [
       ['prompt-anatomy', 'Prompt anatomy', 'flowchart + subgraph'],
@@ -52,7 +56,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Examples', name: 'On an axis', dir: fixturesBlog,
+    section: 'Examples',
+    name: 'On an axis',
+    dir: fixturesBlog,
     note: 'position is data, not the output of a layout search',
     items: [
       ['geekforce-timeline', 'GeekFORCE timeline', 'timeline'],
@@ -60,7 +66,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Examples', name: 'Charts', dir: fixturesBlog,
+    section: 'Examples',
+    name: 'Charts',
+    dir: fixturesBlog,
     note: 'marks encode quantities, so charting rules apply',
     items: [
       ['outcomes-2024', '2024 outcomes', 'xychart-beta'],
@@ -68,7 +76,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Catalog', name: 'Graphs', dir: fixturesRoot,
+    section: 'Catalog',
+    name: 'Graphs',
+    dir: fixturesRoot,
     note: 'mermaid parses, ELK places, we draw',
     items: [
       ['flow', 'Flowchart', 'flowchart'],
@@ -82,7 +92,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Catalog', name: 'Panels', dir: fixturesRoot,
+    section: 'Catalog',
+    name: 'Panels',
+    dir: fixturesRoot,
     note: 'a subgraph drawn as a container — the composition family',
     items: [
       ['control-plane', 'Control plane', 'flowchart + subgraph'],
@@ -91,7 +103,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Catalog', name: 'On an axis', dir: fixturesRoot,
+    section: 'Catalog',
+    name: 'On an axis',
+    dir: fixturesRoot,
     note: 'position is data, not the output of a layout search',
     items: [
       ['timeline', 'Timeline', 'timeline'],
@@ -101,7 +115,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Catalog', name: 'Charts', dir: fixturesRoot,
+    section: 'Catalog',
+    name: 'Charts',
+    dir: fixturesRoot,
     note: 'marks encode quantities, so charting rules apply',
     items: [
       ['xy', 'Bar and line', 'xychart-beta'],
@@ -110,7 +126,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Catalog', name: 'Boards', dir: fixturesRoot,
+    section: 'Catalog',
+    name: 'Boards',
+    dir: fixturesRoot,
     note: 'a flow, an area, a board — sharing only their chrome',
     items: [
       ['sankey', 'Sankey', 'sankey-beta'],
@@ -119,7 +137,9 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Catalog', name: 'Radial', dir: fixturesRoot,
+    section: 'Catalog',
+    name: 'Radial',
+    dir: fixturesRoot,
     note: 'everything placed relative to one centre or one lane, not a row-and-column layout',
     items: [
       ['pie', 'Pie', 'pie'],
@@ -128,14 +148,19 @@ const GROUPS = [
     ],
   },
   {
-    section: 'Catalog', name: 'Bad input', dir: fixturesRoot,
+    section: 'Catalog',
+    name: 'Bad input',
+    dir: fixturesRoot,
     note: 'what happens when the paste is broken — the repair step, demonstrated',
     items: [['messy', 'Damaged paste, repaired', 'flowchart']],
   },
 ];
 
 const esc = (t) =>
-  String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  String(t).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
 
 // Each group is keyed by section+name, since "Graphs", "Panels" etc. appear
 // once per section (Examples and Catalog draw from different fixture dirs but
@@ -177,7 +202,11 @@ try {
 }
 
 const missing = [fixturesRoot, fixturesBlog]
-  .flatMap((dir) => readdirSync(dir).filter((f) => f.endsWith('.mmd')).map((f) => join(dir, f.replace(/\.mmd$/, ''))))
+  .flatMap((dir) =>
+    readdirSync(dir)
+      .filter((f) => f.endsWith('.mmd'))
+      .map((f) => join(dir, f.replace(/\.mmd$/, ''))),
+  )
   .map((p) => p.split('/').pop())
   .filter((id) => !entries.some((e) => e.id === id));
 if (missing.length) process.stderr.write(`  not in any group: ${missing.join(', ')}\n`);
@@ -186,9 +215,8 @@ let lastSection = '';
 const nav = GROUPS.map((group) => {
   const items = entries.filter((e) => e.group === group.key);
   if (!items.length) return '';
-  const heading = group.section !== lastSection
-    ? `<h2 class="nav-section">${esc(group.section)}</h2>`
-    : '';
+  const heading =
+    group.section !== lastSection ? `<h2 class="nav-section">${esc(group.section)}</h2>` : '';
   lastSection = group.section;
   return (
     heading +
@@ -527,4 +555,6 @@ const page = `<meta charset="utf-8">
 const out = process.argv[2] ?? join(repo, 'gallery.html');
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, page);
-process.stderr.write(`\nwrote ${out} — ${(page.length / 1024).toFixed(0)} kB, ${entries.length} charts\n`);
+process.stderr.write(
+  `\nwrote ${out} — ${(page.length / 1024).toFixed(0)} kB, ${entries.length} charts\n`,
+);

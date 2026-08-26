@@ -73,8 +73,7 @@ export async function fold(
   // shape a cycle creates, not to being short.
   const shortBackEdged = graph.edges.some((e) => e.backward) && longestPath(graph) <= 6;
   const wasteful = (r: ElkNode) =>
-    !shortBackEdged &&
-    ((r.width ?? 0) < room * 0.55 || (r.height ?? 0) > (r.width ?? 1) * 1.2);
+    !shortBackEdged && ((r.width ?? 0) < room * 0.55 || (r.height ?? 0) > (r.width ?? 1) * 1.2);
   if (fits(first) && !overlong && !wasteful(first)) return first;
 
   // ELK's own wrapping (`wrapping.strategy: MULTI_EDGE`, below) cannot be
@@ -119,12 +118,14 @@ export async function fold(
     try {
       // Cloned immediately: this candidate must survive whatever the next
       // `run()` call in the loop does to the shared node objects.
-      candidate = cloneElk(await run({
-        'elk.aspectRatio': String(aspect),
-        'elk.layered.wrapping.strategy': 'MULTI_EDGE',
-        'elk.layered.wrapping.additionalEdgeSpacing': String(scene.gapNode),
-        'elk.layered.wrapping.correctionFactor': '1',
-      }));
+      candidate = cloneElk(
+        await run({
+          'elk.aspectRatio': String(aspect),
+          'elk.layered.wrapping.strategy': 'MULTI_EDGE',
+          'elk.layered.wrapping.additionalEdgeSpacing': String(scene.gapNode),
+          'elk.layered.wrapping.correctionFactor': '1',
+        }),
+      );
     } catch {
       // A graph ELK cannot wrap keeps the layout it already has.
       break;
@@ -159,7 +160,13 @@ export async function fold(
   return quality ?? original;
 }
 
-interface PlacedNode { id: string; x: number; y: number; width: number; height: number }
+interface PlacedNode {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 interface ChainGrid {
   placed: PlacedNode[];
@@ -198,7 +205,12 @@ function chunkChainRows(n: number, k: number): number[] {
  * directly under row `r`'s first node — the Z-wrap DESIGN 1.2 asks for,
  * rather than a boustrophedon that would reverse direction every other row.
  */
-function buildChainGrid(chainNodes: GraphNode[], k: number, gutter: number, corridor: number): ChainGrid {
+function buildChainGrid(
+  chainNodes: GraphNode[],
+  k: number,
+  gutter: number,
+  corridor: number,
+): ChainGrid {
   const sizes = chunkChainRows(chainNodes.length, k);
   const rows: GraphNode[][] = [];
   let idx = 0;
@@ -296,14 +308,16 @@ function buildSerpentine(
   const pool = candidates.filter((g) => g.width <= room && g.height <= g.width * target);
   if (!pool.length) return null;
   const best = pool.reduce((a, b) =>
-    Math.abs(b.height / b.width - target) < Math.abs(a.height / a.width - target) ? b : a);
+    Math.abs(b.height / b.width - target) < Math.abs(a.height / a.width - target) ? b : a,
+  );
 
   const placed = new Map<string, PlacedNode>();
   for (const p of best.placed) placed.set(p.id, p);
 
   const overlaps = (a: PlacedNode, b: PlacedNode) =>
     a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-  const collides = (p: PlacedNode) => [...placed.values()].some((o) => o.id !== p.id && overlaps(p, o));
+  const collides = (p: PlacedNode) =>
+    [...placed.values()].some((o) => o.id !== p.id && overlaps(p, o));
 
   // The wrap edge itself needs the corridor between two rows whenever the
   // row above ends past column 0 — the Z-wrap's drop-and-return travels the
@@ -321,7 +335,13 @@ function buildSerpentine(
     const rowBottom = Math.max(...row.map((n) => placed.get(n.id)!.y + placed.get(n.id)!.height));
     const nextRow = best.rows[r + 1]!;
     const rowTop = Math.min(...nextRow.map((n) => placed.get(n.id)!.y));
-    corridors.push({ id: `corridor:${r}`, x: x0, y: rowBottom - corridorPad, width: x1 - x0, height: rowTop - rowBottom + corridorPad * 2 });
+    corridors.push({
+      id: `corridor:${r}`,
+      x: x0,
+      y: rowBottom - corridorPad,
+      width: x1 - x0,
+      height: rowTop - rowBottom + corridorPad * 2,
+    });
   }
   const blocked = (p: PlacedNode) => collides(p) || corridors.some((c) => overlaps(p, c));
 
@@ -336,11 +356,17 @@ function buildSerpentine(
     // over a retry's target (a backward edge into the chain) when a node is
     // both — a "no" branch that loops back to its own diamond is anchored on
     // the diamond it visibly hangs off, not on itself.
-    const forwardParent = graph.edges.find((e) => e.to === node.id && !e.backward && chainSet.has(e.from))?.from;
-    const retryTarget = graph.edges.find((e) => e.from === node.id && e.backward && chainSet.has(e.to))?.to;
+    const forwardParent = graph.edges.find(
+      (e) => e.to === node.id && !e.backward && chainSet.has(e.from),
+    )?.from;
+    const retryTarget = graph.edges.find(
+      (e) => e.from === node.id && e.backward && chainSet.has(e.to),
+    )?.to;
     const anchorId = forwardParent ?? retryTarget;
     const anchor = anchorId ? placed.get(anchorId) : undefined;
-    const anchorRow = anchorId ? best.rows.findIndex((row) => row.some((n) => n.id === anchorId)) : -1;
+    const anchorRow = anchorId
+      ? best.rows.findIndex((row) => row.some((n) => n.id === anchorId))
+      : -1;
     if (!anchorId || !anchor || anchorRow < 0) return null;
 
     const row = best.rows[anchorRow]!;
@@ -365,7 +391,10 @@ function buildSerpentine(
       const x = left + gutter;
       const y = anchor.y + anchor.height / 2 - node.height / 2;
       const trial: PlacedNode = { id: node.id, x, y, width: node.width, height: node.height };
-      if (!blocked(trial)) { placed.set(node.id, trial); ok = true; }
+      if (!blocked(trial)) {
+        placed.set(node.id, trial);
+        ok = true;
+      }
     }
 
     // Otherwise, immediately beside the anchor itself — close enough that
@@ -382,12 +411,18 @@ function buildSerpentine(
     // over a stray band overlap.
     if (!ok) {
       const x = anchor.x + anchor.width + 24;
-      const above = anchorRow > 0
-        ? Math.max(...best.rows[anchorRow - 1]!.map((n) => placed.get(n.id)!.y + placed.get(n.id)!.height))
-        : -Infinity;
-      const below = anchorRow < best.rows.length - 1
-        ? Math.min(...best.rows[anchorRow + 1]!.map((n) => placed.get(n.id)!.y))
-        : Infinity;
+      const above =
+        anchorRow > 0
+          ? Math.max(
+              ...best.rows[anchorRow - 1]!.map(
+                (n) => placed.get(n.id)!.y + placed.get(n.id)!.height,
+              ),
+            )
+          : -Infinity;
+      const below =
+        anchorRow < best.rows.length - 1
+          ? Math.min(...best.rows[anchorRow + 1]!.map((n) => placed.get(n.id)!.y))
+          : Infinity;
       for (const clearance of [8, 16, 24]) {
         const candidates = [
           Math.max(anchor.y - clearance - node.height, above + 8),
@@ -395,7 +430,11 @@ function buildSerpentine(
         ];
         for (const y of candidates) {
           const trial: PlacedNode = { id: node.id, x, y, width: node.width, height: node.height };
-          if (!blocked(trial)) { placed.set(node.id, trial); ok = true; break; }
+          if (!blocked(trial)) {
+            placed.set(node.id, trial);
+            ok = true;
+            break;
+          }
         }
         if (ok) break;
       }
@@ -438,7 +477,11 @@ function buildSerpentine(
  * would allow — replicating that quirk here is the point, since it is what
  * decides which columns `gridUp` will actually produce.
  */
-export function bandByCentre(items: ElkNode[], centreOf: (n: ElkNode) => number, tolerance = 9): ElkNode[][] {
+export function bandByCentre(
+  items: ElkNode[],
+  centreOf: (n: ElkNode) => number,
+  tolerance = 9,
+): ElkNode[][] {
   const order = [...items].sort((a, b) => centreOf(a) - centreOf(b));
   const groups: ElkNode[][] = [];
   let group: ElkNode[] = [];
@@ -459,14 +502,18 @@ export function chainWraps(byId: Map<string, ElkNode>, chain: string[]): boolean
     const a = byId.get(chain[k - 1]!);
     const b = byId.get(chain[k]!);
     if (!a || !b) continue;
-    if (a.x === undefined || a.y === undefined || a.width === undefined || a.height === undefined) continue;
+    if (a.x === undefined || a.y === undefined || a.width === undefined || a.height === undefined)
+      continue;
     if (b.x === undefined || b.y === undefined || b.width === undefined) continue;
     if (b.y >= a.y + a.height - 1 && b.x + b.width <= a.x + 1) return true;
   }
   return false;
 }
 
-function foldQuality(children: ElkNode[], chain: string[]): { balanced: boolean; orphanFree: boolean } {
+function foldQuality(
+  children: ElkNode[],
+  chain: string[],
+): { balanced: boolean; orphanFree: boolean } {
   const inner = chain.slice(1, -1);
   if (inner.length < 2) return { balanced: true, orphanFree: true };
   const byId = new Map(children.map((n) => [n.id, n] as const));
@@ -482,7 +529,9 @@ function foldQuality(children: ElkNode[], chain: string[]): { balanced: boolean;
   // buckets, which let a candidate that *looked* orphan-free on its raw
   // coordinates (16-unit buckets happened to separate every node into its own
   // bucket) turn out to still strand a node once banded for real.
-  const innerNodes = inner.map((id) => byId.get(id)!).filter((n) => n.y !== undefined && n.height !== undefined);
+  const innerNodes = inner
+    .map((id) => byId.get(id)!)
+    .filter((n) => n.y !== undefined && n.height !== undefined);
   const rowGroups = bandByCentre(innerNodes, (n) => n.y! + n.height! / 2);
   const counts = rowGroups.map((g) => g.length);
   const balanced = counts.length < 2 || Math.max(...counts) - Math.min(...counts) <= 1;

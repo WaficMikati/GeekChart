@@ -106,7 +106,12 @@ export const TYPE: TypeScale = {
 /** The canvas every renderer lays out on. */
 export const CANVAS: Canvas = { width: 1000, min: 480, max: 1200, margin: 48, maxAspect: 1.4 };
 
-export interface Box { x: number; y: number; width: number; height: number }
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /** Where a drawing sits once it has been centred on the canvas. */
 export interface Frame {

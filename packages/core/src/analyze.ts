@@ -227,9 +227,9 @@ export function analyze(svg: SVGSVGElement, source: string): Analysis {
   );
   const medianSize =
     sortedNodes.length > 0
-      ? [...sortedNodes]
+      ? ([...sortedNodes]
           .map((n) => (direction === 'LR' || direction === 'RL' ? n.w : n.h))
-          .sort((a, b) => a - b)[Math.floor(sortedNodes.length / 2)] ?? 40
+          .sort((a, b) => a - b)[Math.floor(sortedNodes.length / 2)] ?? 40)
       : 40;
   const tolerance = Math.max(12, medianSize * 0.55);
   const nodeWaves = bucket(
@@ -295,7 +295,10 @@ export function analyze(svg: SVGSVGElement, source: string): Analysis {
     const own = edgeWaves.get(el);
     const wave =
       own ??
-      Math.min(nearestWave(endpoint(el, 'start', origin)), nearestWave(endpoint(el, 'end', origin)));
+      Math.min(
+        nearestWave(endpoint(el, 'start', origin)),
+        nearestWave(endpoint(el, 'end', origin)),
+      );
     elements.push({
       el,
       kind: 'edge',
@@ -311,14 +314,17 @@ export function analyze(svg: SVGSVGElement, source: string): Analysis {
     if (!placed) continue;
     // A label rides with the edge it annotates, so it uses the same rule.
     const nearestEdge = nodesAreFlat
-      ? [...edgeWaves.entries()].reduce<{ wave: number; distance: number } | null>((best, [edge, wave]) => {
-          const r = edge.getBoundingClientRect();
-          const distance = Math.hypot(
-            r.left + r.width / 2 - origin.left - placed.cx,
-            r.top + r.height / 2 - origin.top - placed.cy,
-          );
-          return !best || distance < best.distance ? { wave, distance } : best;
-        }, null)
+      ? [...edgeWaves.entries()].reduce<{ wave: number; distance: number } | null>(
+          (best, [edge, wave]) => {
+            const r = edge.getBoundingClientRect();
+            const distance = Math.hypot(
+              r.left + r.width / 2 - origin.left - placed.cx,
+              r.top + r.height / 2 - origin.top - placed.cy,
+            );
+            return !best || distance < best.distance ? { wave, distance } : best;
+          },
+          null,
+        )
       : null;
     elements.push({
       el,

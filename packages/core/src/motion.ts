@@ -195,7 +195,9 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
   // edges before one that took longer, so a fast branch never waits on a slow
   // one it has no dependency on.
   while (queue.length) {
-    queue.sort((p, q) => nodeStart.get(p)! - nodeStart.get(q)! || nodeIndex.get(p)! - nodeIndex.get(q)!);
+    queue.sort(
+      (p, q) => nodeStart.get(p)! - nodeStart.get(q)! || nodeIndex.get(p)! - nodeIndex.get(q)!,
+    );
     const id = queue.shift()!;
     const ready = nodeStart.get(id)!;
     outEdges.get(id)!.forEach((edge, k) => {
@@ -226,14 +228,15 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
   const fallback = Math.max(lead, ...drawing.nodes.map((id) => nodeStart.get(id) ?? 0));
   let strandedI = 0;
   for (const id of drawing.nodes) {
-    if (!nodeStart.has(id)) nodeStart.set(id, fallback + (strandedI++) * SIBLING_LAG);
+    if (!nodeStart.has(id)) nodeStart.set(id, fallback + strandedI++ * SIBLING_LAG);
   }
 
   // Loop-backs draw once both ends are individually settled, staggered among
   // themselves the same sibling-row way (DESIGN 10.4) — never gating, and
   // never racing the flow they answer.
   loopEdges.forEach((edge, i) => {
-    const bothSettled = Math.max(nodeStart.get(edge.from) ?? lead, nodeStart.get(edge.to) ?? lead) + m.build;
+    const bothSettled =
+      Math.max(nodeStart.get(edge.from) ?? lead, nodeStart.get(edge.to) ?? lead) + m.build;
     edgeStart.set(edge.id, bothSettled + i * SIBLING_LAG);
   });
 
@@ -316,7 +319,9 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
       // being forced solid for its length (DESIGN 10.4). Safe only on a single
       // straight run — this is the case an elbowed path would unfold on.
       const { axis, origin } = edgeAxis(edge.d);
-      originRules.push(`.gc-edge[data-id="${edge.id}"]{transform-box:fill-box;transform-origin:${origin}}`);
+      originRules.push(
+        `.gc-edge[data-id="${edge.id}"]{transform-box:fill-box;transform-origin:${origin}}`,
+      );
       // The scale carries the actual reveal (so the dash pattern survives); the
       // opacity pairs with it only so the edge reads as fully absent before its
       // turn rather than as a collapsed sliver sitting at the origin.
@@ -378,7 +383,9 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
       // Same selector the build-in wash track above uses, so this merges into
       // that one track/one animation instead of a second rule fighting it for
       // the `animation` property on the same element.
-      const fromFill = track(`.gc-node[data-id="${edge.from}"] .gc-fill, .gc-node[data-id="${edge.from}"] .gc-core`);
+      const fromFill = track(
+        `.gc-node[data-id="${edge.from}"] .gc-fill, .gc-node[data-id="${edge.from}"] .gc-core`,
+      );
       fromFill.at(0, { fill: surface });
       fromFill.at(depart, { fill: surface });
       fromFill.at(depart + FLASH_OUT * 0.35, { fill: accent });
@@ -399,7 +406,9 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
       // Same selector the build-in wash track above uses, so this merges into
       // that one track/one animation instead of a second rule fighting it for
       // the `animation` property on the same element.
-      const toFill = track(`.gc-node[data-id="${edge.to}"] .gc-fill, .gc-node[data-id="${edge.to}"] .gc-core`);
+      const toFill = track(
+        `.gc-node[data-id="${edge.to}"] .gc-fill, .gc-node[data-id="${edge.to}"] .gc-core`,
+      );
       toFill.at(0, { fill: surface });
       toFill.at(arrive, { fill: surface, 'animation-timing-function': PRESS_EASE });
       toFill.at(arrive + PRESS * 0.35, { fill: accent, 'animation-timing-function': PRESS_EASE });
@@ -409,7 +418,10 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
       const toOutline = track(`.gc-node[data-id="${edge.to}"] .gc-outline`);
       toOutline.at(0, { stroke: path });
       toOutline.at(arrive, { stroke: path, 'animation-timing-function': PRESS_EASE });
-      toOutline.at(arrive + PRESS * 0.35, { stroke: accent, 'animation-timing-function': PRESS_EASE });
+      toOutline.at(arrive + PRESS * 0.35, {
+        stroke: accent,
+        'animation-timing-function': PRESS_EASE,
+      });
       toOutline.at(arrive + PRESS, { stroke: path, 'animation-timing-function': m.ease });
       toOutline.at(cycle, { stroke: path });
     }
@@ -419,7 +431,10 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
     const group = track(`.gc-node[data-id="${edge.to}"]`);
     group.at(0, { transform: 'scale(1)' });
     group.at(arrive, { transform: 'scale(1)', 'animation-timing-function': PRESS_EASE });
-    group.at(arrive + PRESS * 0.3, { transform: 'scale(1.03)', 'animation-timing-function': PRESS_EASE });
+    group.at(arrive + PRESS * 0.3, {
+      transform: 'scale(1.03)',
+      'animation-timing-function': PRESS_EASE,
+    });
     group.at(arrive + PRESS, { transform: 'scale(1)', 'animation-timing-function': m.ease });
     group.at(cycle, { transform: 'scale(1)' });
 

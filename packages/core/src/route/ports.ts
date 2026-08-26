@@ -53,8 +53,12 @@ export function portOn(shape: Shape, side: Side, offset: number): Point {
   const along = side === 'left' || side === 'right' ? { x: 0, y: 1 } : { x: 1, y: 0 };
   const span =
     side === 'left' || side === 'right'
-      ? Math.abs(boundaryPoint(shape, { x: shape.centre.x, y: shape.centre.y + 10000 }).y - shape.centre.y)
-      : Math.abs(boundaryPoint(shape, { x: shape.centre.x + 10000, y: shape.centre.y }).x - shape.centre.x);
+      ? Math.abs(
+          boundaryPoint(shape, { x: shape.centre.x, y: shape.centre.y + 10000 }).y - shape.centre.y,
+        )
+      : Math.abs(
+          boundaryPoint(shape, { x: shape.centre.x + 10000, y: shape.centre.y }).x - shape.centre.x,
+        );
   const slid = {
     x: centreOfFace.x + along.x * offset * span * 1.1,
     y: centreOfFace.y + along.y * offset * span * 1.1,
@@ -117,7 +121,14 @@ export function planPorts<T extends { id: string; from: string; to: string; back
       const others = all
         .filter((shape) => shape !== from && shape !== to)
         .map((shape) => shape.centre);
-      const side = loopSide(from, to, others, flow, usedSides.get(edge.from), usedSides.get(edge.to));
+      const side = loopSide(
+        from,
+        to,
+        others,
+        flow,
+        usedSides.get(edge.from),
+        usedSides.get(edge.to),
+      );
       plans.set(edge.id, { startSide: side, endSide: side, startOffset: 0, endOffset: 0 });
       markUsed(edge.from, side);
       markUsed(edge.to, side);
@@ -149,8 +160,16 @@ export function planPorts<T extends { id: string; from: string; to: string; back
     const across = (side: Side, shape: Shape) =>
       side === 'left' || side === 'right' ? shape.centre.y : shape.centre.x;
 
-    push(`${edge.from}:${plan.startSide}@${across(plan.startSide, from)}`, 'start', across(plan.startSide, to));
-    push(`${edge.to}:${plan.endSide}@${across(plan.endSide, to)}`, 'end', across(plan.endSide, from));
+    push(
+      `${edge.from}:${plan.startSide}@${across(plan.startSide, from)}`,
+      'start',
+      across(plan.startSide, to),
+    );
+    push(
+      `${edge.to}:${plan.endSide}@${across(plan.endSide, to)}`,
+      'end',
+      across(plan.endSide, from),
+    );
   }
 
   for (const [key, members] of buckets) {
@@ -193,10 +212,14 @@ const FACE_INSET = 16;
 /** Where a face sits on the axis it is perpendicular to. */
 export function faceLine(box: Extent, side: Side): number {
   switch (side) {
-    case 'left': return box.x;
-    case 'right': return box.x + box.width;
-    case 'top': return box.y;
-    default: return box.y + box.height;
+    case 'left':
+      return box.x;
+    case 'right':
+      return box.x + box.width;
+    case 'top':
+      return box.y;
+    default:
+      return box.y + box.height;
   }
 }
 
@@ -207,9 +230,7 @@ export function faceRange(box: Extent, side: Side, sharp = false): [number, numb
   // along the bounding box's top edge puts the contact on a slope, where the
   // head reads as glancing off rather than meeting it. DESIGN 2.4, 6.2.
   if (sharp) return [middle, middle];
-  const [lo, hi] = isVertical(side)
-    ? [box.x, box.x + box.width]
-    : [box.y, box.y + box.height];
+  const [lo, hi] = isVertical(side) ? [box.x, box.x + box.width] : [box.y, box.y + box.height];
   const inset = Math.min(FACE_INSET, (hi - lo) / 2 - 1);
   return [lo + inset, hi - inset];
 }
@@ -256,7 +277,8 @@ export function facesFor(
   // Overlapping on both axes — rare, and whichever centre is further apart wins.
   const dx = b.x + b.width / 2 - (a.x + a.width / 2);
   const dy = b.y + b.height / 2 - (a.y + a.height / 2);
-  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? { start: 'right', end: 'left' } : { start: 'left', end: 'right' };
+  if (Math.abs(dx) >= Math.abs(dy))
+    return dx >= 0 ? { start: 'right', end: 'left' } : { start: 'left', end: 'right' };
   return dy >= 0 ? { start: 'bottom', end: 'top' } : { start: 'top', end: 'bottom' };
 }
 
@@ -271,8 +293,12 @@ export function facesFor(
  * and the elbow does the work.
  */
 export function alignEnds(
-  a: Extent, startSide: Side, sharpA: boolean,
-  b: Extent, endSide: Side, sharpB: boolean,
+  a: Extent,
+  startSide: Side,
+  sharpA: boolean,
+  b: Extent,
+  endSide: Side,
+  sharpB: boolean,
 ) {
   const parallel = isVertical(startSide) === isVertical(endSide);
   const startMid = faceMiddle(a, startSide);
@@ -286,8 +312,10 @@ export function alignEnds(
   const hi = Math.min(ah, bh);
   if (lo > hi) return { startAlong: startMid, endAlong: endMid, channel: false };
   const shared =
-    startMid >= lo && startMid <= hi ? startMid
-      : endMid >= lo && endMid <= hi ? endMid
+    startMid >= lo && startMid <= hi
+      ? startMid
+      : endMid >= lo && endMid <= hi
+        ? endMid
         : (lo + hi) / 2;
   return { startAlong: shared, endAlong: shared, channel: true };
 }

@@ -66,7 +66,11 @@ export async function toBoard(source: string, kind: BoardKind): Promise<Board> {
       links?: { source?: string; target?: string; value?: number }[];
     };
     const links = (graph.links ?? [])
-      .map((l) => ({ source: clean(l.source), target: clean(l.target), value: Number(l.value) || 0 }))
+      .map((l) => ({
+        source: clean(l.source),
+        target: clean(l.target),
+        value: Number(l.value) || 0,
+      }))
       .filter((l) => l.source && l.target && l.value > 0);
     if (!links.length) throw new Error('Nothing to draw — this sankey has no flows.');
     const ids = [...new Set([...links.map((l) => l.source), ...links.map((l) => l.target)])];
@@ -98,8 +102,13 @@ export async function toBoard(source: string, kind: BoardKind): Promise<Board> {
   }));
   const data = (db.getData?.() ?? {}) as {
     nodes?: {
-      id?: string; parentId?: string; label?: string; isGroup?: boolean;
-      ticket?: string; priority?: string; assigned?: string;
+      id?: string;
+      parentId?: string;
+      label?: string;
+      isGroup?: boolean;
+      ticket?: string;
+      priority?: string;
+      assigned?: string;
     }[];
   };
   const columns: Column[] = sections.map((s) => ({
@@ -126,7 +135,10 @@ export async function toBoard(source: string, kind: BoardKind): Promise<Board> {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const esc = (t: string) =>
-  t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  t.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 const round = (n: number) => Number(n.toFixed(2));
 
 export interface BoardDrawing {
@@ -203,11 +215,20 @@ function squarify(
     const row: typeof queue = [];
     while (queue.length) {
       const next = [...row.map((r) => r.value), queue[0]!.value];
-      if (row.length && worst(next, side, scale) > worst(row.map((r) => r.value), side, scale)) break;
+      if (
+        row.length &&
+        worst(next, side, scale) >
+          worst(
+            row.map((r) => r.value),
+            side,
+            scale,
+          )
+      )
+        break;
       row.push(queue.shift()!);
     }
     const rowValue = row.reduce((n, i) => n + i.value, 0);
-    const thickness = rowValue * scale / side;
+    const thickness = (rowValue * scale) / side;
     let along = 0;
     for (const item of row) {
       const length = (item.value * scale) / Math.max(thickness, 1e-9);
@@ -218,7 +239,8 @@ function squarify(
       );
       along += length;
     }
-    if (rect.w >= rect.h) rect = { x: rect.x + thickness, y: rect.y, w: rect.w - thickness, h: rect.h };
+    if (rect.w >= rect.h)
+      rect = { x: rect.x + thickness, y: rect.y, w: rect.w - thickness, h: rect.h };
     else rect = { x: rect.x, y: rect.y + thickness, w: rect.w, h: rect.h - thickness };
     total -= rowValue;
   }
@@ -236,9 +258,11 @@ export function drawBoard(board: Board, scene: Scene, measureWith?: string): Boa
   const marks: Mark[] = [];
 
   const built =
-    board.kind === 'sankey' ? sankey(board, scene, width, pad, titleH, parts, marks)
-    : board.kind === 'treemap' ? treemap(board, scene, width, pad, titleH, parts, marks)
-    : kanban(board, scene, width, pad, titleH, parts, marks);
+    board.kind === 'sankey'
+      ? sankey(board, scene, width, pad, titleH, parts, marks)
+      : board.kind === 'treemap'
+        ? treemap(board, scene, width, pad, titleH, parts, marks)
+        : kanban(board, scene, width, pad, titleH, parts, marks);
   measurer.done();
 
   const title = board.title
@@ -253,24 +277,38 @@ export function drawBoard(board: Board, scene: Scene, measureWith?: string): Boa
   // A board is the one family DESIGN 1.1 lets past 1000, and only as far as
   // 1200 — a six-column kanban has nowhere else to put the sixth column.
   const frame = fitCanvas(
-    { x: 0, y: 0, width: built.width, height: built.height }, scene.canvas, scene.canvas.max,
+    { x: 0, y: 0, width: built.width, height: built.height },
+    scene.canvas,
+    scene.canvas.max,
   );
   const svg =
     `<svg class="gc-chart" viewBox="0 0 ${frame.width} ${frame.height}" ` +
     `width="${frame.width}" height="${frame.height}" role="img" xmlns="${SVGNS}">` +
     `<g class="gc-frame" transform="${frameTransform(frame)}">` +
-    parts.join('') + marks.map((m) => m.markup).join('') + title + kicker + `</g></svg>`;
+    parts.join('') +
+    marks.map((m) => m.markup).join('') +
+    title +
+    kicker +
+    `</g></svg>`;
 
   const motion = animate(marks, Boolean(board.title), Boolean(board.kicker), scene);
   const noun = { sankey: 'Sankey diagram', treemap: 'Treemap', kanban: 'Kanban board' }[board.kind];
   return {
-    svg, css: motion.css, cycle: motion.cycle,
+    svg,
+    css: motion.css,
+    cycle: motion.cycle,
     summary: `${noun}${board.title ? `: ${board.title}` : ''}. ${built.groups} groups, ${built.items} items.`,
-    groups: built.groups, items: built.items,
+    groups: built.groups,
+    items: built.items,
   };
 }
 
-interface Built { width: number; height: number; groups: number; items: number }
+interface Built {
+  width: number;
+  height: number;
+  groups: number;
+  items: number;
+}
 
 /**
  * How many distinct things may take a categorical colour before the whole
@@ -284,16 +322,23 @@ const SLOTS = 6;
 
 /** A flow of magnitudes: nodes in columns, ribbons in between. */
 function sankey(
-  board: Board, scene: Scene, width: Measure, pad: number, titleH: number,
-  _parts: string[], marks: Mark[],
+  board: Board,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  titleH: number,
+  _parts: string[],
+  marks: Mark[],
 ): Built {
   const links = board.links ?? [];
   const ids = [...new Set([...links.map((l) => l.source), ...links.map((l) => l.target)])];
   const depth = layerOf(links, ids);
   const layers = Math.max(...ids.map((n) => depth.get(n) ?? 0)) + 1;
 
-  const inflow = (id: string) => links.filter((l) => l.target === id).reduce((n, l) => n + l.value, 0);
-  const outflow = (id: string) => links.filter((l) => l.source === id).reduce((n, l) => n + l.value, 0);
+  const inflow = (id: string) =>
+    links.filter((l) => l.target === id).reduce((n, l) => n + l.value, 0);
+  const outflow = (id: string) =>
+    links.filter((l) => l.source === id).reduce((n, l) => n + l.value, 0);
   const weight = (id: string) => Math.max(inflow(id), outflow(id));
 
   const byLayer: string[][] = Array.from({ length: layers }, () => []);
@@ -304,19 +349,25 @@ function sankey(
   // the gutter to the overall widest label, as if it always fell last, reserves
   // more than the last column ever uses, and centres the whole block on that
   // overstated width (DESIGN 7.3).
-  const lastLabelW = Math.max(0, ...(byLayer[layers - 1] ?? []).map((id) => width(id, scene.titleFont, scene.type.name)));
+  const lastLabelW = Math.max(
+    0,
+    ...(byLayer[layers - 1] ?? []).map((id) => width(id, scene.titleFont, scene.type.name)),
+  );
   const barW = 12;
   const gap = 16;
   const plotH = 420;
   const top = pad + titleH + 10;
   const tallest = Math.max(...byLayer.map((col) => col.reduce((n, id) => n + weight(id), 0)));
-  const scale = (plotH - gap * (Math.max(...byLayer.map((c) => c.length)) - 1)) / Math.max(tallest, 1);
+  const scale =
+    (plotH - gap * (Math.max(...byLayer.map((c) => c.length)) - 1)) / Math.max(tallest, 1);
   // The columns are spread across the canvas rather than packed at the width
   // the labels happen to need. DESIGN 1.1 and 7.4.
   const left = pad + 4;
   const colGap = Math.max(
     150,
-    layers > 1 ? (scene.canvas.width - left - pad - lastLabelW - 16 - barW * layers) / (layers - 1) : 0,
+    layers > 1
+      ? (scene.canvas.width - left - pad - lastLabelW - 16 - barW * layers) / (layers - 1)
+      : 0,
   );
   const xOf = (d: number) => left + d * (barW + colGap);
 
@@ -349,7 +400,7 @@ function sankey(
   const ribbonMark = new Map<string, Mark>();
   const outAt = new Map<string, number>();
   const inAt = new Map<string, number>();
-  for (const link of [...links].sort((a, b) => (place.get(a.target)!.y - place.get(b.target)!.y))) {
+  for (const link of [...links].sort((a, b) => place.get(a.target)!.y - place.get(b.target)!.y)) {
     const from = place.get(link.source)!;
     const to = place.get(link.target)!;
     const so = outAt.get(link.source) ?? 0;
@@ -430,11 +481,17 @@ function sankey(
 
 /** A partition of area: one block per group, tiles inside it. */
 function treemap(
-  board: Board, scene: Scene, width: Measure, pad: number, titleH: number,
-  parts: string[], marks: Mark[],
+  board: Board,
+  scene: Scene,
+  width: Measure,
+  pad: number,
+  titleH: number,
+  parts: string[],
+  marks: Mark[],
 ): Built {
   const groups = (board.root?.children ?? []).filter((g) => g.children?.length || g.value);
-  const total = (n: TreeNode): number => n.value ?? (n.children ?? []).reduce((s, c) => s + total(c), 0);
+  const total = (n: TreeNode): number =>
+    n.value ?? (n.children ?? []).reduce((s, c) => s + total(c), 0);
   const W = scene.canvas.width - pad * 2;
   const H = 520;
   const top = pad + titleH + 6;
@@ -461,7 +518,10 @@ function treemap(
     );
     const leaves = (group.children ?? []).map((c) => ({ name: c.name, value: total(c) }));
     const tiles = squarify(leaves, {
-      x: block.x + 8, y: block.y + headH, w: Math.max(block.w - 16, 1), h: Math.max(block.h - headH - 10, 1),
+      x: block.x + 8,
+      y: block.y + headH,
+      w: Math.max(block.w - 16, 1),
+      h: Math.max(block.h - headH - 10, 1),
     });
     for (const tile of tiles) {
       // A label only goes in a tile it actually fits inside; a clipped word is
@@ -471,7 +531,8 @@ function treemap(
       // name+value at 12/8.5 is tried first, and only a tile too small for
       // even the name alone at 8.5 falls back to the "Also:" row).
       const fits =
-        tile.w > width(tile.name, scene.titleFont, scene.type.name) + 28 && tile.h > scene.type.name * 3;
+        tile.w > width(tile.name, scene.titleFont, scene.type.name) + 28 &&
+        tile.h > scene.type.name * 3;
       const compact =
         !fits &&
         tile.w > width(tile.name, scene.rowFont, scene.type.caption) + 20 &&
@@ -488,8 +549,7 @@ function treemap(
               `<text class="gc-board-value" x="${round(tile.x + 12)}" y="${round(tile.y + 40)}">${tile.value}</text>`
             : compact
               ? `<text class="gc-board-tile-compact" x="${round(tile.x + 10)}" y="${round(tile.y + tile.h / 2 + scene.type.caption * 0.36)}">${esc(tile.name)}</text>`
-              : ''
-          ) +
+              : '') +
           `</g>`,
       });
     }
@@ -514,17 +574,28 @@ function treemap(
       items = items.slice(0, -1);
       text = `${prefix}${items.join(' · ')} …`;
     }
-    parts.push(`<text class="gc-board-footnote" x="${round(pad)}" y="${round(footY)}">${esc(text)}</text>`);
+    parts.push(
+      `<text class="gc-board-footnote" x="${round(pad)}" y="${round(footY)}">${esc(text)}</text>`,
+    );
   }
 
-  return { width: W + pad * 2, height: top + H + footH + pad, groups: groups.length,
-           items: groups.reduce((n, g) => n + (g.children?.length ?? 0), 0) };
+  return {
+    width: W + pad * 2,
+    height: top + H + footH + pad,
+    groups: groups.length,
+    items: groups.reduce((n, g) => n + (g.children?.length ?? 0), 0),
+  };
 }
 
 /** A board of columns, each holding cards. */
 function kanban(
-  board: Board, scene: Scene, _width: Measure, pad: number, titleH: number,
-  parts: string[], marks: Mark[],
+  board: Board,
+  scene: Scene,
+  _width: Measure,
+  pad: number,
+  titleH: number,
+  parts: string[],
+  marks: Mark[],
 ): Built {
   const columns = board.columns ?? [];
   // A card is inset 10 from the column and its text a further 12, on both
@@ -589,12 +660,18 @@ function kanban(
 
   return {
     width: pad * 2 + columns.length * colW + Math.max(columns.length - 1, 0) * gap,
-    height, groups: columns.length,
+    height,
+    groups: columns.length,
     items: columns.reduce((n, c) => n + c.cards.length, 0),
   };
 }
 
-function animate(marks: Mark[], hasTitle: boolean, hasKicker: boolean, scene: Scene): { css: string; cycle: number } {
+function animate(
+  marks: Mark[],
+  hasTitle: boolean,
+  hasKicker: boolean,
+  scene: Scene,
+): { css: string; cycle: number } {
   const m = scene.motion;
   const tracks = new Map<string, Track>();
   const track = (sel: string) => {
@@ -630,7 +707,8 @@ function animate(marks: Mark[], hasTitle: boolean, hasKicker: boolean, scene: Sc
       if (!mark.ribbon) return;
       if (mark.ribbon.layer !== layer) {
         if (layer !== -1) base = base + ribbonGrow * 0.6 + idx * 0.12;
-        layer = mark.ribbon.layer; idx = 0;
+        layer = mark.ribbon.layer;
+        idx = 0;
       }
       ribbonStart.set(mark.id, base + idx * 0.12);
       idx++;
@@ -677,7 +755,12 @@ function animate(marks: Mark[], hasTitle: boolean, hasKicker: boolean, scene: Sc
   marks.forEach((mark, i) => {
     const start = scaffold + 0.15 + i * step;
     if (mark.ribbon) {
-      grow(`.gc-ribbon[data-id="${mark.id}"]`, ribbonStart.get(mark.id)!, mark.ribbon.width, ribbonGrow);
+      grow(
+        `.gc-ribbon[data-id="${mark.id}"]`,
+        ribbonStart.get(mark.id)!,
+        mark.ribbon.width,
+        ribbonGrow,
+      );
     } else {
       fade(`.gc-ribbon[data-id="${mark.id}"]`, start);
     }

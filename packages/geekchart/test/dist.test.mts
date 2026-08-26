@@ -26,7 +26,10 @@ test('the chunk fetched on first chart mount stays under the 420 kB brotli budge
   const files = JSON.parse(readFileSync(manifestPath, 'utf8')) as string[];
   assert.ok(files.length > 0, 'expected at least the @geekchart/core chunk');
 
-  const total = files.reduce((sum, f) => sum + brotliCompressSync(readFileSync(join(dist, f))).length, 0);
+  const total = files.reduce(
+    (sum, f) => sum + brotliCompressSync(readFileSync(join(dist, f))).length,
+    0,
+  );
   assert.ok(
     total <= BUDGET_BYTES,
     `first-mount chunk is ${(total / 1024).toFixed(1)} kB brotli, over the ${(BUDGET_BYTES / 1024).toFixed(0)} kB budget`,

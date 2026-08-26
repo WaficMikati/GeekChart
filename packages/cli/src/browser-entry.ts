@@ -1,4 +1,15 @@
-import { ChartError, componentName, reactComponent, render, renderFlow, sceneCss, scenes, svgDocument, type RenderOptions, type SceneName } from '@geekchart/core';
+import {
+  ChartError,
+  componentName,
+  reactComponent,
+  render,
+  renderFlow,
+  sceneCss,
+  scenes,
+  svgDocument,
+  type RenderOptions,
+  type SceneName,
+} from '@geekchart/core';
 // Mermaid's own full render (theming, roughjs, markdown-in-labels) is only
 // worth the weight for whatever `drawnType` does not recognize — the drawn
 // pipeline the rest of this file drives already handles everything else — so
@@ -11,7 +22,16 @@ declare global {
       source: string,
       options: RenderInput,
     ) => Promise<
-      | { ok: true; svg: string; svgDocument: string; html: string; runtime: number; repairs: unknown[]; diagram: string; parts: number }
+      | {
+          ok: true;
+          svg: string;
+          svgDocument: string;
+          html: string;
+          runtime: number;
+          repairs: unknown[];
+          diagram: string;
+          parts: number;
+        }
       | { ok: false; error: { message: string; line?: number; excerpt?: string } }
     >;
   }

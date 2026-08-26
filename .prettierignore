@@ -1,0 +1,8 @@
+# The measurement gate and its allowlist. AGENT-BRIEF.md forbids editing
+# these, so they stay out of pnpm format the same way eslint.config.js
+# keeps gate.mjs out of pnpm lint.
+packages/cli/scripts/gate.mjs
+packages/cli/test/gate-allowlist.json
+
+# Never touch the hand-drawn reference chart.
+fixtures/golden/

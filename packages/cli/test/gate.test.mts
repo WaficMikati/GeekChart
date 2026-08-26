@@ -38,7 +38,11 @@ before(() => {
   }
   // The gate exits 1 while anything FAILs, which is expected here — the
   // allowlist, not the exit code, decides whether this suite is green.
-  const run = spawnSync(process.execPath, [gate, '--json'], { cwd: repo, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const run = spawnSync(process.execPath, [gate, '--json'], {
+    cwd: repo,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
   assert.equal(run.error, undefined, String(run.error));
   assert.ok(run.status === 0 || run.status === 1, `gate exited ${run.status}: ${run.stderr}`);
   results = JSON.parse(run.stdout);
@@ -51,10 +55,17 @@ describe('design gate', () => {
     const unexpected = results
       .filter((r) => r.status === 'FAIL' && !allowed.has(r.chart))
       .map((r) => `${r.chart}: ${r.fails.join('; ')}`);
-    assert.deepEqual(unexpected, [], `charts failing the gate that are not allowlisted:\n${unexpected.join('\n')}`);
+    assert.deepEqual(
+      unexpected,
+      [],
+      `charts failing the gate that are not allowlisted:\n${unexpected.join('\n')}`,
+    );
 
     // Not a failure, but the reason the allowlist exists: say what can go.
-    const fixed = [...allowed].filter((c) => !results.some((r) => r.chart === c && r.status === 'FAIL'));
-    if (fixed.length) console.log(`allowlist entries that now pass — delete them: ${fixed.join(', ')}`);
+    const fixed = [...allowed].filter(
+      (c) => !results.some((r) => r.chart === c && r.status === 'FAIL'),
+    );
+    if (fixed.length)
+      console.log(`allowlist entries that now pass — delete them: ${fixed.join(', ')}`);
   });
 });

@@ -21,8 +21,15 @@ const fixtures = join(here, '..', '..', '..', 'fixtures');
 
 /** The families this file speaks for: mermaid parses, ELK places, `draw` draws. */
 const GRAPHS = [
-  'flow.mmd', 'subgraphs.mmd', '4geeks-journey.mmd', 'state.mmd',
-  'class.mmd', 'er.mmd', 'control-plane.mmd', 'architecture.mmd', 'org-chart.mmd',
+  'flow.mmd',
+  'subgraphs.mmd',
+  '4geeks-journey.mmd',
+  'state.mmd',
+  'class.mmd',
+  'er.mmd',
+  'control-plane.mmd',
+  'architecture.mmd',
+  'org-chart.mmd',
 ];
 
 let session: Session;
@@ -97,9 +104,10 @@ const measure = (): Promise<Measured> =>
         to: line.dataset.to!,
         runs,
         corners,
-        head: m.length >= 6
-          ? { tipX: m[2]!, tipY: m[3]!, baseX: (m[0]! + m[4]!) / 2, baseY: (m[1]! + m[5]!) / 2 }
-          : null,
+        head:
+          m.length >= 6
+            ? { tipX: m[2]!, tipY: m[3]!, baseX: (m[0]! + m[4]!) / 2, baseY: (m[1]! + m[5]!) / 2 }
+            : null,
         lastX: at.x,
         lastY: at.y,
       };
@@ -160,8 +168,10 @@ describe('every edge is orthogonal', () => {
       for (const node of nodes) {
         for (const c of clusters) {
           const inside =
-            node.x >= c.x - 1 && node.x + node.w <= c.x + c.w + 1 &&
-            node.y >= c.y - 1 && node.y + node.h <= c.y + c.h + 1;
+            node.x >= c.x - 1 &&
+            node.x + node.w <= c.x + c.w + 1 &&
+            node.y >= c.y - 1 &&
+            node.y + node.h <= c.y + c.h + 1;
           if (inside) holds.get(c.id)!.add(node.id);
         }
       }
@@ -169,20 +179,28 @@ describe('every edge is orthogonal', () => {
         for (const node of nodes) {
           if (node.id === edge.from || node.id === edge.to) continue;
           // A group the edge has an end inside is not something it crosses.
-          if ([...holds].some(([id, set]) =>
-            (id === edge.from || id === edge.to) && set.has(node.id))) continue;
+          if (
+            [...holds].some(([id, set]) => (id === edge.from || id === edge.to) && set.has(node.id))
+          )
+            continue;
           for (const run of edge.runs) {
             // A run has no thickness, so the overlap on its own axis has to be
             // asked as "is the line inside the box" rather than measured — an
             // area test says no every time and the check silently passes.
             const span = (lo: number, hi: number, from: number, to: number) =>
-              lo === hi
-                ? (lo > from && lo < to ? 1 : -1)
-                : Math.min(hi, to) - Math.max(lo, from);
+              lo === hi ? (lo > from && lo < to ? 1 : -1) : Math.min(hi, to) - Math.max(lo, from);
             const w = span(
-              Math.min(run.x1, run.x2), Math.max(run.x1, run.x2), node.x + 3, node.x + node.w - 3);
+              Math.min(run.x1, run.x2),
+              Math.max(run.x1, run.x2),
+              node.x + 3,
+              node.x + node.w - 3,
+            );
             const h = span(
-              Math.min(run.y1, run.y2), Math.max(run.y1, run.y2), node.y + 3, node.y + node.h - 3);
+              Math.min(run.y1, run.y2),
+              Math.max(run.y1, run.y2),
+              node.y + 3,
+              node.y + node.h - 3,
+            );
             assert.ok(
               w <= 0 || h <= 0,
               `${name} ${edge.id}: runs ${Math.min(w, h).toFixed(0)} through ${node.id}`,
@@ -289,8 +307,10 @@ describe('panels, loops and the grid', () => {
         for (const run of edge.runs) {
           const long = Math.abs(run.x2 - run.x1) > 40 || Math.abs(run.y2 - run.y1) > 40;
           if (!long) continue;
-          const x1 = Math.min(run.x1, run.x2), x2 = Math.max(run.x1, run.x2);
-          const y1 = Math.min(run.y1, run.y2), y2 = Math.max(run.y1, run.y2);
+          const x1 = Math.min(run.x1, run.x2),
+            x2 = Math.max(run.x1, run.x2);
+          const y1 = Math.min(run.y1, run.y2),
+            y2 = Math.max(run.y1, run.y2);
           for (const n of nodes) {
             if (own.includes(n.id)) continue; // its own ends are governed by 6.2
             const touches = (px: number, py: number) =>
@@ -316,12 +336,20 @@ describe('panels, loops and the grid', () => {
       await mount(name);
       const { nodes } = await measure();
       for (const node of nodes) {
-        assert.equal(Math.round(node.w) % 8, 0, `${name} ${node.id}: width ${node.w} is off the grid`);
-        assert.equal(Math.round(node.h) % 8, 0, `${name} ${node.id}: height ${node.h} is off the grid`);
+        assert.equal(
+          Math.round(node.w) % 8,
+          0,
+          `${name} ${node.id}: width ${node.w} is off the grid`,
+        );
+        assert.equal(
+          Math.round(node.h) % 8,
+          0,
+          `${name} ${node.id}: height ${node.h} is off the grid`,
+        );
       }
       // Boxes whose middles are within half a box of each other are one row, and
       // a row has exactly one middle.
-      const band = (of: (n: typeof nodes[number]) => number) => {
+      const band = (of: (n: (typeof nodes)[number]) => number) => {
         const groups: number[][] = [];
         for (const value of nodes.map(of).sort((a, b) => a - b)) {
           const last = groups[groups.length - 1];

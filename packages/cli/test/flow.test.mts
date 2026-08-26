@@ -49,10 +49,20 @@ async function mount(source: string, options = {}) {
 // in route.ts) rather than the mermaid-fallback chord router — a flowchart or
 // a state diagram, wherever its file happens to sit.
 const GRAPH_FIXTURES = [
-  '4geeks-journey.mmd', 'architecture.mmd', 'control-plane.mmd', 'flow.mmd',
-  'messy.mmd', 'org-chart.mmd', 'state.mmd', 'subgraphs.mmd',
-  'blog/incident-response.mmd', 'blog/platform-layers.mmd', 'blog/prompt-anatomy.mmd',
-  'blog/pyenv-resolution.mmd', 'blog/python-or-java.mmd', 'blog/regex-engine.mmd',
+  '4geeks-journey.mmd',
+  'architecture.mmd',
+  'control-plane.mmd',
+  'flow.mmd',
+  'messy.mmd',
+  'org-chart.mmd',
+  'state.mmd',
+  'subgraphs.mmd',
+  'blog/incident-response.mmd',
+  'blog/platform-layers.mmd',
+  'blog/prompt-anatomy.mmd',
+  'blog/pyenv-resolution.mmd',
+  'blog/python-or-java.mmd',
+  'blog/regex-engine.mmd',
 ];
 
 /** A path's `d` attribute, as the run of points it was actually built from. */
@@ -70,7 +80,8 @@ function bendsOf(d: string): number {
   let bends = 0;
   let prev: 'h' | 'v' | null = null;
   for (let i = 1; i < pts.length; i++) {
-    const dx = pts[i]!.x - pts[i - 1]!.x, dy = pts[i]!.y - pts[i - 1]!.y;
+    const dx = pts[i]!.x - pts[i - 1]!.x,
+      dy = pts[i]!.y - pts[i - 1]!.y;
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
     const dir = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
     if (prev && dir !== prev) bends++;
@@ -83,8 +94,10 @@ function bendsOf(d: string): number {
  * exclusive-bounds test, so a shared endpoint (a fan, an arrival) never
  * counts as a crossing. */
 function segmentsCross(
-  a0: { x: number; y: number }, a1: { x: number; y: number },
-  b0: { x: number; y: number }, b1: { x: number; y: number },
+  a0: { x: number; y: number },
+  a1: { x: number; y: number },
+  b0: { x: number; y: number },
+  b1: { x: number; y: number },
 ): boolean {
   const d = (a1.x - a0.x) * (b1.y - b0.y) - (a1.y - a0.y) * (b1.x - b0.x);
   if (Math.abs(d) < 1e-6) return false;
@@ -93,7 +106,13 @@ function segmentsCross(
   return t > 0.02 && t < 0.98 && u > 0.02 && u < 0.98;
 }
 
-interface GraphEdgeDump { id: string | null; from: string | null; to: string | null; back: boolean; d: string }
+interface GraphEdgeDump {
+  id: string | null;
+  from: string | null;
+  to: string | null;
+  back: boolean;
+  d: string;
+}
 
 async function edgesOf(page: Session['page']): Promise<GraphEdgeDump[]> {
   return page.evaluate(() =>
@@ -130,7 +149,9 @@ describe('routing', () => {
       'gitgraph.mmd': 'gitgraph',
     };
     for (const [name, diagram] of Object.entries(drawn)) {
-      const reply = ok(await renderAny(session.page, readFileSync(join(fixtures, name), 'utf8'), {}));
+      const reply = ok(
+        await renderAny(session.page, readFileSync(join(fixtures, name), 'utf8'), {}),
+      );
       assert.equal(reply.path, 'flow', `${name} should use the drawn renderer`);
       assert.equal(reply.diagram, diagram);
     }
@@ -235,7 +256,11 @@ describe('routing', () => {
         .map((t) => t.textContent ?? '')
         .filter((t) => /<br\s*\/?>|&lt;br/i.test(t)),
     );
-    assert.deepEqual(rawTags, [], 'a <br> tag reached the drawn text instead of splitting into a caption');
+    assert.deepEqual(
+      rawTags,
+      [],
+      'a <br> tag reached the drawn text instead of splitting into a caption',
+    );
   });
 
   test('an edge label plate never sits on an edge other than its own', async () => {
@@ -258,11 +283,18 @@ describe('routing', () => {
           const ctm = (e as SVGGraphicsElement).getScreenCTM();
           if (!ctm) continue;
           for (let i = 2; i + 1 < nums.length; i += 2) {
-            const x1 = nums[i - 2]! * ctm.a + ctm.e, y1 = nums[i - 1]! * ctm.d + ctm.f;
-            const x2 = nums[i]! * ctm.a + ctm.e, y2 = nums[i + 1]! * ctm.d + ctm.f;
-            const sx1 = Math.min(x1, x2), sx2 = Math.max(x1, x2);
-            const sy1 = Math.min(y1, y2), sy2 = Math.max(y1, y2);
-            if (sx1 < b.right && sx2 > b.left && sy1 < b.bottom && sy2 > b.top) { count++; break; }
+            const x1 = nums[i - 2]! * ctm.a + ctm.e,
+              y1 = nums[i - 1]! * ctm.d + ctm.f;
+            const x2 = nums[i]! * ctm.a + ctm.e,
+              y2 = nums[i + 1]! * ctm.d + ctm.f;
+            const sx1 = Math.min(x1, x2),
+              sx2 = Math.max(x1, x2);
+            const sy1 = Math.min(y1, y2),
+              sy2 = Math.max(y1, y2);
+            if (sx1 < b.right && sx2 > b.left && sy1 < b.bottom && sy2 > b.top) {
+              count++;
+              break;
+            }
           }
         }
       }
@@ -299,17 +331,28 @@ describe('routing', () => {
           for (let i = 0; i + 1 < nums.length; i += 2) {
             pts.push({ x: nums[i]! * ctm.a + ctm.e, y: nums[i + 1]! * ctm.d + ctm.f });
           }
-          const cx = (b.left + b.right) / 2, cy = (b.top + b.bottom) / 2;
+          const cx = (b.left + b.right) / 2,
+            cy = (b.top + b.bottom) / 2;
           for (let i = 1; i < pts.length; i++) {
-            const p1 = pts[i - 1]!, p2 = pts[i]!;
-            const horiz = Math.abs(p1.y - p2.y) < 1, vert = Math.abs(p1.x - p2.x) < 1;
-            const onH = horiz && Math.abs(cy - p1.y) < b.height &&
-              cx > Math.min(p1.x, p2.x) && cx < Math.max(p1.x, p2.x);
-            const onV = vert && Math.abs(cx - p1.x) < b.width &&
-              cy > Math.min(p1.y, p2.y) && cy < Math.max(p1.y, p2.y);
+            const p1 = pts[i - 1]!,
+              p2 = pts[i]!;
+            const horiz = Math.abs(p1.y - p2.y) < 1,
+              vert = Math.abs(p1.x - p2.x) < 1;
+            const onH =
+              horiz &&
+              Math.abs(cy - p1.y) < b.height &&
+              cx > Math.min(p1.x, p2.x) &&
+              cx < Math.max(p1.x, p2.x);
+            const onV =
+              vert &&
+              Math.abs(cx - p1.x) < b.width &&
+              cy > Math.min(p1.y, p2.y) &&
+              cy < Math.max(p1.y, p2.y);
             const len = horiz ? Math.abs(p2.x - p1.x) : Math.abs(p2.y - p1.y);
-            if (onH && b.width > 0.6 * len) out.push(`${own}: plate width ${b.width.toFixed(1)} over 60% of ${len.toFixed(1)}`);
-            if (onV && (b.height > 0.4 * len || len < 64)) out.push(`${own}: plate on a ${len.toFixed(1)}-long vertical run`);
+            if (onH && b.width > 0.6 * len)
+              out.push(`${own}: plate width ${b.width.toFixed(1)} over 60% of ${len.toFixed(1)}`);
+            if (onV && (b.height > 0.4 * len || len < 64))
+              out.push(`${own}: plate on a ${len.toFixed(1)}-long vertical run`);
           }
         }
         return out;
@@ -327,7 +370,9 @@ describe('routing', () => {
     // by. Stability matters just as much: the video capture renders the same
     // chart repeatedly and would otherwise differ every frame.
     const uid = async (name: string) => {
-      const reply = ok(await renderAny(session.page, readFileSync(join(fixtures, name), 'utf8'), {}));
+      const reply = ok(
+        await renderAny(session.page, readFileSync(join(fixtures, name), 'utf8'), {}),
+      );
       assert.ok(!/<marker\b/.test(reply.svg), `${name} still hangs a mark off a shared id`);
       return /data-gc="([^"]+)"/.exec(reply.svg)?.[1];
     };
@@ -340,7 +385,9 @@ describe('routing', () => {
 
   test('a damaged paste is repaired before the drawn pipeline sees it', async () => {
     // The flow renderer had been skipping repair entirely; the router owns it now.
-    const reply = ok(await renderAny(session.page, readFileSync(join(fixtures, 'messy.mmd'), 'utf8'), {}));
+    const reply = ok(
+      await renderAny(session.page, readFileSync(join(fixtures, 'messy.mmd'), 'utf8'), {}),
+    );
     assert.equal(reply.path, 'flow');
     assert.ok(reply.repairs.length >= 3, 'each fix is reported back');
     assert.ok(reply.repairs.some((r) => r.rule === 'code-fence'));
@@ -362,8 +409,14 @@ describe('routing', () => {
     // diagram, and never a curve big enough to read as a bow instead of a
     // corner.
     for (const name of [
-      'flow.mmd', 'subgraphs.mmd', '4geeks-journey.mmd', 'control-plane.mmd',
-      'org-chart.mmd', 'state.mmd', 'class.mmd', 'er.mmd',
+      'flow.mmd',
+      'subgraphs.mmd',
+      '4geeks-journey.mmd',
+      'control-plane.mmd',
+      'org-chart.mmd',
+      'state.mmd',
+      'class.mmd',
+      'er.mmd',
     ]) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
       const paths = await session.page.$$eval('.gc-edge', (nodes) =>
@@ -375,7 +428,12 @@ describe('routing', () => {
         let cur: { x: number; y: number } | null = null;
         for (const command of commands) {
           const type = command[0];
-          const nums = command.slice(1).trim().split(/[\s,]+/).filter(Boolean).map(Number);
+          const nums = command
+            .slice(1)
+            .trim()
+            .split(/[\s,]+/)
+            .filter(Boolean)
+            .map(Number);
           if (type === 'M') {
             cur = { x: nums[0]!, y: nums[1]! };
           } else if (type === 'L') {
@@ -383,8 +441,10 @@ describe('routing', () => {
             if (cur) {
               const dx = Math.abs(next.x - cur.x);
               const dy = Math.abs(next.y - cur.y);
-              assert.ok(dx <= 1 || dy <= 1,
-                `${name}: a straight run moves diagonally (dx ${dx.toFixed(1)}, dy ${dy.toFixed(1)}) in "${d}"`);
+              assert.ok(
+                dx <= 1 || dy <= 1,
+                `${name}: a straight run moves diagonally (dx ${dx.toFixed(1)}, dy ${dy.toFixed(1)}) in "${d}"`,
+              );
             }
             cur = next;
           } else if (type === 'Q') {
@@ -392,8 +452,10 @@ describe('routing', () => {
             if (cur) {
               const dx = Math.abs(end.x - cur.x);
               const dy = Math.abs(end.y - cur.y);
-              assert.ok(dx <= 16 && dy <= 16,
-                `${name}: a corner arc is too big to read as a rounded elbow (dx ${dx.toFixed(1)}, dy ${dy.toFixed(1)}) in "${d}"`);
+              assert.ok(
+                dx <= 16 && dy <= 16,
+                `${name}: a corner arc is too big to read as a rounded elbow (dx ${dx.toFixed(1)}, dy ${dy.toFixed(1)}) in "${d}"`,
+              );
             }
             cur = end;
           }
@@ -439,27 +501,39 @@ describe('routing', () => {
     const names = [
       ...reply.css.matchAll(/\.gc-node\[data-id="F"\] \.gc-outline\{animation:(gc-t\d+)/g),
     ].map((m) => m[1]);
-    assert.ok(names.length > 0, 'F\'s outline has no animation track at all');
+    assert.ok(names.length > 0, "F's outline has no animation track at all");
     for (const name of names) {
-      const frame = reply.css.match(new RegExp(`@keyframes ${name}\\{((?:[^{}]|\\{[^{}]*\\})*)\\}`));
+      const frame = reply.css.match(
+        new RegExp(`@keyframes ${name}\\{((?:[^{}]|\\{[^{}]*\\})*)\\}`),
+      );
       assert.ok(frame, `no @keyframes block found for ${name}`);
-      assert.ok(!/[^-]stroke:/.test(frame![1]!), `${name} sets a stroke colour on F's outline: ${frame![1]}`);
+      assert.ok(
+        !/[^-]stroke:/.test(frame![1]!),
+        `${name} sets a stroke colour on F's outline: ${frame![1]}`,
+      );
     }
   });
 
-  test('a retry into a node with no forward in-edge arrives on the chart\'s flow-in face (DESIGN 6.2)', async () => {
+  test("a retry into a node with no forward in-edge arrives on the chart's flow-in face (DESIGN 6.2)", async () => {
     // messy.mmd: A -> B -> D -> A. A has no forward edge feeding it — it is
     // the start of the chain — so the retry back into it falls to DESIGN
     // 6.2's default: the chart's own flow-in face, top for a TB chart, not
     // whichever side the exit-corridor search happens to find clearest.
     await mount(readFileSync(join(fixtures, 'messy.mmd'), 'utf8'));
-    const d = await session.page.$eval('.gc-edge[data-from="D"][data-to="A"]', (el) => el.getAttribute('d') ?? '');
-    const aBox = await session.page.$eval('.gc-node[data-id="A"] .gc-outline', (el) => el.getBoundingClientRect());
+    const d = await session.page.$eval(
+      '.gc-edge[data-from="D"][data-to="A"]',
+      (el) => el.getAttribute('d') ?? '',
+    );
+    const aBox = await session.page.$eval('.gc-node[data-id="A"] .gc-outline', (el) =>
+      el.getBoundingClientRect(),
+    );
     const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
     const last = nums.length >= 2 ? [nums[nums.length - 2]!, nums[nums.length - 1]!] : null;
     assert.ok(last, `D->A: could not read the path's end point from "${d}"`);
-    assert.ok(last![1]! <= aBox.top + 1,
-      `D->A should arrive on A's top, landed at y=${last![1]} against a box top of ${aBox.top}`);
+    assert.ok(
+      last![1]! <= aBox.top + 1,
+      `D->A should arrive on A's top, landed at y=${last![1]} against a box top of ${aBox.top}`,
+    );
   });
 
   test('no edge has a redundant double-corner — a short jog sandwiched between two long runs', async () => {
@@ -471,9 +545,17 @@ describe('routing', () => {
     // vanishingly small win, when the lane already on that side was free.
     // Checked structurally, across every graph-family fixture, rather than
     // pinned to one edge's exact coordinates.
-    for (const name of ['flow.mmd', 'subgraphs.mmd', '4geeks-journey.mmd', 'state.mmd', 'org-chart.mmd']) {
+    for (const name of [
+      'flow.mmd',
+      'subgraphs.mmd',
+      '4geeks-journey.mmd',
+      'state.mmd',
+      'org-chart.mmd',
+    ]) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
-      const paths = await session.page.$$eval('.gc-edge', (nodes) => nodes.map((n) => n.getAttribute('d') ?? ''));
+      const paths = await session.page.$$eval('.gc-edge', (nodes) =>
+        nodes.map((n) => n.getAttribute('d') ?? ''),
+      );
       for (const d of paths) {
         // Every M/L/Q coordinate pair, in order — corners and their rounded
         // enter/leave points alike. A genuine notch shows up here as two
@@ -487,8 +569,14 @@ describe('routing', () => {
           // A short hop only counts as a notch if it sits between two runs
           // that are each clearly longer than it — a genuinely tiny diagram
           // (or a corner's own enter/leave pair on a small radius) is not one.
-          const before = i >= 2 ? Math.hypot(pts[i - 1]!.x - pts[i - 2]!.x, pts[i - 1]!.y - pts[i - 2]!.y) : Infinity;
-          const after = i + 2 < pts.length ? Math.hypot(pts[i + 2]!.x - pts[i + 1]!.x, pts[i + 2]!.y - pts[i + 1]!.y) : Infinity;
+          const before =
+            i >= 2
+              ? Math.hypot(pts[i - 1]!.x - pts[i - 2]!.x, pts[i - 1]!.y - pts[i - 2]!.y)
+              : Infinity;
+          const after =
+            i + 2 < pts.length
+              ? Math.hypot(pts[i + 2]!.x - pts[i + 1]!.x, pts[i + 2]!.y - pts[i + 1]!.y)
+              : Infinity;
           assert.ok(
             !(before > gap * 4 && after > gap * 4),
             `${name}: a ${gap.toFixed(1)}-unit jog sits between runs of ${before.toFixed(0)} and ${after.toFixed(0)} in "${d}"`,
@@ -507,13 +595,15 @@ describe('routing', () => {
     // this fixture is pinned to the exact numbers the gate measures.
     await mount(readFileSync(join(fixtures, 'state.mmd'), 'utf8'));
     const paths = await session.page.$$eval('.gc-edge', (nodes) =>
-      nodes.map((n) => ({ id: n.getAttribute('data-id'), d: n.getAttribute('d') ?? '' })));
+      nodes.map((n) => ({ id: n.getAttribute('data-id'), d: n.getAttribute('d') ?? '' })),
+    );
     for (const { id, d } of paths) {
       const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
       const pts: { x: number; y: number }[] = [];
       for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
       const segs: number[] = [];
-      for (let i = 1; i < pts.length; i++) segs.push(Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y));
+      for (let i = 1; i < pts.length; i++)
+        segs.push(Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y));
       for (let i = 1; i + 1 < segs.length; i++) {
         assert.ok(
           !(segs[i]! < 6 && segs[i - 1]! > 24 && segs[i + 1]! > 24),
@@ -535,13 +625,15 @@ describe('routing', () => {
     ] as const) {
       await mount(readFileSync(join(dir, name), 'utf8'));
       const paths = await session.page.$$eval('.gc-edge', (nodes) =>
-        nodes.map((n) => ({ id: n.getAttribute('data-id'), d: n.getAttribute('d') ?? '' })));
+        nodes.map((n) => ({ id: n.getAttribute('data-id'), d: n.getAttribute('d') ?? '' })),
+      );
       for (const { id, d } of paths) {
         const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
         const pts: { x: number; y: number }[] = [];
         for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
         let len = 0;
-        for (let i = 1; i < pts.length; i++) len += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
+        for (let i = 1; i < pts.length; i++)
+          len += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
         assert.ok(len >= 16, `${name} ${id}: edge is ${len.toFixed(1)} units — nodes are touching`);
       }
     }
@@ -569,7 +661,13 @@ describe('routing', () => {
         const nodeList = [...document.querySelectorAll('.gc-node[data-id]')].map((n) => {
           const shape = n.querySelector('.gc-outline, .gc-fill') as SVGGraphicsElement | null;
           const b = shape?.getBBox();
-          return { id: n.getAttribute('data-id')!, x: b?.x ?? 0, y: b?.y ?? 0, width: b?.width ?? 0, height: b?.height ?? 0 };
+          return {
+            id: n.getAttribute('data-id')!,
+            x: b?.x ?? 0,
+            y: b?.y ?? 0,
+            width: b?.width ?? 0,
+            height: b?.height ?? 0,
+          };
         });
         const edgeList = [...document.querySelectorAll('.gc-edge[data-id]')].map((e) => ({
           id: e.getAttribute('data-id'),
@@ -585,17 +683,25 @@ describe('routing', () => {
         const pts: { x: number; y: number }[] = [];
         for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
         for (let i = 1; i < pts.length; i++) {
-          const a = pts[i - 1]!, b = pts[i]!;
-          const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
-          const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
+          const a = pts[i - 1]!,
+            b = pts[i]!;
+          const x1 = Math.min(a.x, b.x),
+            x2 = Math.max(a.x, b.x);
+          const y1 = Math.min(a.y, b.y),
+            y2 = Math.max(a.y, b.y);
           // A corner's own rounding, not a run worth measuring.
           if (x2 - x1 < 8 && y2 - y1 < 8) continue;
           for (const node of nodes) {
             if (node.id === from || node.id === to) continue;
             const hit =
-              x1 < node.x + node.width + CLEAR && x2 > node.x - CLEAR &&
-              y1 < node.y + node.height + CLEAR && y2 > node.y - CLEAR;
-            assert.ok(!hit, `${name} ${id}: passes within ${CLEAR} units of "${node.id}", which it does not connect to`);
+              x1 < node.x + node.width + CLEAR &&
+              x2 > node.x - CLEAR &&
+              y1 < node.y + node.height + CLEAR &&
+              y2 > node.y - CLEAR;
+            assert.ok(
+              !hit,
+              `${name} ${id}: passes within ${CLEAR} units of "${node.id}", which it does not connect to`,
+            );
           }
         }
       }
@@ -615,15 +721,23 @@ describe('routing', () => {
     // than treating it as an anchor another edge has to fan around.
     for (const name of ['state.mmd', '4geeks-journey.mmd']) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
-      const paths = await session.page.$$eval('.gc-edge', (nodes) => nodes.map((n) => n.getAttribute('d') ?? ''));
-      interface ColSeg { v: boolean; c: number; a: number; b: number }
+      const paths = await session.page.$$eval('.gc-edge', (nodes) =>
+        nodes.map((n) => n.getAttribute('d') ?? ''),
+      );
+      interface ColSeg {
+        v: boolean;
+        c: number;
+        a: number;
+        b: number;
+      }
       const segsOf = (d: string) => {
         const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
         const pts: { x: number; y: number }[] = [];
         for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
         const segs: ColSeg[] = [];
         for (let i = 1; i < pts.length; i++) {
-          const p1 = pts[i - 1]!, p2 = pts[i]!;
+          const p1 = pts[i - 1]!,
+            p2 = pts[i]!;
           if (Math.abs(p1.x - p2.x) < 0.5 && Math.abs(p1.y - p2.y) > 8) {
             segs.push({ v: true, c: p1.x, a: Math.min(p1.y, p2.y), b: Math.max(p1.y, p2.y) });
           } else if (Math.abs(p1.y - p2.y) < 0.5 && Math.abs(p1.x - p2.x) > 8) {
@@ -637,14 +751,18 @@ describe('routing', () => {
         Math.abs(u.x - w.x) < 1.5 && Math.abs(u.y - w.y) < 1.5;
       for (let i = 0; i < parsed.length; i++) {
         for (let j = i + 1; j < parsed.length; j++) {
-          for (const p of parsed[i]!.segs) for (const q of parsed[j]!.segs) {
-            if (p.v !== q.v || Math.abs(p.c - q.c) > 1.5) continue;
-            const overlap = Math.min(p.b, q.b) - Math.max(p.a, q.a);
-            if (overlap <= 8) continue;
-            // A bus is fine: both edges leave the same point or arrive at the same one.
-            if (same(parsed[i]!.start, parsed[j]!.start) || same(parsed[i]!.end, parsed[j]!.end)) continue;
-            assert.fail(`${name}: two edges run collinear for ${overlap.toFixed(1)} units with no shared endpoint`);
-          }
+          for (const p of parsed[i]!.segs)
+            for (const q of parsed[j]!.segs) {
+              if (p.v !== q.v || Math.abs(p.c - q.c) > 1.5) continue;
+              const overlap = Math.min(p.b, q.b) - Math.max(p.a, q.a);
+              if (overlap <= 8) continue;
+              // A bus is fine: both edges leave the same point or arrive at the same one.
+              if (same(parsed[i]!.start, parsed[j]!.start) || same(parsed[i]!.end, parsed[j]!.end))
+                continue;
+              assert.fail(
+                `${name}: two edges run collinear for ${overlap.toFixed(1)} units with no shared endpoint`,
+              );
+            }
         }
       }
     }
@@ -656,15 +774,23 @@ describe('routing', () => {
     // forward edge more than 1.75x its own endpoints' Manhattan distance,
     // the gate's own detour measure (plus 32 for two elbows).
     await mount(readFileSync(join(fixtures, 'blog', 'regex-engine.mmd'), 'utf8'));
-    const edge = await session.page.$eval('.gc-edge[data-from="DM"][data-to="DT"]', (n) => n.getAttribute('d') ?? '');
+    const edge = await session.page.$eval(
+      '.gc-edge[data-from="DM"][data-to="DT"]',
+      (n) => n.getAttribute('d') ?? '',
+    );
     const nums = (edge.match(/-?[\d.]+/g) ?? []).map(Number);
     const pts: { x: number; y: number }[] = [];
     for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
     let len = 0;
-    for (let i = 1; i < pts.length; i++) len += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
-    const a = pts[0]!, b = pts[pts.length - 1]!;
+    for (let i = 1; i < pts.length; i++)
+      len += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
+    const a = pts[0]!,
+      b = pts[pts.length - 1]!;
     const direct = Math.hypot(b.x - a.x, b.y - a.y) + 32;
-    assert.ok(len < 1.75 * direct, `Domain -> Dot is ${len.toFixed(1)} units, more than 1.75x its ${direct.toFixed(1)}-unit direct distance`);
+    assert.ok(
+      len < 1.75 * direct,
+      `Domain -> Dot is ${len.toFixed(1)} units, more than 1.75x its ${direct.toFixed(1)}-unit direct distance`,
+    );
   });
 
   test('state.mmd: a back edge carries gc-back so the gate does not score it as a detour', async () => {
@@ -675,8 +801,14 @@ describe('routing', () => {
     // id-shape fallback for spotting a back edge, and the loop was scored as
     // a detouring forward edge.
     await mount(readFileSync(join(fixtures, 'state.mmd'), 'utf8'));
-    const cls = await session.page.$eval('.gc-edge[data-from="Paused"][data-to="Running"]', (n) => n.getAttribute('class') ?? '');
-    assert.ok(cls.split(/\s+/).includes('gc-back'), `Paused -> Running is missing gc-back: "${cls}"`);
+    const cls = await session.page.$eval(
+      '.gc-edge[data-from="Paused"][data-to="Running"]',
+      (n) => n.getAttribute('class') ?? '',
+    );
+    assert.ok(
+      cls.split(/\s+/).includes('gc-back'),
+      `Paused -> Running is missing gc-back: "${cls}"`,
+    );
   });
 
   test('a loop can enter from a different side than it left, when that side is clearer', async () => {
@@ -686,12 +818,22 @@ describe('routing', () => {
     // even though F has nothing below it. F should take the top, where it
     // actually has room, independent of which side I used.
     await mount(readFileSync(join(fixtures, '4geeks-journey.mmd'), 'utf8'));
-    const d = await session.page.$eval('.gc-edge[data-from="I"][data-to="F"]', (el) => el.getAttribute('d') ?? '');
-    const fBox = await session.page.$eval('.gc-node[data-id="F"] .gc-outline', (el) => el.getBoundingClientRect());
-    const last = d.match(/[\d.]+,[\d.]+(?=\s*$)/)?.[0]?.split(',').map(Number);
+    const d = await session.page.$eval(
+      '.gc-edge[data-from="I"][data-to="F"]',
+      (el) => el.getAttribute('d') ?? '',
+    );
+    const fBox = await session.page.$eval('.gc-node[data-id="F"] .gc-outline', (el) =>
+      el.getBoundingClientRect(),
+    );
+    const last = d
+      .match(/[\d.]+,[\d.]+(?=\s*$)/)?.[0]
+      ?.split(',')
+      .map(Number);
     assert.ok(last, `I->F: could not read the path's end point from "${d}"`);
-    assert.ok(last[1]! <= fBox.top + fBox.height / 2 + 1,
-      `I->F should arrive on F's top half, landed at y=${last[1]} against a box from ${fBox.top} to ${fBox.top + fBox.height}`);
+    assert.ok(
+      last[1]! <= fBox.top + fBox.height / 2 + 1,
+      `I->F should arrive on F's top half, landed at y=${last[1]} against a box from ${fBox.top} to ${fBox.top + fBox.height}`,
+    );
   });
 
   test('a blocked edge dodges only what is in its way, not the whole diagram', async () => {
@@ -702,11 +844,21 @@ describe('routing', () => {
     // but this checks it holds for an ordinary forward edge, across every
     // graph-family fixture at once). No edge should need to travel further
     // than a modest margin outside the union of every node's own box.
-    for (const name of ['flow.mmd', 'subgraphs.mmd', '4geeks-journey.mmd', 'state.mmd', 'control-plane.mmd', 'architecture.mmd', 'org-chart.mmd']) {
+    for (const name of [
+      'flow.mmd',
+      'subgraphs.mmd',
+      '4geeks-journey.mmd',
+      'state.mmd',
+      'control-plane.mmd',
+      'architecture.mmd',
+      'org-chart.mmd',
+    ]) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
       const bounds = await session.page.evaluate(() => {
         const svg = document.querySelector('svg')!;
-        const nodes = [...svg.querySelectorAll('.gc-node .gc-outline')].map((n) => (n as SVGGraphicsElement).getBBox());
+        const nodes = [...svg.querySelectorAll('.gc-node .gc-outline')].map((n) =>
+          (n as SVGGraphicsElement).getBBox(),
+        );
         const x0 = Math.min(...nodes.map((b) => b.x));
         const x1 = Math.max(...nodes.map((b) => b.x + b.width));
         const y0 = Math.min(...nodes.map((b) => b.y));
@@ -719,10 +871,14 @@ describe('routing', () => {
         const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
         const xs = nums.filter((_, i) => i % 2 === 0);
         const ys = nums.filter((_, i) => i % 2 === 1);
-        assert.ok(Math.min(...xs) >= bounds.x0 - 1 && Math.max(...xs) <= bounds.x1 + 1,
-          `${name}: an edge reaches x outside [${bounds.x0.toFixed(0)},${bounds.x1.toFixed(0)}] in "${d}"`);
-        assert.ok(Math.min(...ys) >= bounds.y0 - 1 && Math.max(...ys) <= bounds.y1 + 1,
-          `${name}: an edge reaches y outside [${bounds.y0.toFixed(0)},${bounds.y1.toFixed(0)}] in "${d}"`);
+        assert.ok(
+          Math.min(...xs) >= bounds.x0 - 1 && Math.max(...xs) <= bounds.x1 + 1,
+          `${name}: an edge reaches x outside [${bounds.x0.toFixed(0)},${bounds.x1.toFixed(0)}] in "${d}"`,
+        );
+        assert.ok(
+          Math.min(...ys) >= bounds.y0 - 1 && Math.max(...ys) <= bounds.y1 + 1,
+          `${name}: an edge reaches y outside [${bounds.y0.toFixed(0)},${bounds.y1.toFixed(0)}] in "${d}"`,
+        );
       }
     }
   });
@@ -745,8 +901,10 @@ describe('routing', () => {
     ]);
     const topGap = row.y - (rule.y + rule.height);
     const bottomGap = panel.y + panel.height - (row.y + row.height);
-    assert.ok(Math.abs(topGap - bottomGap) < 3,
-      `gap above the row is ${topGap.toFixed(1)}, below the panel floor is ${bottomGap.toFixed(1)} — not centred`);
+    assert.ok(
+      Math.abs(topGap - bottomGap) < 3,
+      `gap above the row is ${topGap.toFixed(1)}, below the panel floor is ${bottomGap.toFixed(1)} — not centred`,
+    );
   });
 
   test('no two cluster kickers overlap', async () => {
@@ -757,13 +915,22 @@ describe('routing', () => {
     // Codespaces". Both kickers are now short enough to clear their own panel.
     await mount(readFileSync(join(fixtures, 'blog', 'platform-layers.mmd'), 'utf8'));
     const boxes = await session.page.$$eval('.gc-cluster-kicker', (nodes) =>
-      nodes.map((n) => ({ txt: n.textContent ?? '', b: (n as SVGGraphicsElement).getBoundingClientRect() })),
+      nodes.map((n) => ({
+        txt: n.textContent ?? '',
+        b: (n as SVGGraphicsElement).getBoundingClientRect(),
+      })),
     );
-    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
-      const a = boxes[i]!.b, b = boxes[j]!.b;
-      const overlaps = a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
-      assert.ok(!overlaps, `"${boxes[i]!.txt}" overlaps "${boxes[j]!.txt}"`);
-    }
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]!.b,
+          b = boxes[j]!.b;
+        const overlaps =
+          a.left < b.right - 1 &&
+          b.left < a.right - 1 &&
+          a.top < b.bottom - 1 &&
+          b.top < a.bottom - 1;
+        assert.ok(!overlaps, `"${boxes[i]!.txt}" overlaps "${boxes[j]!.txt}"`);
+      }
   });
 
   test('every panel hugs its contents — 24±8 padding, nothing escaping (DESIGN 2.6)', async () => {
@@ -775,14 +942,17 @@ describe('routing', () => {
     // 2.6 check (gate.mjs), reimplemented so a regression fails a test run
     // rather than waiting for the next `pnpm gate`.
     const withClusters = [
-      'architecture.mmd', 'control-plane.mmd', 'subgraphs.mmd',
-      'blog/platform-layers.mmd', 'blog/prompt-anatomy.mmd', 'blog/pyenv-resolution.mmd',
+      'architecture.mmd',
+      'control-plane.mmd',
+      'subgraphs.mmd',
+      'blog/platform-layers.mmd',
+      'blog/prompt-anatomy.mmd',
+      'blog/pyenv-resolution.mmd',
     ];
     for (const name of withClusters) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
-      const panels = await session.page.$$eval(
-        '.gc-cluster',
-        (clusters) => clusters.map((c) => {
+      const panels = await session.page.$$eval('.gc-cluster', (clusters) =>
+        clusters.map((c) => {
           const rect = (el: Element) => (el as SVGGraphicsElement).getBoundingClientRect();
           const box = c.querySelector('.gc-cluster-box');
           const cb = rect(box!);
@@ -791,13 +961,19 @@ describe('routing', () => {
             .map((t) => rect(t));
           for (const n of document.querySelectorAll('.gc-node')) {
             const nb = rect(n);
-            const cx = (nb.left + nb.right) / 2, cy = (nb.top + nb.bottom) / 2;
+            const cx = (nb.left + nb.right) / 2,
+              cy = (nb.top + nb.bottom) / 2;
             if (cx > cb.left && cx < cb.right && cy > cb.top && cy < cb.bottom) inside.push(nb);
           }
           return {
             id: c.getAttribute('data-id'),
             box: { left: cb.left, right: cb.right, top: cb.top, bottom: cb.bottom },
-            inside: inside.map((b) => ({ left: b.left, right: b.right, top: b.top, bottom: b.bottom })),
+            inside: inside.map((b) => ({
+              left: b.left,
+              right: b.right,
+              top: b.top,
+              bottom: b.bottom,
+            })),
           };
         }),
       );
@@ -808,15 +984,28 @@ describe('routing', () => {
         const b = Math.max(...p.inside.map((b) => b.bottom));
         for (const box of p.inside) {
           assert.ok(
-            box.left >= p.box.left - 1 && box.right <= p.box.right + 1 &&
-            box.top >= p.box.top - 1 && box.bottom <= p.box.bottom + 1,
+            box.left >= p.box.left - 1 &&
+              box.right <= p.box.right + 1 &&
+              box.top >= p.box.top - 1 &&
+              box.bottom <= p.box.bottom + 1,
             `${name} ${p.id}: content escapes its panel`,
           );
         }
-        const padL = l - p.box.left, padR = p.box.right - r, padB = p.box.bottom - b;
-        assert.ok(Math.abs(padL - 24) <= 8, `${name} ${p.id}: left padding ${padL.toFixed(1)}, not 24±8`);
-        assert.ok(Math.abs(padR - 24) <= 8, `${name} ${p.id}: right padding ${padR.toFixed(1)}, not 24±8`);
-        assert.ok(Math.abs(padB - 24) <= 8, `${name} ${p.id}: bottom padding ${padB.toFixed(1)}, not 24±8`);
+        const padL = l - p.box.left,
+          padR = p.box.right - r,
+          padB = p.box.bottom - b;
+        assert.ok(
+          Math.abs(padL - 24) <= 8,
+          `${name} ${p.id}: left padding ${padL.toFixed(1)}, not 24±8`,
+        );
+        assert.ok(
+          Math.abs(padR - 24) <= 8,
+          `${name} ${p.id}: right padding ${padR.toFixed(1)}, not 24±8`,
+        );
+        assert.ok(
+          Math.abs(padB - 24) <= 8,
+          `${name} ${p.id}: bottom padding ${padB.toFixed(1)}, not 24±8`,
+        );
       }
     }
   });
@@ -830,8 +1019,12 @@ describe('routing', () => {
     // centre. This is the gate's own 7.3 rows check (gate.mjs), reimplemented
     // so a regression fails a test run rather than waiting for `pnpm gate`.
     const withClusters = [
-      'architecture.mmd', 'control-plane.mmd', 'subgraphs.mmd',
-      'blog/platform-layers.mmd', 'blog/prompt-anatomy.mmd', 'blog/pyenv-resolution.mmd',
+      'architecture.mmd',
+      'control-plane.mmd',
+      'subgraphs.mmd',
+      'blog/platform-layers.mmd',
+      'blog/prompt-anatomy.mmd',
+      'blog/pyenv-resolution.mmd',
     ];
     for (const name of withClusters) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
@@ -841,21 +1034,37 @@ describe('routing', () => {
           .filter((e) => e.classList.contains('gc-cluster'))
           .map((c) => {
             const b = rect(c.querySelector('.gc-cluster-box, rect')!);
-            return { id: c.getAttribute('data-id') ?? 'panel', left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+            return {
+              id: c.getAttribute('data-id') ?? 'panel',
+              left: b.left,
+              right: b.right,
+              top: b.top,
+              bottom: b.bottom,
+            };
           });
         const nodeBoxes: typeof clusterBoxes = [];
         for (const n of els) {
           if (!n.classList.contains('gc-node')) continue;
           const nb = rect(n);
           if (!nb.width) continue;
-          const cx = (nb.left + nb.right) / 2, cy = (nb.top + nb.bottom) / 2;
-          const inPanel = clusterBoxes.some((b) => cx > b.left && cx < b.right && cy > b.top && cy < b.bottom);
-          if (!inPanel) nodeBoxes.push({ id: n.getAttribute('data-id') ?? 'node', left: nb.left, right: nb.right, top: nb.top, bottom: nb.bottom });
+          const cx = (nb.left + nb.right) / 2,
+            cy = (nb.top + nb.bottom) / 2;
+          const inPanel = clusterBoxes.some(
+            (b) => cx > b.left && cx < b.right && cy > b.top && cy < b.bottom,
+          );
+          if (!inPanel)
+            nodeBoxes.push({
+              id: n.getAttribute('data-id') ?? 'node',
+              left: nb.left,
+              right: nb.right,
+              top: nb.top,
+              bottom: nb.bottom,
+            });
         }
         return [...clusterBoxes, ...nodeBoxes];
       });
       if (boxes.length < 2) continue;
-      type Box = typeof boxes[number];
+      type Box = (typeof boxes)[number];
       const rows: { top: number; bottom: number; items: Box[] }[] = [];
       for (const bx of [...boxes].sort((a, b) => a.top - b.top)) {
         const row = rows.find((r) => bx.top < r.bottom - 1 && bx.bottom > r.top + 1);
@@ -868,10 +1077,12 @@ describe('routing', () => {
         }
       }
       if (rows.length < 2) continue;
-      const allL = Math.min(...boxes.map((b) => b.left)), allR = Math.max(...boxes.map((b) => b.right));
+      const allL = Math.min(...boxes.map((b) => b.left)),
+        allR = Math.max(...boxes.map((b) => b.right));
       const contentCentre = (allL + allR) / 2;
       for (const row of rows) {
-        const l = Math.min(...row.items.map((b) => b.left)), r = Math.max(...row.items.map((b) => b.right));
+        const l = Math.min(...row.items.map((b) => b.left)),
+          r = Math.max(...row.items.map((b) => b.right));
         const off = (l + r) / 2 - contentCentre;
         assert.ok(
           Math.abs(off) <= 8,
@@ -891,8 +1102,12 @@ describe('routing', () => {
     // the gate's own 2.3 row-gap check (gate.mjs), reimplemented so a
     // regression fails a test run rather than waiting for `pnpm gate`.
     const withClusters = [
-      'architecture.mmd', 'control-plane.mmd', 'subgraphs.mmd',
-      'blog/platform-layers.mmd', 'blog/prompt-anatomy.mmd', 'blog/pyenv-resolution.mmd',
+      'architecture.mmd',
+      'control-plane.mmd',
+      'subgraphs.mmd',
+      'blog/platform-layers.mmd',
+      'blog/prompt-anatomy.mmd',
+      'blog/pyenv-resolution.mmd',
     ];
     for (const name of withClusters) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
@@ -902,21 +1117,37 @@ describe('routing', () => {
           .filter((e) => e.classList.contains('gc-cluster'))
           .map((c) => {
             const b = rect(c.querySelector('.gc-cluster-box, rect')!);
-            return { id: c.getAttribute('data-id') ?? 'panel', left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+            return {
+              id: c.getAttribute('data-id') ?? 'panel',
+              left: b.left,
+              right: b.right,
+              top: b.top,
+              bottom: b.bottom,
+            };
           });
         const nodeBoxes: typeof clusterBoxes = [];
         for (const n of els) {
           if (!n.classList.contains('gc-node')) continue;
           const nb = rect(n);
           if (!nb.width) continue;
-          const cx = (nb.left + nb.right) / 2, cy = (nb.top + nb.bottom) / 2;
-          const inPanel = clusterBoxes.some((b) => cx > b.left && cx < b.right && cy > b.top && cy < b.bottom);
-          if (!inPanel) nodeBoxes.push({ id: n.getAttribute('data-id') ?? 'node', left: nb.left, right: nb.right, top: nb.top, bottom: nb.bottom });
+          const cx = (nb.left + nb.right) / 2,
+            cy = (nb.top + nb.bottom) / 2;
+          const inPanel = clusterBoxes.some(
+            (b) => cx > b.left && cx < b.right && cy > b.top && cy < b.bottom,
+          );
+          if (!inPanel)
+            nodeBoxes.push({
+              id: n.getAttribute('data-id') ?? 'node',
+              left: nb.left,
+              right: nb.right,
+              top: nb.top,
+              bottom: nb.bottom,
+            });
         }
         return [...clusterBoxes, ...nodeBoxes];
       });
       if (boxes.length < 2) continue;
-      type Box = typeof boxes[number];
+      type Box = (typeof boxes)[number];
       const rows: { top: number; bottom: number; items: Box[] }[] = [];
       for (const bx of [...boxes].sort((a, b) => a.top - b.top)) {
         const row = rows.find((r) => bx.top < r.bottom - 1 && bx.bottom > r.top + 1);
@@ -934,10 +1165,13 @@ describe('routing', () => {
       for (let ri = 0; ri < rows.length; ri++) {
         const row = rows[ri]!;
         if (row.items.length < 2) continue;
-        const neighbours = [rows[ri - 1], rows[ri + 1]].filter((r): r is typeof row => Boolean(r)).flatMap((r) => r.items);
+        const neighbours = [rows[ri - 1], rows[ri + 1]]
+          .filter((r): r is typeof row => Boolean(r))
+          .flatMap((r) => r.items);
         const aligned = (b: Box) => neighbours.some((o) => Math.abs(centreOf(o) - centreOf(b)) < 8);
         for (let k = 1; k < row.items.length; k++) {
-          const a = row.items[k - 1]!, b = row.items[k]!;
+          const a = row.items[k - 1]!,
+            b = row.items[k]!;
           const gap = b.left - a.right;
           if (Math.abs(gap - 32) <= 8) continue;
           assert.ok(
@@ -962,8 +1196,10 @@ describe('routing', () => {
       for (const e of await edgesOf(session.page)) {
         const bends = bendsOf(e.d);
         const limit = e.back ? 4 : 2;
-        assert.ok(bends <= limit,
-          `${name} ${e.id}: ${bends} bends, over the ${limit}-bend budget for a ${e.back ? 'back' : 'forward'} edge`);
+        assert.ok(
+          bends <= limit,
+          `${name} ${e.id}: ${bends} bends, over the ${limit}-bend budget for a ${e.back ? 'back' : 'forward'} edge`,
+        );
       }
     }
   });
@@ -980,11 +1216,15 @@ describe('routing', () => {
         const pts = ptsOf(e.d);
         if (pts.length < 2) continue;
         let len = 0;
-        for (let i = 1; i < pts.length; i++) len += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
-        const a = pts[0]!, b = pts[pts.length - 1]!;
+        for (let i = 1; i < pts.length; i++)
+          len += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
+        const a = pts[0]!,
+          b = pts[pts.length - 1]!;
         const direct = Math.hypot(b.x - a.x, b.y - a.y) + 32;
-        assert.ok(len <= 1.4 * direct + 0.5,
-          `${name} ${e.id}: drawn length ${len.toFixed(1)} is more than 1.4x its ${direct.toFixed(1)}-unit direct distance`);
+        assert.ok(
+          len <= 1.4 * direct + 0.5,
+          `${name} ${e.id}: drawn length ${len.toFixed(1)} is more than 1.4x its ${direct.toFixed(1)}-unit direct distance`,
+        );
       }
     }
   });
@@ -999,16 +1239,27 @@ describe('routing', () => {
     // something to route around (route.ts's `crossingCost`).
     for (const name of GRAPH_FIXTURES) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
-      const forward = (await edgesOf(session.page)).filter((e) => !e.back).map((e) => ({ ...e, pts: ptsOf(e.d) }));
+      const forward = (await edgesOf(session.page))
+        .filter((e) => !e.back)
+        .map((e) => ({ ...e, pts: ptsOf(e.d) }));
       for (let i = 0; i < forward.length; i++) {
         for (let j = i + 1; j < forward.length; j++) {
-          const a = forward[i]!, b = forward[j]!;
-          if (a.pts[0] && b.pts[0] && Math.abs(a.pts[0].x - b.pts[0].x) < 1.5 && Math.abs(a.pts[0].y - b.pts[0].y) < 1.5) continue;
+          const a = forward[i]!,
+            b = forward[j]!;
+          if (
+            a.pts[0] &&
+            b.pts[0] &&
+            Math.abs(a.pts[0].x - b.pts[0].x) < 1.5 &&
+            Math.abs(a.pts[0].y - b.pts[0].y) < 1.5
+          )
+            continue;
           let hit = false;
-          outer:
-          for (let p = 1; p < a.pts.length; p++) {
+          outer: for (let p = 1; p < a.pts.length; p++) {
             for (let q = 1; q < b.pts.length; q++) {
-              if (segmentsCross(a.pts[p - 1]!, a.pts[p]!, b.pts[q - 1]!, b.pts[q]!)) { hit = true; break outer; }
+              if (segmentsCross(a.pts[p - 1]!, a.pts[p]!, b.pts[q - 1]!, b.pts[q]!)) {
+                hit = true;
+                break outer;
+              }
             }
           }
           assert.ok(!hit, `${name}: forward edges ${a.id} and ${b.id} cross`);
@@ -1037,10 +1288,13 @@ describe('routing', () => {
         for (let i = 1; i < pts.length; i++) {
           len += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
         }
-        const a = pts[0]!, b = pts[pts.length - 1]!;
+        const a = pts[0]!,
+          b = pts[pts.length - 1]!;
         const manhattan = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
-        assert.ok(len <= manhattan + 128 + 0.5,
-          `${name} ${e.id}: loop-back drawn length ${len.toFixed(1)} is more than its ${manhattan.toFixed(1)}-unit corridor (+128)`);
+        assert.ok(
+          len <= manhattan + 128 + 0.5,
+          `${name} ${e.id}: loop-back drawn length ${len.toFixed(1)} is more than its ${manhattan.toFixed(1)}-unit corridor (+128)`,
+        );
       }
     }
   });
@@ -1059,14 +1313,22 @@ describe('routing', () => {
         const nodeList = [...document.querySelectorAll('.gc-node[data-id]')].map((n) => {
           const shape = n.querySelector('.gc-outline, .gc-fill') as SVGGraphicsElement | null;
           const b = shape?.getBBox();
-          return { id: n.getAttribute('data-id')!, x: b?.x ?? 0, y: b?.y ?? 0, width: b?.width ?? 0, height: b?.height ?? 0 };
+          return {
+            id: n.getAttribute('data-id')!,
+            x: b?.x ?? 0,
+            y: b?.y ?? 0,
+            width: b?.width ?? 0,
+            height: b?.height ?? 0,
+          };
         });
         const edgeList = [...document.querySelectorAll('.gc-edge[data-id]')].map((e) => {
           const id = e.getAttribute('data-id')!;
           const head = document.querySelector(`.gc-arrow[data-id="${CSS.escape(id)}"]`);
           const hb = head?.getBoundingClientRect();
           return {
-            id, to: e.getAttribute('data-to'), d: e.getAttribute('d') ?? '',
+            id,
+            to: e.getAttribute('data-to'),
+            d: e.getAttribute('d') ?? '',
             head: hb ? { x: hb.x, y: hb.y } : null,
           };
         });
@@ -1079,24 +1341,32 @@ describe('routing', () => {
         const pts = ptsOf(e.d);
         if (!box || pts.length < 2) continue;
         const p = pts[pts.length - 1]!;
-        const dl = Math.abs(p.x - box.x), dr = Math.abs(p.x - (box.x + box.width));
-        const dt = Math.abs(p.y - box.y), db = Math.abs(p.y - (box.y + box.height));
+        const dl = Math.abs(p.x - box.x),
+          dr = Math.abs(p.x - (box.x + box.width));
+        const dt = Math.abs(p.y - box.y),
+          db = Math.abs(p.y - (box.y + box.height));
         const nearest = Math.min(dl, dr, dt, db);
-        const side = nearest === dl ? 'left' : nearest === dr ? 'right' : nearest === dt ? 'top' : 'bottom';
+        const side =
+          nearest === dl ? 'left' : nearest === dr ? 'right' : nearest === dt ? 'top' : 'bottom';
         const key = `${e.to}:${side}`;
         (bySide.get(key) ?? bySide.set(key, []).get(key)!).push(e);
       }
       for (const [key, members] of bySide) {
         if (members.length < 2) continue;
         const heads = new Set(
-          members.filter((m) => m.head).map((m) => `${Math.round(m.head!.x)},${Math.round(m.head!.y)}`),
+          members
+            .filter((m) => m.head)
+            .map((m) => `${Math.round(m.head!.x)},${Math.round(m.head!.y)}`),
         );
-        assert.ok(heads.size <= 1, `${name} ${key}: ${heads.size} distinct arrowheads for edges sharing a side`);
+        assert.ok(
+          heads.size <= 1,
+          `${name} ${key}: ${heads.size} distinct arrowheads for edges sharing a side`,
+        );
       }
     }
   });
 
-  test('every graph fixture centres a Z edge\'s middle segment in its free channel (DESIGN 6.1)', async () => {
+  test("every graph fixture centres a Z edge's middle segment in its free channel (DESIGN 6.1)", async () => {
     // The gate's own `offChannel` check (gate.mjs), reimplemented so a test
     // can see it too: a Z (or V-H-V) route's middle segment should sit at
     // the midpoint of the gap between the nearest obstacle edges flanking
@@ -1133,9 +1403,11 @@ describe('routing', () => {
         if (e.back) continue;
         const pts = ptsOf(e.d);
         // Collapse to straight runs, same as the gate.
-        const runs: { dir: 'h' | 'v'; a: { x: number; y: number }; b: { x: number; y: number } }[] = [];
+        const runs: { dir: 'h' | 'v'; a: { x: number; y: number }; b: { x: number; y: number } }[] =
+          [];
         for (let i = 1; i < pts.length; i++) {
-          const dx = pts[i]!.x - pts[i - 1]!.x, dy = pts[i]!.y - pts[i - 1]!.y;
+          const dx = pts[i]!.x - pts[i - 1]!.x,
+            dy = pts[i]!.y - pts[i - 1]!.y;
           if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
           const dir = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
           const last = runs[runs.length - 1];
@@ -1145,27 +1417,43 @@ describe('routing', () => {
         if (runs.length !== 3 || runs[0]!.dir !== runs[2]!.dir) continue;
         const mid = runs[1]!;
         if (mid.dir === 'v') {
-          const x = (mid.a.x + mid.b.x) / 2, y1 = Math.min(mid.a.y, mid.b.y), y2 = Math.max(mid.a.y, mid.b.y);
-          const lefts = obstacles.filter((o) => o.right <= x + 1 && o.bottom > y1 && o.top < y2).map((o) => o.right);
-          const rights = obstacles.filter((o) => o.left >= x - 1 && o.bottom > y1 && o.top < y2).map((o) => o.left);
+          const x = (mid.a.x + mid.b.x) / 2,
+            y1 = Math.min(mid.a.y, mid.b.y),
+            y2 = Math.max(mid.a.y, mid.b.y);
+          const lefts = obstacles
+            .filter((o) => o.right <= x + 1 && o.bottom > y1 && o.top < y2)
+            .map((o) => o.right);
+          const rights = obstacles
+            .filter((o) => o.left >= x - 1 && o.bottom > y1 && o.top < y2)
+            .map((o) => o.left);
           if (!lefts.length || !rights.length) continue;
           const want = (Math.max(...lefts) + Math.min(...rights)) / 2;
-          assert.ok(Math.abs(x - want) <= 4,
-            `${name} ${e.id}: vertical middle segment at x=${x.toFixed(1)}, channel wants x=${want.toFixed(1)}`);
+          assert.ok(
+            Math.abs(x - want) <= 4,
+            `${name} ${e.id}: vertical middle segment at x=${x.toFixed(1)}, channel wants x=${want.toFixed(1)}`,
+          );
         } else {
-          const y = (mid.a.y + mid.b.y) / 2, x1 = Math.min(mid.a.x, mid.b.x), x2 = Math.max(mid.a.x, mid.b.x);
-          const tops = obstacles.filter((o) => o.bottom <= y + 1 && o.right > x1 && o.left < x2).map((o) => o.bottom);
-          const bottoms = obstacles.filter((o) => o.top >= y - 1 && o.right > x1 && o.left < x2).map((o) => o.top);
+          const y = (mid.a.y + mid.b.y) / 2,
+            x1 = Math.min(mid.a.x, mid.b.x),
+            x2 = Math.max(mid.a.x, mid.b.x);
+          const tops = obstacles
+            .filter((o) => o.bottom <= y + 1 && o.right > x1 && o.left < x2)
+            .map((o) => o.bottom);
+          const bottoms = obstacles
+            .filter((o) => o.top >= y - 1 && o.right > x1 && o.left < x2)
+            .map((o) => o.top);
           if (!tops.length || !bottoms.length) continue;
           const want = (Math.max(...tops) + Math.min(...bottoms)) / 2;
-          assert.ok(Math.abs(y - want) <= 4,
-            `${name} ${e.id}: horizontal middle segment at y=${y.toFixed(1)}, channel wants y=${want.toFixed(1)}`);
+          assert.ok(
+            Math.abs(y - want) <= 4,
+            `${name} ${e.id}: horizontal middle segment at y=${y.toFixed(1)}, channel wants y=${want.toFixed(1)}`,
+          );
         }
       }
     }
   });
 
-  test('every graph fixture fans a node\'s ports in the order of their targets (DESIGN 6.1)', async () => {
+  test("every graph fixture fans a node's ports in the order of their targets (DESIGN 6.1)", async () => {
     // Several edges leaving (or arriving at) one face of a node are ordered
     // by where the far end sits along that face's axis — the leftmost
     // target gets the leftmost port on a horizontal face, the topmost gets
@@ -1178,7 +1466,13 @@ describe('routing', () => {
         const nodeList = [...document.querySelectorAll('.gc-node[data-id]')].map((n) => {
           const shape = n.querySelector('.gc-outline, .gc-fill') as SVGGraphicsElement | null;
           const b = shape?.getBBox();
-          return { id: n.getAttribute('data-id')!, x: b?.x ?? 0, y: b?.y ?? 0, width: b?.width ?? 0, height: b?.height ?? 0 };
+          return {
+            id: n.getAttribute('data-id')!,
+            x: b?.x ?? 0,
+            y: b?.y ?? 0,
+            width: b?.width ?? 0,
+            height: b?.height ?? 0,
+          };
         });
         const edgeList = [...document.querySelectorAll('.gc-edge[data-id]')].map((e) => ({
           id: e.getAttribute('data-id'),
@@ -1190,19 +1484,33 @@ describe('routing', () => {
         return { nodes: nodeList, edges: edgeList };
       });
       const nodeById = new Map(nodes.map((n) => [n.id, n]));
-      interface Member { id: string; along: number; target: number }
+      interface Member {
+        id: string;
+        along: number;
+        target: number;
+      }
       const groups = new Map<string, Member[]>();
-      const addSide = (nodeId: string, point: { x: number; y: number }, edgeId: string, other: string) => {
+      const addSide = (
+        nodeId: string,
+        point: { x: number; y: number },
+        edgeId: string,
+        other: string,
+      ) => {
         const box = nodeById.get(nodeId);
         const otherBox = nodeById.get(other);
         if (!box || !otherBox) return;
-        const dl = Math.abs(point.x - box.x), dr = Math.abs(point.x - (box.x + box.width));
-        const dt = Math.abs(point.y - box.y), db = Math.abs(point.y - (box.y + box.height));
+        const dl = Math.abs(point.x - box.x),
+          dr = Math.abs(point.x - (box.x + box.width));
+        const dt = Math.abs(point.y - box.y),
+          db = Math.abs(point.y - (box.y + box.height));
         const nearest = Math.min(dl, dr, dt, db);
         const vertical = nearest === dt || nearest === db; // a top/bottom face
-        const side = nearest === dl ? 'left' : nearest === dr ? 'right' : nearest === dt ? 'top' : 'bottom';
+        const side =
+          nearest === dl ? 'left' : nearest === dr ? 'right' : nearest === dt ? 'top' : 'bottom';
         const along = vertical ? point.x : point.y;
-        const target = vertical ? otherBox.x + otherBox.width / 2 : otherBox.y + otherBox.height / 2;
+        const target = vertical
+          ? otherBox.x + otherBox.width / 2
+          : otherBox.y + otherBox.height / 2;
         const key = `${nodeId}:${side}`;
         (groups.get(key) ?? groups.set(key, []).get(key)!).push({ id: edgeId, along, target });
       };
@@ -1217,11 +1525,16 @@ describe('routing', () => {
         if (members.length < 2) continue;
         // Two ports under 8 apart are a deliberate aligned channel (DESIGN
         // 2.6), not a fan — there is no order to check.
-        const spread = Math.max(...members.map((m) => m.along)) - Math.min(...members.map((m) => m.along));
+        const spread =
+          Math.max(...members.map((m) => m.along)) - Math.min(...members.map((m) => m.along));
         if (spread < 8) continue;
         const byPort = [...members].sort((a, b) => a.along - b.along).map((m) => m.id);
         const byTarget = [...members].sort((a, b) => a.target - b.target).map((m) => m.id);
-        assert.deepEqual(byPort, byTarget, `${name} ${key}: ports are not ordered by target position`);
+        assert.deepEqual(
+          byPort,
+          byTarget,
+          `${name} ${key}: ports are not ordered by target position`,
+        );
       }
     }
   });
@@ -1247,7 +1560,13 @@ describe('routing', () => {
         const nodeList = [...document.querySelectorAll('.gc-node[data-id]')].map((n) => {
           const shape = n.querySelector('.gc-outline, .gc-fill') as SVGGraphicsElement | null;
           const b = shape?.getBBox();
-          return { id: n.getAttribute('data-id')!, x: b?.x ?? 0, y: b?.y ?? 0, width: b?.width ?? 0, height: b?.height ?? 0 };
+          return {
+            id: n.getAttribute('data-id')!,
+            x: b?.x ?? 0,
+            y: b?.y ?? 0,
+            width: b?.width ?? 0,
+            height: b?.height ?? 0,
+          };
         });
         const edgeList = [...document.querySelectorAll('.gc-edge[data-id]')].map((e) => ({
           id: e.getAttribute('data-id'),
@@ -1263,22 +1582,30 @@ describe('routing', () => {
         const n = id ? nodeById.get(id) : undefined;
         return n ? { left: n.x, right: n.x + n.width, top: n.y, bottom: n.y + n.height } : null;
       };
-      const sideOfEnd = (end: { x: number; y: number }, rb: { left: number; right: number; top: number; bottom: number }) => {
-        const dT = Math.abs(end.y - rb.top), dB = Math.abs(end.y - rb.bottom);
-        const dL = Math.abs(end.x - rb.left), dR = Math.abs(end.x - rb.right);
+      const sideOfEnd = (
+        end: { x: number; y: number },
+        rb: { left: number; right: number; top: number; bottom: number },
+      ) => {
+        const dT = Math.abs(end.y - rb.top),
+          dB = Math.abs(end.y - rb.bottom);
+        const dL = Math.abs(end.x - rb.left),
+          dR = Math.abs(end.x - rb.right);
         const m = Math.min(dT, dB, dL, dR);
         return m === dT ? 'top' : m === dB ? 'bottom' : m === dL ? 'left' : 'right';
       };
-      let downCount = 0, rightCount = 0;
+      let downCount = 0,
+        rightCount = 0;
       for (const e of edges) {
         if (e.back) continue;
-        const ra = rect(e.from), rb = rect(e.to);
+        const ra = rect(e.from),
+          rb = rect(e.to);
         if (!ra || !rb) continue;
         if (rb.top >= ra.bottom - 1) downCount++;
         else if (rb.left >= ra.right - 1) rightCount++;
       }
       const dirTB = flow ? /^(TB|TD|BT)$/.test(flow) : downCount >= rightCount;
-      const geom = edges.map((e) => ({ e, pts: ptsOf(e.d), ra: rect(e.from), rb: rect(e.to) }))
+      const geom = edges
+        .map((e) => ({ e, pts: ptsOf(e.d), ra: rect(e.from), rb: rect(e.to) }))
         .filter((g) => g.ra && g.rb && g.pts.length > 0);
       const flowIn = new Map<string, string>();
       for (const g of geom) {
@@ -1289,13 +1616,27 @@ describe('routing', () => {
       for (const g of geom) {
         const { e, pts, ra, rb } = g;
         const arrives = sideOfEnd(pts[pts.length - 1]!, rb!);
-        const below = rb!.top >= ra!.bottom - 1, above = rb!.bottom <= ra!.top + 1;
-        const right = rb!.left >= ra!.right - 1, leftOf = rb!.right <= ra!.left + 1;
+        const below = rb!.top >= ra!.bottom - 1,
+          above = rb!.bottom <= ra!.top + 1;
+        const right = rb!.left >= ra!.right - 1,
+          leftOf = rb!.right <= ra!.left + 1;
         const want = e.back
           ? (e.to && flowIn.get(e.to)) || defaultFlowIn
           : dirTB
-            ? (below ? 'top' : right ? 'left' : leftOf ? 'right' : 'bottom')
-            : (right ? 'left' : below ? 'top' : above ? 'bottom' : 'right');
+            ? below
+              ? 'top'
+              : right
+                ? 'left'
+                : leftOf
+                  ? 'right'
+                  : 'bottom'
+            : right
+              ? 'left'
+              : below
+                ? 'top'
+                : above
+                  ? 'bottom'
+                  : 'right';
         assert.equal(arrives, want, `${name} ${e.id}: arrives ${arrives}, wants ${want}`);
       }
     }
@@ -1317,7 +1658,8 @@ describe('routing', () => {
         for (const n of document.querySelectorAll<SVGGElement>('.gc-node[data-id]')) {
           const shape = n.querySelector('.gc-outline, .gc-fill') as SVGGraphicsElement | null;
           const b = shape?.getBBox();
-          if (b) out[n.getAttribute('data-id')!] = { x: b.x, y: b.y, width: b.width, height: b.height };
+          if (b)
+            out[n.getAttribute('data-id')!] = { x: b.x, y: b.y, width: b.width, height: b.height };
         }
         return out;
       });
@@ -1329,12 +1671,18 @@ describe('routing', () => {
           .filter((b): b is { x: number; y: number; width: number; height: number } => !!b);
         if (!ownBoxes.length) continue;
         for (let i = 2; i < pts.length - 1; i++) {
-          const a = pts[i - 1]!, b = pts[i]!;
-          const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
-          const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
+          const a = pts[i - 1]!,
+            b = pts[i]!;
+          const x1 = Math.min(a.x, b.x),
+            x2 = Math.max(a.x, b.x);
+          const y1 = Math.min(a.y, b.y),
+            y2 = Math.max(a.y, b.y);
           for (const box of ownBoxes) {
-            const hit = x1 < box.x + box.width - 2 && x2 > box.x + 2 &&
-              y1 < box.y + box.height - 2 && y2 > box.y + 2;
+            const hit =
+              x1 < box.x + box.width - 2 &&
+              x2 > box.x + 2 &&
+              y1 < box.y + box.height - 2 &&
+              y2 > box.y + 2;
             assert.ok(!hit, `${name} ${e.id}: interior segment ${i} pierces its own box`);
           }
         }
@@ -1354,9 +1702,11 @@ describe('routing', () => {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
       for (const e of await edgesOf(session.page)) {
         const pts = ptsOf(e.d);
-        const runs: { dir: 'h' | 'v'; a: { x: number; y: number }; b: { x: number; y: number } }[] = [];
+        const runs: { dir: 'h' | 'v'; a: { x: number; y: number }; b: { x: number; y: number } }[] =
+          [];
         for (let i = 1; i < pts.length; i++) {
-          const dx = pts[i]!.x - pts[i - 1]!.x, dy = pts[i]!.y - pts[i - 1]!.y;
+          const dx = pts[i]!.x - pts[i - 1]!.x,
+            dy = pts[i]!.y - pts[i - 1]!.y;
           if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
           const dir = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
           const last = runs[runs.length - 1];
@@ -1364,13 +1714,17 @@ describe('routing', () => {
           else runs.push({ dir, a: pts[i - 1]!, b: pts[i]! });
         }
         for (let k = 0; k + 2 < runs.length; k++) {
-          const s0 = runs[k]!, s1 = runs[k + 1]!, s2 = runs[k + 2]!;
+          const s0 = runs[k]!,
+            s1 = runs[k + 1]!,
+            s2 = runs[k + 2]!;
           if (s0.dir !== s2.dir) continue;
           const len1 = Math.hypot(s1.b.x - s1.a.x, s1.b.y - s1.a.y);
           const d0 = s0.dir === 'h' ? Math.sign(s0.b.x - s0.a.x) : Math.sign(s0.b.y - s0.a.y);
           const d2 = s2.dir === 'h' ? Math.sign(s2.b.x - s2.a.x) : Math.sign(s2.b.y - s2.a.y);
-          assert.ok(!(d0 === -d2 && len1 < 24),
-            `${name} ${e.id}: hairpin — a ${len1.toFixed(1)}-unit run doubles back on itself`);
+          assert.ok(
+            !(d0 === -d2 && len1 < 24),
+            `${name} ${e.id}: hairpin — a ${len1.toFixed(1)}-unit run doubles back on itself`,
+          );
         }
       }
     }
@@ -1391,7 +1745,13 @@ describe('routing', () => {
         const nodeList = [...document.querySelectorAll('.gc-node[data-id]')].map((n) => {
           const shape = n.querySelector('.gc-outline, .gc-fill') as SVGGraphicsElement | null;
           const b = shape?.getBBox();
-          return { id: n.getAttribute('data-id')!, x: b?.x ?? 0, y: b?.y ?? 0, width: b?.width ?? 0, height: b?.height ?? 0 };
+          return {
+            id: n.getAttribute('data-id')!,
+            x: b?.x ?? 0,
+            y: b?.y ?? 0,
+            width: b?.width ?? 0,
+            height: b?.height ?? 0,
+          };
         });
         const edgeList = [...document.querySelectorAll('.gc-edge[data-id]')].map((e) => ({
           id: e.getAttribute('data-id'),
@@ -1412,15 +1772,20 @@ describe('routing', () => {
       for (const e of edges) {
         if (e.back || !e.from || !e.to) continue;
         if (children.get(e.from) !== 1 || parents.get(e.to) !== 1) continue;
-        const ra = nodeById.get(e.from), rb = nodeById.get(e.to);
+        const ra = nodeById.get(e.from),
+          rb = nodeById.get(e.to);
         if (!ra || !rb) continue;
-        const dxc = Math.abs((ra.x + ra.width / 2) - (rb.x + rb.width / 2));
-        const dyc = Math.abs((ra.y + ra.height / 2) - (rb.y + rb.height / 2));
+        const dxc = Math.abs(ra.x + ra.width / 2 - (rb.x + rb.width / 2));
+        const dyc = Math.abs(ra.y + ra.height / 2 - (rb.y + rb.height / 2));
         if (rb.y >= ra.y + ra.height - 1 && dxc > 1.5 && dxc < (ra.width + rb.width) / 2) {
-          assert.fail(`${name} ${e.id}: sole child off its parent's centre line by ${dxc.toFixed(1)}`);
+          assert.fail(
+            `${name} ${e.id}: sole child off its parent's centre line by ${dxc.toFixed(1)}`,
+          );
         }
         if (rb.x >= ra.x + ra.width - 1 && dyc > 1.5 && dyc < (ra.height + rb.height) / 2) {
-          assert.fail(`${name} ${e.id}: sole child off its parent's centre line by ${dyc.toFixed(1)}`);
+          assert.fail(
+            `${name} ${e.id}: sole child off its parent's centre line by ${dyc.toFixed(1)}`,
+          );
         }
       }
     }
@@ -1446,15 +1811,22 @@ describe('routing', () => {
     for (const name of GRAPH_FIXTURES) {
       await mount(readFileSync(join(fixtures, name), 'utf8'));
       const paths = await session.page.$$eval('.gc-edge', (nodes) =>
-        nodes.filter((n) => !n.classList.contains('gc-back')).map((n) => n.getAttribute('d') ?? ''));
-      interface CorridorSeg { v: boolean; c: number; a: number; b: number }
+        nodes.filter((n) => !n.classList.contains('gc-back')).map((n) => n.getAttribute('d') ?? ''),
+      );
+      interface CorridorSeg {
+        v: boolean;
+        c: number;
+        a: number;
+        b: number;
+      }
       const segsOf = (d: string): CorridorSeg[] => {
         const nums = (d.match(/-?[\d.]+/g) ?? []).map(Number);
         const pts: { x: number; y: number }[] = [];
         for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
         const segs: CorridorSeg[] = [];
         for (let i = 1; i < pts.length; i++) {
-          const p1 = pts[i - 1]!, p2 = pts[i]!;
+          const p1 = pts[i - 1]!,
+            p2 = pts[i]!;
           if (Math.abs(p1.x - p2.x) < 0.5 && Math.abs(p1.y - p2.y) > 8) {
             segs.push({ v: true, c: p1.x, a: Math.min(p1.y, p2.y), b: Math.max(p1.y, p2.y) });
           } else if (Math.abs(p1.y - p2.y) < 0.5 && Math.abs(p1.x - p2.x) > 8) {
@@ -1466,14 +1838,17 @@ describe('routing', () => {
       const parsed = paths.map(segsOf);
       for (let i = 0; i < parsed.length; i++) {
         for (let j = i + 1; j < parsed.length; j++) {
-          for (const p of parsed[i]!) for (const q of parsed[j]!) {
-            if (p.v !== q.v) continue;
-            const gap = Math.abs(p.c - q.c);
-            if (gap < 1.5 || gap >= 16) continue;
-            const overlap = Math.min(p.b, q.b) - Math.max(p.a, q.a);
-            if (overlap <= 16) continue;
-            assert.fail(`${name}: two edges run ${gap.toFixed(1)} apart for ${overlap.toFixed(1)} units through the same corridor`);
-          }
+          for (const p of parsed[i]!)
+            for (const q of parsed[j]!) {
+              if (p.v !== q.v) continue;
+              const gap = Math.abs(p.c - q.c);
+              if (gap < 1.5 || gap >= 16) continue;
+              const overlap = Math.min(p.b, q.b) - Math.max(p.a, q.a);
+              if (overlap <= 16) continue;
+              assert.fail(
+                `${name}: two edges run ${gap.toFixed(1)} apart for ${overlap.toFixed(1)} units through the same corridor`,
+              );
+            }
         }
       }
     }
@@ -1495,10 +1870,17 @@ describe('routing', () => {
         const nodeList = [...document.querySelectorAll('.gc-node[data-id]')].map((n) => {
           const shape = n.querySelector('.gc-outline, .gc-fill');
           const b = rect(shape ?? n);
-          return { id: n.getAttribute('data-id')!, left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+          return {
+            id: n.getAttribute('data-id')!,
+            left: b.left,
+            right: b.right,
+            top: b.top,
+            bottom: b.bottom,
+          };
         });
         const edgeList = [...document.querySelectorAll('.gc-edge[data-id]')].map((e) => ({
-          from: e.getAttribute('data-from'), to: e.getAttribute('data-to'),
+          from: e.getAttribute('data-from'),
+          to: e.getAttribute('data-to'),
         }));
         const panelList = [...document.querySelectorAll('.gc-cluster')]
           .map((c) => {
@@ -1507,38 +1889,59 @@ describe('routing', () => {
           })
           .filter((b): b is DOMRect => b !== null)
           .map((b) => ({ left: b.left, right: b.right, top: b.top, bottom: b.bottom }));
-        const diamondList = [...document.querySelectorAll('.gc-node.gc-kind-decision, .gc-node.gc-kind-diamond')]
-          .map((n) => { const b = rect(n); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom }; });
+        const diamondList = [
+          ...document.querySelectorAll('.gc-node.gc-kind-decision, .gc-node.gc-kind-diamond'),
+        ].map((n) => {
+          const b = rect(n);
+          return { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+        });
         return { nodes: nodeList, edges: edgeList, panels: panelList, diamonds: diamondList };
       });
       const panelOf = (n: { left: number; right: number; top: number; bottom: number }) => {
-        const cx = (n.left + n.right) / 2, cy = (n.top + n.bottom) / 2;
+        const cx = (n.left + n.right) / 2,
+          cy = (n.top + n.bottom) / 2;
         return panels.findIndex((p) => cx > p.left && cx < p.right && cy > p.top && cy < p.bottom);
       };
-      for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i]!, b = nodes[j]!;
-        const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-        const ca = (a.top + a.bottom) / 2, cb = (b.top + b.bottom) / 2;
-        if (!(overlap > 4 && Math.abs(ca - cb) > 1.5)) continue;
-        if (panelOf(a) !== panelOf(b)) continue;
-        const aHeight = a.bottom - a.top, bHeight = b.bottom - b.top;
-        const spanned = diamonds.some((d) => d.top <= Math.min(ca, cb) && d.bottom >= Math.max(ca, cb)) ||
-          (aHeight >= 1.5 * bHeight && a.top <= cb && a.bottom >= cb) ||
-          (bHeight >= 1.5 * aHeight && b.top <= ca && b.bottom >= ca);
-        if (spanned) continue;
-        if (edges.some((e) => (e.from === a.id && e.to === b.id) || (e.from === b.id && e.to === a.id))) continue;
-        // flow.mmd's B (the decision) and E (two hops downstream, past its
-        // own "yes" child C) overlap by exactly the gate's own 16-unit
-        // floor under this suite's manim scene — B's diamond is tall enough
-        // to hold its own two children's centres but, at 8 units short,
-        // not quite E's, which shares C's row rather than a row of B's own.
-        // Pre-existing under this scene (`pnpm gate`'s default-scene render
-        // does not hit it) and untouched by the regex-engine fix this file
-        // guards; left as a known gap rather than folded into that fix's
-        // scope.
-        if (name === 'flow.mmd' && ((a.id === 'B' && b.id === 'E') || (a.id === 'E' && b.id === 'B'))) continue;
-        assert.fail(`${name}: ${a.id} and ${b.id} overlap bands (${overlap.toFixed(1)}) without sharing a row`);
-      }
+      for (let i = 0; i < nodes.length; i++)
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i]!,
+            b = nodes[j]!;
+          const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          const ca = (a.top + a.bottom) / 2,
+            cb = (b.top + b.bottom) / 2;
+          if (!(overlap > 4 && Math.abs(ca - cb) > 1.5)) continue;
+          if (panelOf(a) !== panelOf(b)) continue;
+          const aHeight = a.bottom - a.top,
+            bHeight = b.bottom - b.top;
+          const spanned =
+            diamonds.some((d) => d.top <= Math.min(ca, cb) && d.bottom >= Math.max(ca, cb)) ||
+            (aHeight >= 1.5 * bHeight && a.top <= cb && a.bottom >= cb) ||
+            (bHeight >= 1.5 * aHeight && b.top <= ca && b.bottom >= ca);
+          if (spanned) continue;
+          if (
+            edges.some(
+              (e) => (e.from === a.id && e.to === b.id) || (e.from === b.id && e.to === a.id),
+            )
+          )
+            continue;
+          // flow.mmd's B (the decision) and E (two hops downstream, past its
+          // own "yes" child C) overlap by exactly the gate's own 16-unit
+          // floor under this suite's manim scene — B's diamond is tall enough
+          // to hold its own two children's centres but, at 8 units short,
+          // not quite E's, which shares C's row rather than a row of B's own.
+          // Pre-existing under this scene (`pnpm gate`'s default-scene render
+          // does not hit it) and untouched by the regex-engine fix this file
+          // guards; left as a known gap rather than folded into that fix's
+          // scope.
+          if (
+            name === 'flow.mmd' &&
+            ((a.id === 'B' && b.id === 'E') || (a.id === 'E' && b.id === 'B'))
+          )
+            continue;
+          assert.fail(
+            `${name}: ${a.id} and ${b.id} overlap bands (${overlap.toFixed(1)}) without sharing a row`,
+          );
+        }
     }
   });
 
@@ -1561,10 +1964,12 @@ describe('routing', () => {
           const b = shape?.getBBox();
           return { x: b?.x ?? 0, y: b?.y ?? 0, width: b?.width ?? 0, height: b?.height ?? 0 };
         };
-        const pathList = [...document.querySelectorAll('.gc-node.gc-role-path[data-id]')].map((n) => ({
-          id: n.getAttribute('data-id')!,
-          ...box(n),
-        }));
+        const pathList = [...document.querySelectorAll('.gc-node.gc-role-path[data-id]')].map(
+          (n) => ({
+            id: n.getAttribute('data-id')!,
+            ...box(n),
+          }),
+        );
         const allList = [...document.querySelectorAll('.gc-node[data-id]')]
           .filter((n) => !n.classList.contains('gc-kind-marker'))
           .map((n) => ({ id: n.getAttribute('data-id')!, ...box(n) }));
@@ -1574,7 +1979,12 @@ describe('routing', () => {
           back: e.classList.contains('gc-back'),
         }));
         const clusterList = [...document.querySelectorAll('.gc-cluster')];
-        return { pathNodes: pathList, allNodes: allList, edges: edgeList, clusters: clusterList.length };
+        return {
+          pathNodes: pathList,
+          allNodes: allList,
+          edges: edgeList,
+          clusters: clusterList.length,
+        };
       });
       if (pathNodes.length < 4 || clusters) continue;
 
@@ -1594,7 +2004,8 @@ describe('routing', () => {
       // The chain wraps once some step lands below and to the left of the one before it.
       let wraps = false;
       for (let k = 1; k < chain.length; k++) {
-        const a = byId.get(chain[k - 1]!)!, b = byId.get(chain[k]!)!;
+        const a = byId.get(chain[k - 1]!)!,
+          b = byId.get(chain[k]!)!;
         if (b.y >= a.y + a.height - 1 && b.x + b.width <= a.x + 1) wraps = true;
       }
       if (!wraps) continue;
@@ -1638,8 +2049,14 @@ describe('the build follows the graph, not reading order', () => {
       return { early: opacityAt('WEB', 0.12), late: opacityAt('WEB', 0.9) };
     });
     assert.ok(reply.nodes > 0);
-    assert.ok(found.early < 0.5, `Application's own member is already visible at 12% of the loop (${found.early})`);
-    assert.ok(found.late > 0.5, `Application's own member never arrives by 90% of the loop (${found.late})`);
+    assert.ok(
+      found.early < 0.5,
+      `Application's own member is already visible at 12% of the loop (${found.early})`,
+    );
+    assert.ok(
+      found.late > 0.5,
+      `Application's own member never arrives by 90% of the loop (${found.late})`,
+    );
   });
 
   test('independent roots still build together, not one after another', async () => {
@@ -1669,15 +2086,24 @@ describe('the build follows the graph, not reading order', () => {
       return starts.map((s, i) => (i === 0 ? 0 : s - starts[i - 1]!));
     });
     for (const gap of gaps.slice(1)) {
-      assert.ok(gap < 400, `two independent roots are ${gap}ms apart — that reads as a relay, not a row`);
+      assert.ok(
+        gap < 400,
+        `two independent roots are ${gap}ms apart — that reads as a relay, not a row`,
+      );
     }
   });
 });
 
 describe('timeline, gantt and journey', () => {
   test('all three are drawn, and report their own type', async () => {
-    for (const [name, diagram] of [['timeline', 'timeline'], ['gantt', 'gantt'], ['journey', 'journey']] as const) {
-      const reply = ok(await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}));
+    for (const [name, diagram] of [
+      ['timeline', 'timeline'],
+      ['gantt', 'gantt'],
+      ['journey', 'journey'],
+    ] as const) {
+      const reply = ok(
+        await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
+      );
       assert.equal(reply.path, 'flow', `${name} should use the drawn renderer`);
       assert.equal(reply.diagram, diagram);
       assert.ok(reply.cycle > 0, `${name} should animate`);
@@ -1709,7 +2135,10 @@ describe('timeline, gantt and journey', () => {
         `${bars[i]!.id} does not start later than ${bars[i - 1]!.id}`,
       );
     }
-    assert.ok(bars.every((b) => b.w > 4), 'every bar has width');
+    assert.ok(
+      bars.every((b) => b.w > 4),
+      'every bar has width',
+    );
   });
 
   test('every gantt bar carries its own label inside it, no exceptions', async () => {
@@ -1727,7 +2156,8 @@ describe('timeline, gantt and journey', () => {
       })),
     );
     assert.equal(items.length, 5);
-    for (const item of items) assert.ok(item.onBar, `${item.id}'s label is not drawn inside its own bar`);
+    for (const item of items)
+      assert.ok(item.onBar, `${item.id}'s label is not drawn inside its own bar`);
   });
 
   test('gantt states and milestones are distinguishable', async () => {
@@ -1742,7 +2172,8 @@ describe('timeline, gantt and journey', () => {
         active: of('.gc-chron-bar.gc-state-active'),
         crit: of('.gc-chron-bar.gc-state-crit'),
         plain: of('.gc-chron-bar:not([class*="gc-state"]):not(.gc-milestone)'),
-        milestones: document.querySelectorAll('.gc-chron-bar.gc-milestone:not(.gc-legend-swatch)').length,
+        milestones: document.querySelectorAll('.gc-chron-bar.gc-milestone:not(.gc-legend-swatch)')
+          .length,
       };
     });
     assert.equal(fills.milestones, 2, 'both milestones drawn');
@@ -1792,7 +2223,7 @@ describe('timeline, gantt and journey', () => {
       for (const a of anims) a.pause();
       const cycleMs = Math.max(...anims.map((a) => a.effect!.getTiming().duration as number));
       const lead = svg.querySelector('.gc-chron-lead')!;
-      const items = [...svg.querySelectorAll('.gc-chron-item .gc-chron-dot')];  // the deposited mark is the dot; its label fades in after
+      const items = [...svg.querySelectorAll('.gc-chron-item .gc-chron-dot')]; // the deposited mark is the dot; its label fades in after
       const at = (pct: number) => {
         for (const a of anims) a.currentTime = cycleMs * pct;
         return {
@@ -1809,9 +2240,18 @@ describe('timeline, gantt and journey', () => {
       return { leadWasVisible, grew, notAllAtOnce, endedInvisible };
     });
     assert.ok(info.leadWasVisible, 'the lead dot is never visible anywhere in the build');
-    assert.ok(info.grew, 'the number of deposited periods never increases — nothing is being left behind');
-    assert.ok(info.notAllAtOnce, 'every period is deposited in the same instant, not staggered by the lead');
-    assert.ok(info.endedInvisible, 'the lead dot is still on screen once the build is long finished');
+    assert.ok(
+      info.grew,
+      'the number of deposited periods never increases — nothing is being left behind',
+    );
+    assert.ok(
+      info.notAllAtOnce,
+      'every period is deposited in the same instant, not staggered by the lead',
+    );
+    assert.ok(
+      info.endedInvisible,
+      'the lead dot is still on screen once the build is long finished',
+    );
   });
 
   test('a timeline keeps its sections and every event', async () => {
@@ -1837,15 +2277,25 @@ describe('timeline, gantt and journey', () => {
     await mount(readFileSync(join(fixtures, 'timeline.mmd'), 'utf8'));
     const overlaps = await session.page.evaluate(() => {
       const texts = [...document.querySelectorAll('.gc-chron-period, .gc-chron-event')]
-        .map((t) => ({ txt: t.textContent ?? '', b: (t as SVGGraphicsElement).getBoundingClientRect() }))
+        .map((t) => ({
+          txt: t.textContent ?? '',
+          b: (t as SVGGraphicsElement).getBoundingClientRect(),
+        }))
         .filter((t) => t.b.width);
       const out: string[] = [];
-      for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {
-        const a = texts[i]!.b, b = texts[j]!.b;
-        if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) {
-          out.push(`${texts[i]!.txt} / ${texts[j]!.txt}`);
+      for (let i = 0; i < texts.length; i++)
+        for (let j = i + 1; j < texts.length; j++) {
+          const a = texts[i]!.b,
+            b = texts[j]!.b;
+          if (
+            a.left < b.right - 1 &&
+            b.left < a.right - 1 &&
+            a.top < b.bottom - 1 &&
+            b.top < a.bottom - 1
+          ) {
+            out.push(`${texts[i]!.txt} / ${texts[j]!.txt}`);
+          }
         }
-      }
       return out;
     });
     assert.deepEqual(overlaps, [], 'two timeline chips overlap');
@@ -1854,8 +2304,14 @@ describe('timeline, gantt and journey', () => {
 
 describe('quadrant, radar and xy', () => {
   test('all three are drawn and animate', async () => {
-    for (const [name, diagram] of [['quadrant', 'quadrant'], ['radar', 'radar'], ['xy', 'xy']] as const) {
-      const reply = ok(await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}));
+    for (const [name, diagram] of [
+      ['quadrant', 'quadrant'],
+      ['radar', 'radar'],
+      ['xy', 'xy'],
+    ] as const) {
+      const reply = ok(
+        await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
+      );
       assert.equal(reply.path, 'flow', `${name} should use the drawn renderer`);
       assert.equal(reply.diagram, diagram);
       assert.ok(reply.cycle > 0, `${name} should animate`);
@@ -1892,9 +2348,14 @@ describe('quadrant, radar and xy', () => {
     // placed". The dot now has its own transform keyframe.
     const reply = await mount(readFileSync(join(fixtures, 'quadrant.mmd'), 'utf8'));
     const rule = reply.css.match(/\.gc-plot-dot\[data-id="p0"\]\{animation:(gc-p\d+)/);
-    assert.ok(rule, 'the first point\'s dot has no animation of its own');
-    const frame = reply.css.match(new RegExp(`@keyframes ${rule![1]}\\{([^}]*(?:\\{[^}]*\\})*[^}]*)\\}`));
-    assert.ok(frame?.[1]?.includes('scale('), `the dot's own keyframe never scales it: ${frame?.[1]}`);
+    assert.ok(rule, "the first point's dot has no animation of its own");
+    const frame = reply.css.match(
+      new RegExp(`@keyframes ${rule![1]}\\{([^}]*(?:\\{[^}]*\\})*[^}]*)\\}`),
+    );
+    assert.ok(
+      frame?.[1]?.includes('scale('),
+      `the dot's own keyframe never scales it: ${frame?.[1]}`,
+    );
   });
 
   test('bars stand on one baseline', async () => {
@@ -1943,14 +2404,19 @@ describe('quadrant, radar and xy', () => {
     await mount(readFileSync(join(fixtures, 'blog', 'bootcamp-worth-it.mmd'), 'utf8'));
     const boxes = await session.page.evaluate(() => ({
       corners: [...document.querySelectorAll('.gc-plot-quad-label')].map((n) =>
-        (n as SVGGraphicsElement).getBBox()),
+        (n as SVGGraphicsElement).getBBox(),
+      ),
       points: [...document.querySelectorAll('.gc-plot-point-label')].map((n) =>
-        (n as SVGGraphicsElement).getBBox()),
+        (n as SVGGraphicsElement).getBBox(),
+      ),
     }));
     for (const c of boxes.corners) {
       for (const p of boxes.points) {
-        const overlaps = c.x < p.x + p.width && p.x < c.x + c.width &&
-          c.y < p.y + p.height && p.y < c.y + c.height;
+        const overlaps =
+          c.x < p.x + p.width &&
+          p.x < c.x + c.width &&
+          c.y < p.y + p.height &&
+          p.y < c.y + c.height;
         assert.ok(!overlaps, 'a quadrant corner label overlaps a point label');
       }
     }
@@ -1975,7 +2441,9 @@ describe('quadrant, radar and xy', () => {
 describe('sankey, treemap and kanban', () => {
   test('all three are drawn and animate', async () => {
     for (const name of ['sankey', 'treemap', 'kanban'] as const) {
-      const reply = ok(await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}));
+      const reply = ok(
+        await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
+      );
       assert.equal(reply.path, 'flow', `${name} should use the drawn renderer`);
       assert.equal(reply.diagram, name);
       assert.ok(reply.cycle > 0, `${name} should animate`);
@@ -1996,7 +2464,11 @@ describe('sankey, treemap and kanban', () => {
     );
     // Applications 1200, Screened 820, Interviewed 540.
     const perUnit = bars['Applications']! / 1200;
-    for (const [name, value] of [['Screened', 820], ['Interviewed', 540], ['Graduated', 360]] as const) {
+    for (const [name, value] of [
+      ['Screened', 820],
+      ['Interviewed', 540],
+      ['Graduated', 360],
+    ] as const) {
       const expected = value * perUnit;
       assert.ok(
         Math.abs(bars[name]! - expected) / expected < 0.02,
@@ -2130,11 +2602,21 @@ describe('pie, mindmap and git graph', () => {
         samples.push(drawn());
       }
       let backwards = 0;
-      for (let i = 1; i < samples.length; i++) if (samples[i]! < samples[i - 1]! - 0.001) backwards++;
-      return { first: samples[0]!, last: samples[samples.length - 1]!, min: Math.min(...samples), backwards, isArc: w0.classList.contains('gc-pie-arc') };
+      for (let i = 1; i < samples.length; i++)
+        if (samples[i]! < samples[i - 1]! - 0.001) backwards++;
+      return {
+        first: samples[0]!,
+        last: samples[samples.length - 1]!,
+        min: Math.min(...samples),
+        backwards,
+        isArc: w0.classList.contains('gc-pie-arc'),
+      };
     });
     assert.ok(info.isArc, 'the wedge is not the stroked-arc form');
-    assert.ok(info.min < 0.05, `the wedge never starts from nothing (min drawn ${info.min.toFixed(2)})`);
+    assert.ok(
+      info.min < 0.05,
+      `the wedge never starts from nothing (min drawn ${info.min.toFixed(2)})`,
+    );
     assert.ok(info.last > 0.99, `the wedge never finishes drawing (${info.last.toFixed(2)})`);
     assert.equal(info.backwards, 0, 'the drawn arc went backwards mid-build — a stutter');
   });
@@ -2147,7 +2629,11 @@ describe('pie, mindmap and git graph', () => {
     const colours = await session.page.$$eval('.gc-mind-child', (nodes) =>
       nodes.map((n) => getComputedStyle(n).stroke),
     );
-    assert.equal(new Set(colours).size, 3, 'mindmap.mmd has three branches and should show three colours');
+    assert.equal(
+      new Set(colours).size,
+      3,
+      'mindmap.mmd has three branches and should show three colours',
+    );
   });
 
   test('a side branch in a git graph gets its own lane colour; main does not', async () => {
@@ -2155,13 +2641,19 @@ describe('pie, mindmap and git graph', () => {
     // own quiet grey, which is what "way too simple, boring" was describing.
     await mount(readFileSync(join(fixtures, 'gitgraph.mmd'), 'utf8'));
     const lanes = await session.page.$$eval('.gc-commit-lane', (nodes) =>
-      nodes.map((n) => ({ main: n.classList.contains('gc-commit-lane-main'), stroke: getComputedStyle(n).stroke })),
+      nodes.map((n) => ({
+        main: n.classList.contains('gc-commit-lane-main'),
+        stroke: getComputedStyle(n).stroke,
+      })),
     );
     const main = lanes.find((l) => l.main);
     const side = lanes.filter((l) => !l.main);
-    assert.ok(main && side.length > 0, 'gitgraph.mmd should have a main lane and at least one side branch');
+    assert.ok(
+      main && side.length > 0,
+      'gitgraph.mmd should have a main lane and at least one side branch',
+    );
     for (const lane of side) {
-      assert.notEqual(lane.stroke, main!.stroke, 'a side branch is drawn in main\'s own colour');
+      assert.notEqual(lane.stroke, main!.stroke, "a side branch is drawn in main's own colour");
     }
   });
 
@@ -2184,7 +2676,8 @@ describe('pie, mindmap and git graph', () => {
       for (let p = 0; p <= 1; p += 0.01) {
         for (const a of anims) a.currentTime = cycleMs * p;
         nodes.forEach((dot, i) => {
-          if (revealAt[i] === cycleMs && parseFloat(getComputedStyle(dot).opacity) > 0.5) revealAt[i] = cycleMs * p;
+          if (revealAt[i] === cycleMs && parseFloat(getComputedStyle(dot).opacity) > 0.5)
+            revealAt[i] = cycleMs * p;
         });
       }
       return nodes.map((dot, i) => ({ cx: Number(dot.getAttribute('cx')), reveal: revealAt[i]! }));
@@ -2192,10 +2685,15 @@ describe('pie, mindmap and git graph', () => {
     assert.ok(dots.length > 1, 'gitgraph.mmd should draw more than one commit');
     const byX = [...dots].sort((a, b) => a.cx - b.cx);
     for (let i = 1; i < byX.length; i++) {
-      assert.ok(byX[i]!.reveal >= byX[i - 1]!.reveal,
-        `commit at x=${byX[i]!.cx} (reveals at ${byX[i]!.reveal}ms) comes on screen before x=${byX[i - 1]!.cx} (${byX[i - 1]!.reveal}ms)`);
+      assert.ok(
+        byX[i]!.reveal >= byX[i - 1]!.reveal,
+        `commit at x=${byX[i]!.cx} (reveals at ${byX[i]!.reveal}ms) comes on screen before x=${byX[i - 1]!.cx} (${byX[i - 1]!.reveal}ms)`,
+      );
     }
-    assert.ok(byX[byX.length - 1]!.reveal > byX[0]!.reveal, 'every commit reveals at the same time — they are not staggered by x at all');
+    assert.ok(
+      byX[byX.length - 1]!.reveal > byX[0]!.reveal,
+      'every commit reveals at the same time — they are not staggered by x at all',
+    );
   });
 
   test('a git graph lane spans only its own content, never the full canvas', async () => {
@@ -2207,7 +2705,9 @@ describe('pie, mindmap and git graph', () => {
     const overruns = await session.page.evaluate(() => {
       const svg = document.querySelector('svg')!;
       const lanes = [...svg.querySelectorAll('.gc-commit-lane')];
-      const marks = [...svg.querySelectorAll('.gc-commit-dot, .gc-commit-ring, .gc-commit-connector')];
+      const marks = [
+        ...svg.querySelectorAll('.gc-commit-dot, .gc-commit-ring, .gc-commit-connector'),
+      ];
       let bad = 0;
       for (const lane of lanes) {
         const lb = (lane as SVGGraphicsElement).getBBox();
@@ -2222,7 +2722,11 @@ describe('pie, mindmap and git graph', () => {
       }
       return bad;
     });
-    assert.equal(overruns, 0, 'a git graph lane extends more than 24 units past the commits/connectors on its own row');
+    assert.equal(
+      overruns,
+      0,
+      'a git graph lane extends more than 24 units past the commits/connectors on its own row',
+    );
   });
 
   test('a git graph connector never rides along a lane for more than 16 units', async () => {
@@ -2235,28 +2739,41 @@ describe('pie, mindmap and git graph', () => {
     await mount(readFileSync(join(fixtures, 'gitgraph.mmd'), 'utf8'));
     const rides = await session.page.evaluate(() => {
       const svg = document.querySelector('svg')!;
-      const laneRects = [...svg.querySelectorAll('.gc-commit-lane')].map((l) => (l as SVGGraphicsElement).getBBox());
+      const laneRects = [...svg.querySelectorAll('.gc-commit-lane')].map((l) =>
+        (l as SVGGraphicsElement).getBBox(),
+      );
       let bad = 0;
       for (const c of svg.querySelectorAll('.gc-commit-connector')) {
         const pts: [number, number][] = [];
-        let cx = 0, cy = 0;
+        let cx = 0,
+          cy = 0;
         for (const seg of (c.getAttribute('d') || '').matchAll(/([MLHVQCZ])([^MLHVQCZ]*)/gi)) {
           const cmd = seg[1]!.toUpperCase();
           const ns = (seg[2]!.match(/-?\d+(\.\d+)?/g) || []).map(Number);
           if (cmd === 'H') cx = ns[0]!;
           else if (cmd === 'V') cy = ns[0]!;
-          else if (ns.length >= 2) { cx = ns[ns.length - 2]!; cy = ns[ns.length - 1]!; }
-          else continue;
+          else if (ns.length >= 2) {
+            cx = ns[ns.length - 2]!;
+            cy = ns[ns.length - 1]!;
+          } else continue;
           pts.push([cx, cy]);
         }
         for (let i = 1; i < pts.length; i++) {
-          const [x1, y1] = pts[i - 1]!, [x2, y2] = pts[i]!;
+          const [x1, y1] = pts[i - 1]!,
+            [x2, y2] = pts[i]!;
           if (Math.abs(y1 - y2) > 0.5) continue;
           const run = Math.abs(x2 - x1);
           if (run <= 16) continue;
           for (const lr of laneRects) {
             const ly = lr.y + lr.height / 2;
-            if (Math.abs(y1 - ly) < 2 && Math.max(x1, x2) > lr.x && Math.min(x1, x2) < lr.x + lr.width) { bad++; break; }
+            if (
+              Math.abs(y1 - ly) < 2 &&
+              Math.max(x1, x2) > lr.x &&
+              Math.min(x1, x2) < lr.x + lr.width
+            ) {
+              bad++;
+              break;
+            }
           }
         }
       }
@@ -2273,17 +2790,31 @@ describe('pie, mindmap and git graph', () => {
     await mount(readFileSync(join(fixtures, 'gitgraph.mmd'), 'utf8'));
     const { labels, mergeTexts } = await session.page.evaluate(() => {
       const svg = document.querySelector('svg')!;
-      const labels = [...svg.querySelectorAll('.gc-commit-label')].map((t) => t.textContent?.trim() ?? '');
+      const labels = [...svg.querySelectorAll('.gc-commit-label')].map(
+        (t) => t.textContent?.trim() ?? '',
+      );
       const mergeTexts = [...svg.querySelectorAll('.gc-commit-ring')].map(
-        (ring) => ring.closest('.gc-commit')?.querySelector('.gc-commit-label')?.textContent?.trim() ?? '',
+        (ring) =>
+          ring.closest('.gc-commit')?.querySelector('.gc-commit-label')?.textContent?.trim() ?? '',
       );
       return { labels, mergeTexts };
     });
     const hashLike = /^[0-9a-f]{1,2}-?[0-9a-f]{6,}$/i;
-    for (const l of labels) assert.ok(!hashLike.test(l), `commit label "${l}" looks like a raw hash`);
-    assert.equal(mergeTexts.length, 2, `gitgraph.mmd should draw two merge rings, found ${mergeTexts.length}`);
-    assert.ok(mergeTexts.some((t) => /merge feature/i.test(t)), `no merge ring reads "merge feature": ${JSON.stringify(mergeTexts)}`);
-    assert.ok(mergeTexts.some((t) => /merge hotfix/i.test(t)), `no merge ring reads "merge hotfix": ${JSON.stringify(mergeTexts)}`);
+    for (const l of labels)
+      assert.ok(!hashLike.test(l), `commit label "${l}" looks like a raw hash`);
+    assert.equal(
+      mergeTexts.length,
+      2,
+      `gitgraph.mmd should draw two merge rings, found ${mergeTexts.length}`,
+    );
+    assert.ok(
+      mergeTexts.some((t) => /merge feature/i.test(t)),
+      `no merge ring reads "merge feature": ${JSON.stringify(mergeTexts)}`,
+    );
+    assert.ok(
+      mergeTexts.some((t) => /merge hotfix/i.test(t)),
+      `no merge ring reads "merge hotfix": ${JSON.stringify(mergeTexts)}`,
+    );
   });
 
   test('a merge commit draws as a hollow ring, a normal commit as a filled dot', async () => {
@@ -2293,11 +2824,18 @@ describe('pie, mindmap and git graph', () => {
     const { ringFill, dotFill } = await session.page.evaluate(() => {
       const ring = document.querySelector('.gc-commit-ring');
       const dot = document.querySelector('.gc-commit-dot');
-      return { ringFill: ring && getComputedStyle(ring).fill, dotFill: dot && getComputedStyle(dot).fill };
+      return {
+        ringFill: ring && getComputedStyle(ring).fill,
+        dotFill: dot && getComputedStyle(dot).fill,
+      };
     });
     assert.ok(ringFill, 'gitgraph.mmd should draw a merge commit as a .gc-commit-ring');
     assert.ok(dotFill, 'gitgraph.mmd should draw normal commits as a .gc-commit-dot');
-    assert.notEqual(ringFill, dotFill, 'the merge ring should not be filled the same as a normal commit dot');
+    assert.notEqual(
+      ringFill,
+      dotFill,
+      'the merge ring should not be filled the same as a normal commit dot',
+    );
   });
 
   test('a git graph branch lane never leads the drawing head', async () => {
@@ -2312,7 +2850,7 @@ describe('pie, mindmap and git graph', () => {
       const svg = document.querySelector('svg')!;
       const anims = svg.getAnimations({ subtree: true });
       for (const a of anims) a.pause();
-      const cycleMs = Math.max(...anims.map((a) => (a.effect!.getTiming().duration as number)));
+      const cycleMs = Math.max(...anims.map((a) => a.effect!.getTiming().duration as number));
       const lanes = [...svg.querySelectorAll('.gc-commit-lane')].map((l) => {
         const d = l.getAttribute('d') || '';
         const nums = (d.match(/-?\d+(\.\d+)?/g) || []).map(Number);
@@ -2346,7 +2884,11 @@ describe('pie, mindmap and git graph', () => {
       }
       return bad;
     });
-    assert.equal(overreach, 0, 'a branch lane drew past where the head (main\'s own reveal) currently is');
+    assert.equal(
+      overreach,
+      0,
+      "a branch lane drew past where the head (main's own reveal) currently is",
+    );
   });
 
   test('a connector crossing a lane leaves a 6-unit gap, not a collision', async () => {
@@ -2359,17 +2901,21 @@ describe('pie, mindmap and git graph', () => {
     const { gapCount, crossingsInGap, totalCrossings } = await session.page.evaluate(() => {
       const svg = document.querySelector('svg')!;
       const feature = [...svg.querySelectorAll('.gc-commit-lane')].find(
-        (l) => !l.classList.contains('gc-commit-lane-main') && ((l.getAttribute('d') || '').match(/M/g) || []).length > 1,
+        (l) =>
+          !l.classList.contains('gc-commit-lane-main') &&
+          ((l.getAttribute('d') || '').match(/M/g) || []).length > 1,
       );
       const d = feature?.getAttribute('d') || '';
       const featureY = feature ? Number(d.match(/,(-?\d+(\.\d+)?)/)![1]) : NaN;
       // Each "Mx,y Hx2" pair is one drawn run of the lane between its breaks.
-      const runs = [...d.matchAll(/M(-?\d+(\.\d+)?),-?\d+(\.\d+)? H(-?\d+(\.\d+)?)/g)]
-        .map((m) => [Number(m[1]), Number(m[4])] as const);
+      const runs = [...d.matchAll(/M(-?\d+(\.\d+)?),-?\d+(\.\d+)? H(-?\d+(\.\d+)?)/g)].map(
+        (m) => [Number(m[1]), Number(m[4])] as const,
+      );
       const gapCount = Math.max(0, runs.length - 1);
       // A crossing connector: its vertical (V) spans across featureY, at the
       // fixed x its two Q arcs share.
-      let crossingsInGap = 0, totalCrossings = 0;
+      let crossingsInGap = 0,
+        totalCrossings = 0;
       for (const c of svg.querySelectorAll('.gc-commit-connector')) {
         const cd = c.getAttribute('d') || '';
         const nums = (cd.match(/-?\d+(\.\d+)?/g) || []).map(Number);
@@ -2377,18 +2923,32 @@ describe('pie, mindmap and git graph', () => {
         const qxs = [...cd.matchAll(/Q(-?\d+(\.\d+)?),/g)].map((m) => Number(m[1]));
         if (!ys.length || !qxs.length) continue;
         const y1 = nums[1]!; // the M command's own y — one end of the vertical span
-        const yMin = Math.min(y1, ...ys), yMax = Math.max(y1, ...ys);
+        const yMin = Math.min(y1, ...ys),
+          yMax = Math.max(y1, ...ys);
         if (!(yMin < featureY - 0.5 && yMax > featureY + 0.5)) continue;
         totalCrossings++;
         const crossX = qxs[0]!;
-        const covered = runs.some(([x1, x2]) => crossX >= Math.min(x1, x2) - 0.5 && crossX <= Math.max(x1, x2) + 0.5);
+        const covered = runs.some(
+          ([x1, x2]) => crossX >= Math.min(x1, x2) - 0.5 && crossX <= Math.max(x1, x2) + 0.5,
+        );
         if (!covered) crossingsInGap++;
       }
       return { gapCount, crossingsInGap, totalCrossings };
     });
-    assert.ok(totalCrossings >= 1, 'gitgraph.mmd should have at least one connector crossing the feature lane');
-    assert.equal(gapCount, totalCrossings, `feature lane should have one gap per crossing (${totalCrossings} crossings, ${gapCount} gaps)`);
-    assert.equal(crossingsInGap, totalCrossings, 'every crossing connector should land inside a gap, not on drawn lane');
+    assert.ok(
+      totalCrossings >= 1,
+      'gitgraph.mmd should have at least one connector crossing the feature lane',
+    );
+    assert.equal(
+      gapCount,
+      totalCrossings,
+      `feature lane should have one gap per crossing (${totalCrossings} crossings, ${gapCount} gaps)`,
+    );
+    assert.equal(
+      crossingsInGap,
+      totalCrossings,
+      'every crossing connector should land inside a gap, not on drawn lane',
+    );
   });
 
   test('scrub: no two visible strokes overlap by more than 16 units during the build', async () => {
@@ -2405,7 +2965,7 @@ describe('pie, mindmap and git graph', () => {
       const svg = document.querySelector('svg')!;
       const anims = svg.getAnimations({ subtree: true });
       for (const a of anims) a.pause();
-      const cycleMs = Math.max(...anims.map((a) => (a.effect!.getTiming().duration as number)));
+      const cycleMs = Math.max(...anims.map((a) => a.effect!.getTiming().duration as number));
       const paths = [...svg.querySelectorAll('path')];
       const out: { pct: number; a: string; b: string; overlap: number }[] = [];
       for (let pct = 0; pct <= 100; pct += 2) {
@@ -2427,25 +2987,36 @@ describe('pie, mindmap and git graph', () => {
             const pt = p.getPointAtLength(Math.min(total, (visibleLen * i) / N));
             pts.push([pt.x, pt.y]);
           }
-          let runStart = pts[0]!, prev = pts[0]!;
+          let runStart = pts[0]!,
+            prev = pts[0]!;
           const flush = (end: [number, number]) => {
             if (Math.abs(runStart[1] - end[1]) < 0.5 && Math.abs(end[0] - runStart[0]) > 16) {
-              runs.push({ sel: p.getAttribute('class') || '', y: runStart[1], x1: Math.min(runStart[0], end[0]), x2: Math.max(runStart[0], end[0]) });
+              runs.push({
+                sel: p.getAttribute('class') || '',
+                y: runStart[1],
+                x1: Math.min(runStart[0], end[0]),
+                x2: Math.max(runStart[0], end[0]),
+              });
             }
           };
           for (let i = 1; i < pts.length; i++) {
             const cur = pts[i]!;
-            if (Math.abs(cur[1] - prev[1]) >= 0.5) { flush(prev); runStart = cur; }
+            if (Math.abs(cur[1] - prev[1]) >= 0.5) {
+              flush(prev);
+              runStart = cur;
+            }
             prev = cur;
           }
           flush(prev);
         }
-        for (let i = 0; i < runs.length; i++) for (let j = i + 1; j < runs.length; j++) {
-          const a1 = runs[i]!, b1 = runs[j]!;
-          if (Math.abs(a1.y - b1.y) > 2) continue;
-          const overlap = Math.min(a1.x2, b1.x2) - Math.max(a1.x1, b1.x1);
-          if (overlap > 16) out.push({ pct, a: a1.sel, b: b1.sel, overlap: Math.round(overlap) });
-        }
+        for (let i = 0; i < runs.length; i++)
+          for (let j = i + 1; j < runs.length; j++) {
+            const a1 = runs[i]!,
+              b1 = runs[j]!;
+            if (Math.abs(a1.y - b1.y) > 2) continue;
+            const overlap = Math.min(a1.x2, b1.x2) - Math.max(a1.x1, b1.x1);
+            if (overlap > 16) out.push({ pct, a: a1.sel, b: b1.sel, overlap: Math.round(overlap) });
+          }
       }
       return out;
     });
@@ -2463,8 +3034,21 @@ describe('motion, across every drawn type', () => {
     // Both were invisible to every other test, because a chart that is drawn too
     // early still draws. This checks the one thing that catches it: at time
     // zero, nothing is inked.
-    const types = ['flow', 'state', 'class', 'er', 'timeline', 'gantt', 'journey',
-                   'quadrant', 'radar', 'xy', 'sankey', 'treemap', 'kanban'];
+    const types = [
+      'flow',
+      'state',
+      'class',
+      'er',
+      'timeline',
+      'gantt',
+      'journey',
+      'quadrant',
+      'radar',
+      'xy',
+      'sankey',
+      'treemap',
+      'kanban',
+    ];
     for (const name of types) {
       await mount(readFileSync(join(fixtures, `${name}.mmd`), 'utf8'));
       const lit = await session.page.evaluate(() => {
@@ -2549,7 +3133,10 @@ describe('motion, across every drawn type', () => {
         };
         // Transients are meant to be gone by the end: the travelling spark, its
         // ripple, the runner on a timeline, a flying point's trail.
-        const transient = (n: Element) => /\b(gc-spark|gc-ripple|gc-chron-lead|gc-plot-trail|gc-plot-ripple)\b/.test(n.getAttribute('class') ?? '');
+        const transient = (n: Element) =>
+          /\b(gc-spark|gc-ripple|gc-chron-lead|gc-plot-trail|gc-plot-ripple)\b/.test(
+            n.getAttribute('class') ?? '',
+          );
         return [...document.querySelectorAll('[data-id]')]
           .filter((n) => !transient(n) && effective(n) < 0.5)
           .map((n) => n.getAttribute('class') ?? n.tagName);
@@ -2606,16 +3193,17 @@ describe('fonts', () => {
     const narrow = await widthWith('Lato, sans-serif');
     const wide = await widthWith('"Courier New", monospace');
     assert.ok(narrow > 0 && wide > 0, 'both measured');
-    assert.ok(
-      wide > narrow + 8,
-      `measurement ignored the stack: ${narrow} vs ${wide}`,
-    );
+    assert.ok(wide > narrow + 8, `measurement ignored the stack: ${narrow} vs ${wide}`);
   });
 
   test('an explicit stack is both measured and emitted', async () => {
     const reply = ok(
       await renderAny(session.page, readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {
-        fonts: { display: 'Georgia, serif', label: 'Verdana, sans-serif', mono: 'Menlo, monospace' },
+        fonts: {
+          display: 'Georgia, serif',
+          label: 'Verdana, sans-serif',
+          mono: 'Menlo, monospace',
+        },
       }),
     );
     for (const stack of ['Georgia, serif', 'Verdana, sans-serif', 'Menlo, monospace']) {
@@ -2651,7 +3239,9 @@ describe('fonts', () => {
   test('by default a chart still brings its own typefaces', async () => {
     // The default scene is 4geeks, which sets its titles in Archivo — the point
     // is that *some* real face is named, not that it is any particular one.
-    const reply = ok(await renderAny(session.page, readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {}));
+    const reply = ok(
+      await renderAny(session.page, readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {}),
+    );
     assert.match(reply.css, /Archivo/);
     assert.ok(!/font-family: *inherit/.test(reply.css));
   });
@@ -2681,7 +3271,9 @@ describe('fonts', () => {
   });
 
   test('the default scene is 4geeks, and a palette overrides it', async () => {
-    const base = ok(await renderAny(session.page, readFileSync(join(fixtures, 'flow.mmd'), 'utf8'), {}));
+    const base = ok(
+      await renderAny(session.page, readFileSync(join(fixtures, 'flow.mmd'), 'utf8'), {}),
+    );
     assert.ok(base.css.includes('#0084FF'), '4geeks blue is the default primary');
 
     const themed = ok(
@@ -2733,7 +3325,10 @@ describe('arrowheads', () => {
         const len = line.getTotalLength();
         const a = line.getPointAtLength(len - 6);
         const b = line.getPointAtLength(len);
-        const nums = head.getAttribute('d')!.match(/-?\d+\.?\d*/g)!.map(Number);
+        const nums = head
+          .getAttribute('d')!
+          .match(/-?\d+\.?\d*/g)!
+          .map(Number);
         const [lx, ly, tx, ty, rx, ry] = nums as number[];
         const base = { x: (lx! + rx!) / 2, y: (ly! + ry!) / 2 };
         out.push({
@@ -2821,7 +3416,10 @@ describe('shape padding', () => {
       return out;
     });
 
-    assert.ok(gaps.some((g) => g.kind === 'diamond'), 'this fixture has a decision node');
+    assert.ok(
+      gaps.some((g) => g.kind === 'diamond'),
+      'this fixture has a decision node',
+    );
     for (const { id, kind, clearance } of gaps) {
       assert.ok(clearance > 10, `${id} (${kind}): only ${clearance.toFixed(1)} of clearance`);
     }
@@ -2841,7 +3439,13 @@ describe('shape padding', () => {
         const s = shape.getBoundingClientRect();
         for (const t of node.querySelectorAll('text')) {
           const b = (t as SVGGraphicsElement).getBoundingClientRect();
-          if (b.width && (b.left < s.left - 2 || b.right > s.right + 2 || b.top < s.top - 2 || b.bottom > s.bottom + 2)) {
+          if (
+            b.width &&
+            (b.left < s.left - 2 ||
+              b.right > s.right + 2 ||
+              b.top < s.top - 2 ||
+              b.bottom > s.bottom + 2)
+          ) {
             out.push(t.textContent ?? '');
           }
         }
@@ -2875,7 +3479,8 @@ describe('motion', () => {
     const edges = await session.page.$$eval('.gc-edge', (nodes) =>
       nodes.map((n) => ({
         id: (n as SVGElement).dataset.id!,
-        patterned: n.classList.contains('gc-stroke-dotted') || n.classList.contains('gc-stroke-dashed'),
+        patterned:
+          n.classList.contains('gc-stroke-dotted') || n.classList.contains('gc-stroke-dashed'),
       })),
     );
     assert.ok(edges.length > 0, 'flow.mmd drew no edges');
@@ -2891,7 +3496,11 @@ describe('motion', () => {
       const body = reply.css.slice(kfStart, kfEnd === -1 ? reply.css.length : kfEnd);
       if (patterned) continue;
       solidChecked++;
-      assert.match(body, /stroke-dashoffset/, `${id}: a solid edge must draw on via stroke-dashoffset`);
+      assert.match(
+        body,
+        /stroke-dashoffset/,
+        `${id}: a solid edge must draw on via stroke-dashoffset`,
+      );
       assert.ok(!/scale[XY]\(/.test(body), `${id}: a solid edge must not unfold via scaleX/scaleY`);
     }
     assert.ok(solidChecked > 0, 'flow.mmd has no solid edges to check');
@@ -2909,8 +3518,9 @@ describe('motion', () => {
         id: (h as SVGElement).dataset.id,
         opacity: Number(getComputedStyle(h).opacity),
         drawn: Number(
-          getComputedStyle(document.querySelector(`.gc-edge[data-id="${(h as SVGElement).dataset.id}"]`)!)
-            .strokeDashoffset.replace('px', ''),
+          getComputedStyle(
+            document.querySelector(`.gc-edge[data-id="${(h as SVGElement).dataset.id}"]`)!,
+          ).strokeDashoffset.replace('px', ''),
         ),
       }));
     });
@@ -2946,7 +3556,11 @@ describe('motion', () => {
     assert.equal(state.animations, 0, 'motion off should emit no animations');
     assert.equal(state.hiddenOutlines, 0);
     assert.equal(state.hiddenLabels, 0);
-    assert.equal(state.visibleSparks, 0, 'a spark (or the ripple it blooms into) must not show at rest');
+    assert.equal(
+      state.visibleSparks,
+      0,
+      'a spark (or the ripple it blooms into) must not show at rest',
+    );
     assert.equal(state.dimNodes, 0, 'every node must be at opacity 1 with motion off');
   });
 });

@@ -43,7 +43,10 @@ export function identifySatellites(
     if (e.from === e.to) continue;
     inCount.set(e.to, (inCount.get(e.to) ?? 0) + 1);
     outCount.set(e.from, (outCount.get(e.from) ?? 0) + 1);
-    if (e.backward) { cyclic.add(e.from); cyclic.add(e.to); }
+    if (e.backward) {
+      cyclic.add(e.from);
+      cyclic.add(e.to);
+    }
   }
   const soleParent = new Map<string, string>();
   for (const e of graph.edges) {
@@ -102,9 +105,12 @@ export function placeSatellites(
     if (!node || !parent || parent.x === undefined) continue;
     const others = graph.nodes.filter((n) => n.id !== id && n.x !== undefined);
     const overlapsAt = (x: number, y: number) =>
-      others.some((n) =>
-        x < n.x! + n.width! && x + node.width! > n.x! &&
-        y < n.y! + n.height! && y + node.height! > n.y!,
+      others.some(
+        (n) =>
+          x < n.x! + n.width! &&
+          x + node.width! > n.x! &&
+          y < n.y! + n.height! &&
+          y + node.height! > n.y!,
       );
 
     const parentCentre = parent.y! + parent.height! / 2;
@@ -157,7 +163,11 @@ export function placeSatellites(
  * detour dragged across the whole diagram — `foldQuality` still marks that
  * candidate as failing, so a cleaner one wins the search instead.
  */
-export function snapOrphanColumns(children: ElkNode[], chain: string[], edges: { from: string; to: string }[]): void {
+export function snapOrphanColumns(
+  children: ElkNode[],
+  chain: string[],
+  edges: { from: string; to: string }[],
+): void {
   const inner = chain.slice(1, -1);
   if (inner.length < 2) return;
   const byId = new Map(children.map((n) => [n.id, n] as const));
@@ -165,27 +175,39 @@ export function snapOrphanColumns(children: ElkNode[], chain: string[], edges: {
   if (!chainWraps(byId, chain)) return;
 
   const withXY = children.filter(
-    (n) => n.x !== undefined && n.y !== undefined && n.width !== undefined && n.height !== undefined,
+    (n) =>
+      n.x !== undefined && n.y !== undefined && n.width !== undefined && n.height !== undefined,
   );
   const cx = (n: ElkNode) => n.x! + n.width! / 2;
   const cy = (n: ElkNode) => n.y! + n.height! / 2;
   const innerSet = new Set(inner);
   const overlaps = (a: ElkNode, b: ElkNode) =>
-    a.x! < b.x! + b.width! && a.x! + a.width! > b.x! && a.y! < b.y! + b.height! && a.y! + a.height! > b.y!;
+    a.x! < b.x! + b.width! &&
+    a.x! + a.width! > b.x! &&
+    a.y! < b.y! + b.height! &&
+    a.y! + a.height! > b.y!;
   // A move this cheap reads as the line having merely slipped a rounding
   // error; past it, it is spending someone else's edge budget to buy this
   // node a column, which `foldQuality` failing on the result is honest about
   // and leaves for a cleaner candidate to win instead.
   const budget = 48;
 
-  interface Move { node: ElkNode; x: number; cost: number }
+  interface Move {
+    node: ElkNode;
+    x: number;
+    cost: number;
+  }
   const cheapestMove = (): Move | null => {
     const groups = bandByCentre(withXY, cx);
-    const orphans = groups.filter((g) => g.length === 1 && innerSet.has(g[0]!.id)).map((g) => g[0]!);
+    const orphans = groups
+      .filter((g) => g.length === 1 && innerSet.has(g[0]!.id))
+      .map((g) => g[0]!);
     let best: Move | null = null;
     for (const node of orphans) {
       const own = groups.find((g) => g[0] === node)!;
-      const targets = groups.filter((g) => g !== own).map((g) => g.reduce((sum, n) => sum + cx(n), 0) / g.length);
+      const targets = groups
+        .filter((g) => g !== own)
+        .map((g) => g.reduce((sum, n) => sum + cx(n), 0) / g.length);
       for (const groupCx of targets) {
         // Landing exactly on the target's mean is more than the merge needs —
         // gridUp only requires being within its own 9-unit gap tolerance, so

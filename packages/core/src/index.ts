@@ -20,7 +20,14 @@ export type { ReactComponentInput } from './react.ts';
 export type { Aspect, DrawnType } from './flow.ts';
 export type { RenderOptions, RenderResult } from './chart.ts';
 export {
-  renderFlow, renderSequence, renderChronicle, renderPlot, renderBoard, renderRadial, renderCommits, sceneCss,
+  renderFlow,
+  renderSequence,
+  renderChronicle,
+  renderPlot,
+  renderBoard,
+  renderRadial,
+  renderCommits,
+  sceneCss,
 } from './flow.ts';
 export type { FlowResult, FlowOptions } from './flow.ts';
 export { toGraph } from './graph.ts';
@@ -55,8 +62,14 @@ export * as tokens from './tokens.ts';
 // top-level `render` uses, so they are re-exported under explicit names rather
 // than a wildcard.
 export type {
-  ThemeName, PresetName, AnimationOptions, RepairNote, RepairResult, ParseError,
-  Element, Analysis,
+  ThemeName,
+  PresetName,
+  AnimationOptions,
+  RepairNote,
+  RepairResult,
+  ParseError,
+  Element,
+  Analysis,
 } from './types.ts';
 export type {
   RenderOptions as LegacyRenderOptions,

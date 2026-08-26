@@ -97,7 +97,12 @@ export function addStepNumbers(svg: SVGSVGElement, analysis: Analysis): void {
   }
 }
 
-export function decorate(svg: SVGSVGElement, analysis: Analysis, spec: StyleSpec, id: string): void {
+export function decorate(
+  svg: SVGSVGElement,
+  analysis: Analysis,
+  spec: StyleSpec,
+  id: string,
+): void {
   if (spec.dotGrid) addPaper(svg, id);
   if (spec.numbering) addStepNumbers(svg, analysis);
 }

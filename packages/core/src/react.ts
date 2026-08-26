@@ -29,7 +29,11 @@ export interface ReactComponentInput {
 
 /** `cohort-funnel` or `cohort_funnel.tsx` becomes `CohortFunnel`. */
 export function componentName(fileName: string): string {
-  const base = fileName.replace(/\.[^.]+$/, '').split(/[\\/]/).pop() ?? 'Chart';
+  const base =
+    fileName
+      .replace(/\.[^.]+$/, '')
+      .split(/[\\/]/)
+      .pop() ?? 'Chart';
   const parts = base.split(/[^A-Za-z0-9]+/).filter(Boolean);
   const name = parts.map((p) => p[0]!.toUpperCase() + p.slice(1)).join('');
   // A React component must start with a capital letter, and an identifier

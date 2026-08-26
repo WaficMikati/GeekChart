@@ -1,6 +1,13 @@
 import type { Graph, GraphCluster, GraphNode } from '../graph.ts';
 import type { Scene } from '../scene.ts';
-import { alignPanels, enforceClusterGutters, refitClusters, shareClusterGrid, shiftCluster, spreadClusters } from './panels.ts';
+import {
+  alignPanels,
+  enforceClusterGutters,
+  refitClusters,
+  shareClusterGrid,
+  shiftCluster,
+  spreadClusters,
+} from './panels.ts';
 import { onGrid } from './shared.ts';
 
 /**
@@ -56,7 +63,8 @@ export function square(graph: Graph, scene: Scene): void {
   const rows: GraphNode[][] = [];
   for (const node of [...records].sort((a, b) => a.y! - b.y!)) {
     const found = rows.find((r) =>
-      r.some((o) => node.y! < o.y! + o.height! && o.y! < node.y! + node.height!));
+      r.some((o) => node.y! < o.y! + o.height! && o.y! < node.y! + node.height!),
+    );
     if (found) found.push(node);
     else rows.push([node]);
   }
@@ -71,8 +79,20 @@ export function square(graph: Graph, scene: Scene): void {
   }
 
   const gridUp = () => {
-    band(placed, (n) => n.y! + n.height! / 2, (n, to) => { n.y = to - n.height! / 2; });
-    band(placed, (n) => n.x! + n.width! / 2, (n, to) => { n.x = to - n.width! / 2; });
+    band(
+      placed,
+      (n) => n.y! + n.height! / 2,
+      (n, to) => {
+        n.y = to - n.height! / 2;
+      },
+    );
+    band(
+      placed,
+      (n) => n.x! + n.width! / 2,
+      (n, to) => {
+        n.x = to - n.width! / 2;
+      },
+    );
   };
   gridUp();
 
@@ -110,7 +130,10 @@ export function square(graph: Graph, scene: Scene): void {
   const dx = Math.min(...boxes.map((b) => b.x));
   const dy = Math.min(...boxes.map((b) => b.y));
   if (dx || dy) {
-    for (const n of placed) { n.x! -= dx; n.y! -= dy; }
+    for (const n of placed) {
+      n.x! -= dx;
+      n.y! -= dy;
+    }
     for (const c of graph.clusters) {
       if (c.x === undefined) continue;
       c.x -= dx;
@@ -153,7 +176,14 @@ function centreRows(graph: Graph): void {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const inside = new Set(graph.clusters.flatMap((c) => c.nodes));
 
-  interface Item { cluster?: GraphCluster; node?: GraphNode; x0: number; x1: number; y0: number; y1: number }
+  interface Item {
+    cluster?: GraphCluster;
+    node?: GraphNode;
+    x0: number;
+    x1: number;
+    y0: number;
+    y1: number;
+  }
   const items: Item[] = [];
   for (const c of graph.clusters) {
     if (c.x === undefined) continue;
@@ -165,7 +195,11 @@ function centreRows(graph: Graph): void {
   }
   if (items.length < 2) return;
 
-  interface Row { items: Item[]; top: number; bottom: number }
+  interface Row {
+    items: Item[];
+    top: number;
+    bottom: number;
+  }
   const rows: Row[] = [];
   for (const it of [...items].sort((a, b) => a.y0 - b.y0)) {
     const row = rows.find((r) => it.y0 < r.bottom - 1 && it.y1 > r.top + 1);
@@ -220,7 +254,10 @@ function centreRows(graph: Graph): void {
     let cursor = row.items[Math.max(anchor, 0)]!.x1;
     for (let i = Math.max(anchor, 0) + 1; i < row.items.length; i++) {
       const it = row.items[i]!;
-      if (aligned(it)) { cursor = it.x1; continue; }
+      if (aligned(it)) {
+        cursor = it.x1;
+        continue;
+      }
       const w = it.x1 - it.x0;
       const newX0 = cursor + gutter;
       shift(it, newX0 - it.x0);
@@ -235,7 +272,10 @@ function centreRows(graph: Graph): void {
     const right = Math.max(...row.items.map((i) => i.x1));
     return { centre: (left + right) / 2, width: right - left };
   };
-  const widest = rows.reduce((best, row) => (span(row).width > span(best).width ? row : best), rows[0]!);
+  const widest = rows.reduce(
+    (best, row) => (span(row).width > span(best).width ? row : best),
+    rows[0]!,
+  );
   const target = span(widest).centre;
 
   for (const row of rows) {

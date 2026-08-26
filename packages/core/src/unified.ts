@@ -1,7 +1,16 @@
 import {
-  kindOf, longestPath, markBackEdges, parseWith, splitLabel,
-  type EdgeTip, type Graph, type GraphCluster, type GraphEdge, type GraphNode,
-  type NodeRow, type NodeShape,
+  kindOf,
+  longestPath,
+  markBackEdges,
+  parseWith,
+  splitLabel,
+  type EdgeTip,
+  type Graph,
+  type GraphCluster,
+  type GraphEdge,
+  type GraphNode,
+  type NodeRow,
+  type NodeShape,
 } from './graph.ts';
 
 /**
@@ -92,7 +101,9 @@ const TIPS: Record<string, EdgeTip> = {
 
 /** Mermaid escapes the visibility sigils it would otherwise treat as markup. */
 const unescape = (text: string): string =>
-  String(text ?? '').replace(/\\([+\-#~*$])/g, '$1').trim();
+  String(text ?? '')
+    .replace(/\\([+\-#~*$])/g, '$1')
+    .trim();
 
 /**
  * Blank the labels mermaid invents for the state machine's own endpoints.
@@ -100,15 +111,20 @@ const unescape = (text: string): string =>
  * `[*]` becomes a node called `root_start`; drawing that name inside the dot
  * would be reporting an implementation detail as content.
  */
-const isPseudo = (id: string): boolean => /^(?:root_)?(?:start|end)$/.test(id) || /_(?:start|end)$/.test(id);
+const isPseudo = (id: string): boolean =>
+  /^(?:root_)?(?:start|end)$/.test(id) || /_(?:start|end)$/.test(id);
 
 function classRows(node: RawNode): NodeRow[][] {
   const groups: NodeRow[][] = [];
   const annotations = (node.annotations ?? []).filter(Boolean);
   if (annotations.length) groups.push(annotations.map((a) => ({ text: `«${a}»`, strong: true })));
-  const members = (node.members ?? []).map((m) => ({ text: unescape(m.text ?? m.id ?? '') })).filter((r) => r.text);
+  const members = (node.members ?? [])
+    .map((m) => ({ text: unescape(m.text ?? m.id ?? '') }))
+    .filter((r) => r.text);
   if (members.length) groups.push(members);
-  const methods = (node.methods ?? []).map((m) => ({ text: unescape(m.text ?? m.id ?? '') })).filter((r) => r.text);
+  const methods = (node.methods ?? [])
+    .map((m) => ({ text: unescape(m.text ?? m.id ?? '') }))
+    .filter((r) => r.text);
   if (methods.length) groups.push(methods);
   return groups;
 }
@@ -143,7 +159,9 @@ export async function toUnifiedGraph(source: string, type: UnifiedType): Promise
     .filter((n) => !n.isGroup)
     .map((n) => {
       const shape = SHAPES[String(n.shape ?? 'rect')] ?? 'round';
-      const classes = String(n.cssClasses ?? '').split(/\s+/).filter(Boolean);
+      const classes = String(n.cssClasses ?? '')
+        .split(/\s+/)
+        .filter(Boolean);
       const rows = type === 'class' ? classRows(n) : type === 'er' ? erRows(n) : [];
       // A state description arrives as one string; a name and a caption
       // (Lyzr's two-tier box, DESIGN 3.2) split from it the same way a
@@ -171,7 +189,10 @@ export async function toUnifiedGraph(source: string, type: UnifiedType): Promise
       from: e.start,
       to: e.end,
       ...(e.label ? { label: String(e.label) } : {}),
-      stroke: e.pattern === 'dotted' || e.pattern === 'dashed' ? ('dotted' as const) : ('normal' as const),
+      stroke:
+        e.pattern === 'dotted' || e.pattern === 'dashed'
+          ? ('dotted' as const)
+          : ('normal' as const),
       tipStart: TIPS[String(e.arrowTypeStart ?? 'none')] ?? 'none',
       tipEnd: TIPS[String(e.arrowTypeEnd ?? 'arrow_barb')] ?? 'arrow',
       ...(e.startLabelRight ? { labelStart: String(e.startLabelRight) } : {}),
