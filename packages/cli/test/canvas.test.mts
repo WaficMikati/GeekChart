@@ -1,6 +1,6 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openSession, renderAny, type AnyReply, type Session } from '../src/browser.ts';
@@ -59,6 +59,41 @@ async function mount(source: string, options = {}) {
 }
 
 const named = (name: string) => readFileSync(join(fixtures, `${name}.mmd`), 'utf8');
+
+const measureBundle = join(here, '..', 'dist', 'measure.js');
+
+/** The DESIGN.md checks (packages/cli/src/measure/), the same bundle
+ *  gate.mjs injects — see packages/cli/scripts/gate.mjs. */
+type GateGlobal = {
+  geekchartMeasure: {
+    runCheck: (
+      svg: SVGSVGElement,
+      id: string,
+      opts: { chartId: string },
+    ) => { severity: 'fail' | 'warn'; message: string }[];
+  };
+};
+
+/** Every finding (fail or warn) from one named check, for a test pinning a
+ *  specific rule rather than sweeping the whole gate. */
+async function gateFindings(id: string): Promise<{ severity: 'fail' | 'warn'; message: string }[]> {
+  if (!existsSync(measureBundle)) {
+    throw new Error('run `pnpm --filter @geekchart/cli build` first');
+  }
+  await session.page.addScriptTag({ path: measureBundle });
+  return session.page.evaluate((checkId) => {
+    const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+    return (window as unknown as GateGlobal).geekchartMeasure.runCheck(svg, checkId, {
+      chartId: '',
+    });
+  }, id);
+}
+
+/** Fail-severity messages only, for a check whose gate-level threshold is
+ *  exactly what the test wants to pin. */
+async function gateCheck(id: string): Promise<string[]> {
+  return (await gateFindings(id)).filter((f) => f.severity === 'fail').map((f) => f.message);
+}
 
 /** The frame the renderer chose, plus every text run's size and baseline. */
 async function measure() {
@@ -203,6 +238,8 @@ describe('canvas', () => {
     // mismatch (unstyled measurement text, a presentation attribute a CSS
     // class was silently overriding, a gutter sized for content that never
     // landed on that side).
+    // Calls the gate's own 7.3-centred check (packages/cli/src/measure/canvas.ts)
+    // instead of reimplementing the margin arithmetic.
     for (const name of [
       'flow',
       '4geeks-journey',
@@ -213,15 +250,9 @@ describe('canvas', () => {
       'quadrant',
       'sankey',
     ]) {
-      await mount(named(name));
-      const m = await measure();
-      const ink = m.ink!;
-      const leftMargin = ink.left;
-      const rightMargin = m.width - ink.right;
-      assert.ok(
-        Math.abs(leftMargin - rightMargin) <= 8,
-        `${name}: left margin ${leftMargin.toFixed(1)} vs right margin ${rightMargin.toFixed(1)} (DESIGN 7.3)`,
-      );
+      await mount(named(name), { motion: false });
+      const findings = await gateCheck('7.3-centred');
+      assert.deepEqual(findings, [], `${name}: ${findings.join('; ')}`);
     }
   });
 
@@ -304,16 +335,13 @@ describe('canvas', () => {
 
   test('a chart uses more than a third of its canvas', async () => {
     // "A chart that is a thin strip in a large empty stage" — DESIGN 9. These
-    // six were the strips: 1469×200, 1588×316, 1134×210 and friends.
+    // six were the strips: 1469×200, 1588×316, 1134×210 and friends. Calls the
+    // gate's own 7.4-coverage check (packages/cli/src/measure/canvas.ts)
+    // instead of reimplementing the area arithmetic.
     for (const name of ['flow', '4geeks-journey', 'er', 'org-chart', 'timeline', 'kanban']) {
-      await mount(named(name));
-      const m = await measure();
-      const ink = m.ink!;
-      const covered = ((ink.right - ink.left) * (ink.bottom - ink.top)) / (m.width * m.height);
-      assert.ok(
-        covered > 0.35,
-        `${name}: content covers ${Math.round(covered * 100)}% of the canvas (DESIGN 7.4)`,
-      );
+      await mount(named(name), { motion: false });
+      const findings = await gateCheck('7.4-coverage');
+      assert.deepEqual(findings, [], `${name}: ${findings.join('; ')} (DESIGN 7.4)`);
     }
   });
 });
@@ -402,18 +430,13 @@ describe('rotation', () => {
     // Regression: the y-axis ends used to draw as one vertical run beside the
     // panel, spending DESIGN 3.4's one allowed rotated label. Both ends now sit
     // horizontal, above and below the panel, so the chart spends none of it.
-    await mount(named('quadrant'));
-    const rotated = await session.page.evaluate(() => {
-      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
-      let n = 0;
-      for (const t of svg.querySelectorAll('text')) {
-        const tr =
-          (t.getAttribute('transform') ?? '') + (t.parentElement?.getAttribute('transform') ?? '');
-        if (/rotate\(\s*-?(?!0[\s)])\d/.test(tr)) n++;
-      }
-      return n;
-    });
-    assert.ok(rotated <= 1, `found ${rotated} rotated text runs (DESIGN 3.4)`);
+    // Calls the gate's own 3.4-rotation check (packages/cli/src/measure/type.ts):
+    // a single rotated run is a warn (the axis label is allowed), more than one
+    // is a fail.
+    await mount(named('quadrant'), { motion: false });
+    const findings = await gateFindings('3.4-rotation');
+    const fails = findings.filter((f) => f.severity === 'fail');
+    assert.deepEqual(fails, [], fails.map((f) => f.message).join('; '));
   });
 
   test('git graph has zero rotated text — commit and branch labels stay upright', async () => {
@@ -421,18 +444,16 @@ describe('rotation', () => {
     // "labels upright (never rotated)". A commit id set along its lane, the
     // usual way a hand-drawn git graph is tempted to save horizontal room,
     // would trip this.
-    await mount(named('gitgraph'));
-    const rotated = await session.page.evaluate(() => {
-      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
-      let n = 0;
-      for (const t of svg.querySelectorAll('text')) {
-        const tr =
-          (t.getAttribute('transform') ?? '') + (t.parentElement?.getAttribute('transform') ?? '');
-        if (/rotate\(\s*-?(?!0[\s)])\d/.test(tr)) n++;
-      }
-      return n;
-    });
-    assert.equal(rotated, 0, `found ${rotated} rotated text runs on the git graph (DESIGN 3.4)`);
+    // Zero tolerance, unlike quadrant above — even the one rotated run the
+    // gate itself only warns about would trip this, so it checks every
+    // finding (not just fail-severity ones).
+    await mount(named('gitgraph'), { motion: false });
+    const findings = await gateFindings('3.4-rotation');
+    assert.deepEqual(
+      findings,
+      [],
+      `found rotated text runs on the git graph: ${findings.map((f) => f.message).join('; ')}`,
+    );
   });
 });
 

@@ -117,6 +117,14 @@ export function measureChart(svg: SVGSVGElement, opts: MeasureOptions = {}): Mea
   return { fails, warns };
 }
 
+/** Run one check by id — for tests that pin a specific rule against a
+ *  specific fixture rather than sweeping the whole gate. */
+export function runCheck(svg: SVGSVGElement, id: string, opts: MeasureOptions = {}): Finding[] {
+  const check = ALL_CHECKS.find((c) => c.id === id);
+  if (!check) throw new Error(`no such check: ${id}`);
+  return check.run(svg, createCtx(svg, opts));
+}
+
 export * from './helpers.ts';
 export { CANVAS_CHECKS } from './canvas.ts';
 export { GRID_CHECKS } from './grid.ts';
