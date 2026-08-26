@@ -26,3 +26,19 @@ await build({
 });
 
 console.error('built dist/renderer.js');
+
+// The DESIGN.md checks (packages/cli/src/measure/), bundled the same way so
+// the gate and the test suite call the exact same code inside the page.
+await build({
+  entryPoints: [join(here, 'src', 'measure-entry.ts')],
+  bundle: true,
+  format: 'iife',
+  target: 'chrome120',
+  platform: 'browser',
+  minify: true,
+  legalComments: 'none',
+  outfile: join(here, 'dist', 'measure.js'),
+  logLevel: 'error',
+});
+
+console.error('built dist/measure.js');
