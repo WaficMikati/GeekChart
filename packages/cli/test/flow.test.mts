@@ -1,9 +1,11 @@
-import { after, before, describe, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openSession, renderAny, type AnyReply, type Session } from '../src/browser.ts';
+import { renderAny, type AnyReply, type AnyRequest, type Session } from '../src/browser.ts';
+import { getSession } from './helpers/session.ts';
+import { cachedRender } from './helpers/render-cache.ts';
 
 /**
  * Guards for the drawn pipeline.
@@ -27,10 +29,7 @@ const CAPTIONED = `flowchart LR
 
 let session: Session;
 before(async () => {
-  session = await openSession();
-});
-after(async () => {
-  await session?.close();
+  session = await getSession();
 });
 
 const ok = (reply: AnyReply): Extract<AnyReply, { ok: true }> => {
@@ -39,10 +38,15 @@ const ok = (reply: AnyReply): Extract<AnyReply, { ok: true }> => {
 };
 
 async function mount(source: string, options = {}) {
-  const reply = ok(await renderAny(session.page, source, { scene: 'manim', ...options }));
+  const reply = ok(await renderCached(source, { scene: 'manim', ...options }));
   await session.page.setContent(reply.html, { waitUntil: 'load' });
   await session.page.evaluate(() => document.fonts.ready);
   return reply;
+}
+
+/** For call sites that only need the reply, not a mounted page. */
+async function renderCached(source: string, options: AnyRequest = {}) {
+  return cachedRender('renderAny', source, options, () => renderAny(session.page, source, options));
 }
 
 // Every fixture that goes through the orthogonal router (planPorts/planRoutes
@@ -142,7 +146,7 @@ describe('routing', () => {
     };
     for (const [name, diagram] of Object.entries(drawn)) {
       const reply = ok(
-        await renderAny(session.page, readFileSync(join(fixtures, name), 'utf8'), {}),
+        await renderCached(readFileSync(join(fixtures, name), 'utf8'), {}),
       );
       assert.equal(reply.path, 'flow', `${name} should use the drawn renderer`);
       assert.equal(reply.diagram, diagram);
@@ -363,7 +367,7 @@ describe('routing', () => {
     // chart repeatedly and would otherwise differ every frame.
     const uid = async (name: string) => {
       const reply = ok(
-        await renderAny(session.page, readFileSync(join(fixtures, name), 'utf8'), {}),
+        await renderCached(readFileSync(join(fixtures, name), 'utf8'), {}),
       );
       assert.ok(!/<marker\b/.test(reply.svg), `${name} still hangs a mark off a shared id`);
       return /data-gc="([^"]+)"/.exec(reply.svg)?.[1];
@@ -378,7 +382,7 @@ describe('routing', () => {
   test('a damaged paste is repaired before the drawn pipeline sees it', async () => {
     // The flow renderer had been skipping repair entirely; the router owns it now.
     const reply = ok(
-      await renderAny(session.page, readFileSync(join(fixtures, 'messy.mmd'), 'utf8'), {}),
+      await renderCached(readFileSync(join(fixtures, 'messy.mmd'), 'utf8'), {}),
     );
     assert.equal(reply.path, 'flow');
     assert.ok(reply.repairs.length >= 3, 'each fix is reported back');
@@ -389,7 +393,7 @@ describe('routing', () => {
     const names = readdirSync(fixtures).filter((f) => f.endsWith('.mmd'));
     for (const name of names) {
       const source = readFileSync(join(fixtures, name), 'utf8');
-      const reply = ok(await renderAny(session.page, source, {}));
+      const reply = ok(await renderCached(source, {}));
       assert.ok(reply.nodes > 0, `${name} found no nodes`);
     }
   });
@@ -803,7 +807,7 @@ describe('timeline, gantt and journey', () => {
       ['journey', 'journey'],
     ] as const) {
       const reply = ok(
-        await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
+        await renderCached(readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
       );
       assert.equal(reply.path, 'flow', `${name} should use the drawn renderer`);
       assert.equal(reply.diagram, diagram);
@@ -1011,7 +1015,7 @@ describe('quadrant, radar and xy', () => {
       ['xy', 'xy'],
     ] as const) {
       const reply = ok(
-        await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
+        await renderCached(readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
       );
       assert.equal(reply.path, 'flow', `${name} should use the drawn renderer`);
       assert.equal(reply.diagram, diagram);
@@ -1143,7 +1147,7 @@ describe('sankey, treemap and kanban', () => {
   test('all three are drawn and animate', async () => {
     for (const name of ['sankey', 'treemap', 'kanban'] as const) {
       const reply = ok(
-        await renderAny(session.page, readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
+        await renderCached(readFileSync(join(fixtures, `${name}.mmd`), 'utf8'), {}),
       );
       assert.equal(reply.path, 'flow', `${name} should use the drawn renderer`);
       assert.equal(reply.diagram, name);
@@ -1803,7 +1807,7 @@ describe('fonts', () => {
 `;
     const widthWith = async (measureWith: string) => {
       const reply = ok(
-        await renderAny(session.page, source, {
+        await renderCached(source, {
           fonts: { display: 'inherit', label: 'inherit', mono: 'inherit', measureWith },
         }),
       );
@@ -1834,7 +1838,7 @@ describe('fonts', () => {
 
   test('an explicit stack is both measured and emitted', async () => {
     const reply = ok(
-      await renderAny(session.page, readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {
+      await renderCached(readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {
         fonts: {
           display: 'Georgia, serif',
           label: 'Verdana, sans-serif',
@@ -1855,7 +1859,7 @@ describe('fonts', () => {
     // it answers "can this be rendered", and a fallback always can.
     const warn = async (measureWith: string) => {
       const reply = ok(
-        await renderAny(session.page, readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {
+        await renderCached(readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {
           fonts: { display: 'inherit', label: 'inherit', mono: 'inherit', measureWith },
         }),
       );
@@ -1876,7 +1880,7 @@ describe('fonts', () => {
     // The default scene is 4geeks, which sets its titles in Archivo — the point
     // is that *some* real face is named, not that it is any particular one.
     const reply = ok(
-      await renderAny(session.page, readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {}),
+      await renderCached(readFileSync(join(fixtures, 'class.mmd'), 'utf8'), {}),
     );
     assert.match(reply.css, /Archivo/);
     assert.ok(!/font-family: *inherit/.test(reply.css));
@@ -1908,12 +1912,12 @@ describe('fonts', () => {
 
   test('the default scene is 4geeks, and a palette overrides it', async () => {
     const base = ok(
-      await renderAny(session.page, readFileSync(join(fixtures, 'flow.mmd'), 'utf8'), {}),
+      await renderCached(readFileSync(join(fixtures, 'flow.mmd'), 'utf8'), {}),
     );
     assert.ok(base.css.includes('#0084FF'), '4geeks blue is the default primary');
 
     const themed = ok(
-      await renderAny(session.page, readFileSync(join(fixtures, 'flow.mmd'), 'utf8'), {
+      await renderCached(readFileSync(join(fixtures, 'flow.mmd'), 'utf8'), {
         palette: { path: '#FF00AA', ink: '#001122' },
       }),
     );
@@ -2206,25 +2210,26 @@ describe('reduced motion', () => {
     // The pulse's resting opacity had been written inside the reduced-motion
     // media query, so with motion disabled it never applied and every pulse
     // parked on the start of its edge as a stray dot.
-    const still = await openSession(1, 'reduce');
-    try {
-      const reply = ok(await renderAny(still.page, CAPTIONED, { scene: 'manim' }));
-      await still.page.setContent(reply.html, { waitUntil: 'load' });
-      await still.page.evaluate(() => document.fonts.ready);
-      const state = await still.page.evaluate(() => ({
-        visibleSparks: [...document.querySelectorAll('.gc-spark')].filter(
-          (s) => Number(getComputedStyle(s).opacity) > 0.01,
-        ).length,
-        sparkCount: document.querySelectorAll('.gc-spark').length,
-        hiddenOutlines: [...document.querySelectorAll('.gc-outline')].filter(
-          (o) => Number(getComputedStyle(o).opacity) < 0.9,
-        ).length,
-      }));
-      assert.ok(state.sparkCount > 0, 'this chart has a spine to pulse');
-      assert.equal(state.visibleSparks, 0, 'a parked pulse shows as a stray dot');
-      assert.equal(state.hiddenOutlines, 0, 'the un-animated state must be the finished chart');
-    } finally {
-      await still.close();
-    }
+    // A second, independent session under its own `getSession` key (see
+    // helpers/session.ts) — this is the one test in the file that needs
+    // `reducedMotion: 'reduce'`, so it cannot share the default session.
+    // Closed with everything else in the file's global `after`, not right
+    // after this test, now that closing is the helper's job.
+    const still = await getSession(1, 'reduce');
+    const reply = ok(await renderAny(still.page, CAPTIONED, { scene: 'manim' }));
+    await still.page.setContent(reply.html, { waitUntil: 'load' });
+    await still.page.evaluate(() => document.fonts.ready);
+    const state = await still.page.evaluate(() => ({
+      visibleSparks: [...document.querySelectorAll('.gc-spark')].filter(
+        (s) => Number(getComputedStyle(s).opacity) > 0.01,
+      ).length,
+      sparkCount: document.querySelectorAll('.gc-spark').length,
+      hiddenOutlines: [...document.querySelectorAll('.gc-outline')].filter(
+        (o) => Number(getComputedStyle(o).opacity) < 0.9,
+      ).length,
+    }));
+    assert.ok(state.sparkCount > 0, 'this chart has a spine to pulse');
+    assert.equal(state.visibleSparks, 0, 'a parked pulse shows as a stray dot');
+    assert.equal(state.hiddenOutlines, 0, 'the un-animated state must be the finished chart');
   });
 });

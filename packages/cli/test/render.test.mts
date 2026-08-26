@@ -1,15 +1,17 @@
-import { after, before, describe, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  openSession,
   render,
   renderAny,
+  type AnyRequest,
   type RenderRequest,
   type Session,
 } from '../src/browser.ts';
+import { getSession } from './helpers/session.ts';
+import { cachedRender } from './helpers/render-cache.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, '..', '..', '..', 'fixtures');
@@ -28,19 +30,25 @@ const baseRequest: RenderRequest = {
 
 let session: Session;
 before(async () => {
-  session = await openSession();
-});
-after(async () => {
-  await session?.close();
+  session = await getSession();
 });
 
 const source = (name: string) => readFileSync(join(fixtures, name), 'utf8');
+
+/** `render`/`renderAny` are pure functions of (source, options) — the same
+ *  fixture rendered with the same options elsewhere in this file, or in a
+ *  sibling test file, is the same result. `render.test.mts` alone renders
+ *  `flow.mmd` with `baseRequest` seven times. */
+const renderCached = (diagram: string, options: RenderRequest) =>
+  cachedRender('render', diagram, options, () => render(session.page, diagram, options));
+const renderAnyCached = (diagram: string, options: AnyRequest = {}) =>
+  cachedRender('renderAny', diagram, options, () => renderAny(session.page, diagram, options));
 
 describe('every fixture renders', () => {
   for (const name of names) {
     for (const style of ['blueprint', 'surface', 'press'] as const) {
       test(`${name} · ${style}`, async () => {
-        const reply = await render(session.page, source(name), { ...baseRequest, style });
+        const reply = await renderCached(source(name), { ...baseRequest, style });
         assert.equal(reply.ok, true, reply.ok ? '' : `${name}: ${JSON.stringify(reply)}`);
         if (!reply.ok) return;
         assert.ok(reply.svg.includes('<svg'), 'produced an svg');
@@ -64,7 +72,7 @@ describe('mermaid contract', () => {
   };
   for (const [name, minimum] of Object.entries(expected)) {
     test(`${name} still exposes at least ${minimum} animatable parts`, async () => {
-      const reply = await render(session.page, source(name), baseRequest);
+      const reply = await renderCached(source(name), baseRequest);
       assert.equal(reply.ok, true);
       if (!reply.ok) return;
       assert.ok(
@@ -80,7 +88,7 @@ describe('the animation is actually wired up', () => {
   test('edges carry a real dash pattern', async () => {
     // Regression: mermaid's own `.edge-pattern-solid { stroke-dasharray: 0 }`
     // used to win the cascade, leaving every edge fully drawn at frame one.
-    const reply = await render(session.page, source('flow.mmd'), baseRequest);
+    const reply = await renderCached(source('flow.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -98,7 +106,7 @@ describe('the animation is actually wired up', () => {
 
   test('the page reports animations a capture can seek', async () => {
     // Regression: without this the video export silently produced a still.
-    const reply = await render(session.page, source('flow.mmd'), baseRequest);
+    const reply = await renderCached(source('flow.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -107,7 +115,7 @@ describe('the animation is actually wired up', () => {
   });
 
   test('every animated part has a start time', async () => {
-    const reply = await render(session.page, source('subgraphs.mmd'), baseRequest);
+    const reply = await renderCached(source('subgraphs.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -124,7 +132,7 @@ describe('the animation is actually wired up', () => {
 describe('styling survives serialisation', () => {
   test('edge labels sit on the page background, not the ink', async () => {
     // Regression: these rendered as solid black boxes.
-    const reply = await render(session.page, source('flow.mmd'), baseRequest);
+    const reply = await renderCached(source('flow.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -140,7 +148,7 @@ describe('styling survives serialisation', () => {
   test('the injected stylesheet contains no XML-escapable characters', async () => {
     // Regression: XMLSerializer turns `>` into `&gt;`, which corrupts the rule
     // that follows it once the SVG is re-parsed.
-    const reply = await render(session.page, source('flow.mmd'), baseRequest);
+    const reply = await renderCached(source('flow.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     const style = /<style[^>]*>([\s\S]*?)<\/style>/.exec(reply.svg);
@@ -152,7 +160,7 @@ describe('styling survives serialisation', () => {
     // foreignObject clips its contents and does not render outside a browser, so
     // an HTML label both crops long text and breaks the standalone .svg export.
     for (const name of ['flow.mmd', 'subgraphs.mmd', 'state.mmd', 'class.mmd']) {
-      const reply = await render(session.page, source(name), baseRequest);
+      const reply = await renderCached(source(name), baseRequest);
       assert.equal(reply.ok, true);
       if (!reply.ok) return;
       assert.equal(reply.svg.includes('foreignObject'), false, `${name} used an HTML label`);
@@ -162,7 +170,7 @@ describe('styling survives serialisation', () => {
   test('labels fit inside the boxes drawn for them', async () => {
     // Regression: mermaid measured at weight 400 while our CSS drew at 500, so
     // every label came out a few pixels too wide and lost its last glyph.
-    const reply = await render(session.page, source('flow.mmd'), baseRequest);
+    const reply = await renderCached(source('flow.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -184,7 +192,7 @@ describe('styling survives serialisation', () => {
   test('a one-line label keeps one colour throughout', async () => {
     // Regression: the subtitle rule matched mermaid's per-word tspans, so every
     // word after the first turned grey.
-    const reply = await render(session.page, source('flow.mmd'), baseRequest);
+    const reply = await renderCached(source('flow.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -204,7 +212,7 @@ describe('styling survives serialisation', () => {
   });
 
   test('the brand font is loaded before mermaid measures text', async () => {
-    const reply = await render(session.page, source('flow.mmd'), baseRequest);
+    const reply = await renderCached(source('flow.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     const loaded = await session.page.evaluate(() => document.fonts.check('500 15px Archivo'));
     assert.equal(loaded, true, 'labels get measured at fallback-font widths otherwise');
@@ -213,7 +221,7 @@ describe('styling survives serialisation', () => {
 
 describe('bad input', () => {
   test('a messy paste is repaired and reported', async () => {
-    const reply = await render(session.page, source('messy.mmd'), baseRequest);
+    const reply = await renderCached(source('messy.mmd'), baseRequest);
     assert.equal(reply.ok, true);
     if (!reply.ok) return;
     assert.ok(reply.repairs.length >= 3, 'each fix is reported back to the user');
@@ -228,7 +236,7 @@ describe('bad input', () => {
   });
 
   test('a genuine syntax error comes back located, not thrown', async () => {
-    const reply = await render(session.page, 'flowchart TD\n  A --> \n  B -->|', baseRequest);
+    const reply = await renderCached('flowchart TD\n  A --> \n  B -->|', baseRequest);
     assert.equal(reply.ok, false);
     if (reply.ok) return;
     assert.ok(reply.error.message.length > 0);
@@ -236,7 +244,7 @@ describe('bad input', () => {
   });
 
   test('an empty diagram fails cleanly', async () => {
-    const reply = await render(session.page, '   \n  \n', baseRequest);
+    const reply = await renderCached('   \n  \n', baseRequest);
     assert.equal(reply.ok, false);
   });
 });
@@ -314,7 +322,7 @@ describe('sequence geometry', () => {
     // scale then shrank everything, including 11-unit type, below what
     // DESIGN 3.1 calls legible. Wrapping long messages to two lines keeps the
     // lanes — and the canvas — inside the 1000-unit cap, so nothing shrinks.
-    const reply = await renderAny(session.page, source('blog/first-ai-app.mmd'), {});
+    const reply = await renderAnyCached(source('blog/first-ai-app.mmd'), {});
     assert.equal(reply.ok, true, reply.ok ? '' : JSON.stringify(reply));
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });
@@ -343,7 +351,7 @@ describe('sequence geometry', () => {
     // span on each side. The extent handed to fitCanvas used to assume the
     // nominal content box, so the frame — and its kind tab — clipped at the
     // canvas edge (DESIGN 7.5).
-    const reply = await renderAny(session.page, source('blog/rigobot-loop.mmd'), {});
+    const reply = await renderAnyCached(source('blog/rigobot-loop.mmd'), {});
     assert.equal(reply.ok, true, reply.ok ? '' : JSON.stringify(reply));
     if (!reply.ok) return;
     await session.page.setContent(reply.html, { waitUntil: 'load' });

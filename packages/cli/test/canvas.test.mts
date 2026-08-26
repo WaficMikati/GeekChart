@@ -1,9 +1,11 @@
-import { after, before, describe, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openSession, renderAny, type AnyReply, type Session } from '../src/browser.ts';
+import { renderAny, type AnyReply, type Session } from '../src/browser.ts';
+import { getSession } from './helpers/session.ts';
+import { cachedRender } from './helpers/render-cache.ts';
 
 /**
  * The canvas and the type scale — DESIGN 1.1–1.4, 3, 3.1, 10.2, 10.3.
@@ -40,10 +42,7 @@ const CAPTIONED = `flowchart TB
 
 let session: Session;
 before(async () => {
-  session = await openSession();
-});
-after(async () => {
-  await session?.close();
+  session = await getSession();
 });
 
 const ok = (reply: AnyReply): Extract<AnyReply, { ok: true }> => {
@@ -52,7 +51,9 @@ const ok = (reply: AnyReply): Extract<AnyReply, { ok: true }> => {
 };
 
 async function mount(source: string, options = {}) {
-  const reply = ok(await renderAny(session.page, source, options));
+  const reply = ok(
+    await cachedRender('renderAny', source, options, () => renderAny(session.page, source, options)),
+  );
   await session.page.setContent(reply.html, { waitUntil: 'load' });
   await session.page.evaluate(() => document.fonts.ready);
   return reply;
@@ -285,7 +286,9 @@ describe('canvas', () => {
     // Phase 9: pie, mindmap and gitGraph used to fall through to mermaid's own
     // renderer (DESIGN 7.6). The one thing every native chart carries that a
     // raw mermaid SVG never does is this class on the root element.
-    const reply = ok(await renderAny(session.page, named('pie'), {}));
+    const reply = ok(
+      await cachedRender('renderAny', named('pie'), {}, () => renderAny(session.page, named('pie'), {})),
+    );
     assert.match(
       reply.svg,
       /<svg class="gc-chart"/,

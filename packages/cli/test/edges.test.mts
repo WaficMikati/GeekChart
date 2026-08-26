@@ -1,9 +1,11 @@
-import { after, before, describe, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openSession, renderAny, type AnyReply, type Session } from '../src/browser.ts';
+import { renderAny, type AnyReply, type Session } from '../src/browser.ts';
+import { getSession } from './helpers/session.ts';
+import { cachedRender } from './helpers/render-cache.ts';
 
 /**
  * Edge geometry, measured. DESIGN 6.1–6.7, 2.1, 2.3, 2.6, 10.3.
@@ -34,10 +36,7 @@ const GRAPHS = [
 
 let session: Session;
 before(async () => {
-  session = await openSession();
-});
-after(async () => {
-  await session?.close();
+  session = await getSession();
 });
 
 const ok = (reply: AnyReply): Extract<AnyReply, { ok: true }> => {
@@ -46,8 +45,10 @@ const ok = (reply: AnyReply): Extract<AnyReply, { ok: true }> => {
 };
 
 async function mount(name: string) {
+  const source = readFileSync(join(fixtures, name), 'utf8');
+  const options = { motion: false };
   const reply = ok(
-    await renderAny(session.page, readFileSync(join(fixtures, name), 'utf8'), { motion: false }),
+    await cachedRender('renderAny', source, options, () => renderAny(session.page, source, options)),
   );
   await session.page.setContent(reply.html, { waitUntil: 'load' });
   await session.page.evaluate(() => document.fonts.ready);
