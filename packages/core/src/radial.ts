@@ -130,17 +130,6 @@ function sliceClass(i: number, seriesLen: number): string {
   return `gc-pie-slice gc-series-${(i - 4) % Math.max(seriesLen, 1)}`;
 }
 
-/** A donut wedge, outer arc out, inner arc back. */
-function wedgePath(cx: number, cy: number, rOuter: number, rInner: number, a0: number, a1: number): string {
-  const large = a1 - a0 > Math.PI ? 1 : 0;
-  const at = (r: number, a: number) => ({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
-  const o0 = at(rOuter, a0), o1 = at(rOuter, a1), i1 = at(rInner, a1), i0 = at(rInner, a0);
-  return (
-    `M${round(o0.x)},${round(o0.y)} A${rOuter},${rOuter} 0 ${large} 1 ${round(o1.x)},${round(o1.y)} ` +
-    `L${round(i1.x)},${round(i1.y)} A${rInner},${rInner} 0 ${large} 0 ${round(i0.x)},${round(i0.y)} Z`
-  );
-}
-
 /**
  * A donut, centred left, with every slice named on a short leader line outside
  * the ring rather than crammed inside it — a wedge under 20° has nowhere to set
@@ -459,7 +448,6 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
   // its loop is longer than the index cadence would give; computed below.
   const mindLinks = marks.filter((mk) => mk.id.startsWith('m-')).length;
   const mindDepth = Math.max(0, ...marks.map((mk) => mk.depth ?? 0));
-  let liveEnd = 0;
   const cycle = marks.some((mk) => mk.id === 'root')
     ? scaffold + m.build * 0.5 + mindDepth * (m.build * 0.9 + m.build * 0.6 * 0.6 + 0.36) + 0.4 + mindLinks * 0.45 * 0.8 + 0.45 + 0.6 + m.hold
     : last + m.hold;
@@ -543,7 +531,6 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
       outline.at(cycle, { stroke: 'var(--gc-mark)' });
       at += walk * 0.8;
     }
-    liveEnd = at + 0.6;
   }
   marks.forEach((mark, i) => {
     if (isMind) return;

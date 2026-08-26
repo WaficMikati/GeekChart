@@ -17,8 +17,6 @@ import { faceLine } from './ports.ts';
  * rounded, and every arrowhead sits exactly on an axis.
  */
 
-const distance = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
-
 /**
  * One cubic from port to port.
  *

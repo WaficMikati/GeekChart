@@ -187,7 +187,7 @@ export function boundaryPoint(shape: Shape, outside: Point, inner: Point = shape
  * meet a box cleanly instead of nearly.
  */
 export function attachToShapes(points: Point[], from: Shape | null, to: Shape | null): Point[] {
-  let route = [...points];
+  const route = [...points];
 
   if (from) {
     while (route.length > 1 && isInside(from, route[0]!)) route.shift();

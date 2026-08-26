@@ -477,7 +477,6 @@ function animate(
     return made;
   };
   const lead = 0.25;
-  const scaffold = lead + m.build;
   const commits = marks.filter((mk) => mk.commit);
   // The lanes' own left-to-right draw is the "drawing head": a commit pops in
   // exactly when that stroke would have reached its x, so the two read as one

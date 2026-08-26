@@ -225,7 +225,7 @@ async function buildMermaidBundle(scratch) {
     raw += buf.length;
     brotli += brotliSize(buf);
   }
-  return { outfile: join(scratch, 'mermaid-bundle.js'), bundleRaw: raw, bundleBrotli: brotli, files: [...closure].map((k) => k.split('/').pop()) };
+  return { outfile, bundleRaw: raw, bundleBrotli: brotli, files: [...closure].map((k) => k.split('/').pop()) };
 }
 
 async function benchMermaidBaseline(fixtures, scratch) {
@@ -397,7 +397,7 @@ async function measureFirstChart(port) {
 }
 
 async function runLighthouse(port, scratch) {
-  let lighthouse, chromeLauncher;
+  let lighthouse;
   try {
     ({ default: lighthouse } = await import('lighthouse'));
   } catch {
@@ -516,7 +516,7 @@ function psSnapshot() {
   return map;
 }
 
-async function benchServer(fixtures, scratch) {
+async function benchServer(fixtures) {
   log('5. server path (geekchart/server): start time, warm miss, cache hit, throughput, RSS');
   const serverModPath = join(geekchartDist, 'server.js');
   if (!existsSync(serverModPath)) {
@@ -783,7 +783,7 @@ async function main() {
     .map((c) => fixtures.find((f) => f.id === c.id));
   const animation = await benchAnimation(heaviest);
 
-  const server = await benchServer(fixtures, scratch);
+  const server = await benchServer(fixtures);
   const bundle = benchBundle();
 
   rmSync(scratch, { recursive: true, force: true });

@@ -6,7 +6,7 @@ import { metricsCss, themeCss, themeVariables, toAttributeSelectors } from './th
 import { analyze } from './analyze.ts';
 import { decorate } from './decorate.ts';
 import { normalize } from './normalize.ts';
-import { styles, type StyleName } from './styles.ts';
+import { styles } from './styles.ts';
 import { bake, defaultAnimation } from './animate.ts';
 import { ensureFonts } from './fonts.ts';
 import { standaloneHtml } from './export.ts';
@@ -264,7 +264,7 @@ export async function renderChart(input: string, opts: RenderInput = {}): Promis
     );
 
     const analysis = analyze(svg, source);
-    const animation = bake(svg, analysis, options.theme, options.animation, options.style);
+    const animation = bake(svg, analysis, options.theme, options.animation);
     decorate(svg, analysis, spec, id);
     frameToCanvas(svg);
     const css = themeCss(id, options.theme, options.style) + animation.css;

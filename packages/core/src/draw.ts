@@ -346,7 +346,7 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     const role = onPath.has(node.id) ? 'path' : 'quiet';
     const label = node.rows?.length
       ? panelLabel(node, scene)
-      : centredLabel(node, cx, cy, scene);
+      : centredLabel(node, cx, cy);
 
     // The end state is a ring with a filled core, which is the only way to tell
     // it from the start state at a glance. Drawn as a second element rather than
@@ -543,7 +543,7 @@ function cardinality(
  * that lands the name on `y + 24` and the caption on `y + 40`, which is exactly
  * where the golden puts them; on the 48-high box the lone name is at `y + 28`.
  */
-function centredLabel(node: Placed, cx: number, cy: number, scene: Scene): string {
+function centredLabel(node: Placed, cx: number, cy: number): string {
   if (!node.title) return '';
   // A wrapped title (DESIGN 2.2: wrap rather than widen) sits on the same two
   // baselines a title+caption pair would, but both lines keep the title's

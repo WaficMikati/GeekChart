@@ -563,7 +563,7 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
           selfPierce(round.points, [a, b]) * 2000 +
           (item.loop ? tightCornerCost(round.points) : 0) +
           Math.max(0, pathLength(round.points) - loopBudget) * 10;
-        if ((globalThis as any).__DEBUG_EDGE === item.edge.id) {
+        if ((globalThis as Record<string, unknown>).__DEBUG_EDGE === item.edge.id) {
           console.error('ROUND', round.side, JSON.stringify(round.points), 'cost', cost,
             'selfPierce', selfPierce(round.points, [a, b]), 'intrusion', intrusion(round.points, blockers),
             'len', pathLength(round.points), 'budget', loopBudget);
@@ -680,7 +680,7 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
         }
       }
     }
-    if ((globalThis as any).__DEBUG_EDGE === item.edge.id) {
+    if ((globalThis as Record<string, unknown>).__DEBUG_EDGE === item.edge.id) {
       console.error('WINNER', JSON.stringify(best));
     }
     if (item.loop) lane++;

@@ -8,7 +8,8 @@
     "build": "pnpm -r build",
     "deploy": "pnpm --filter @geekchart/web deploy",
     "typecheck": "pnpm -r exec tsc --noEmit",
-    "lint": "eslint packages/geekchart/src packages/geekchart/test",
+    "lint": "eslint packages/core/src packages/cli/src packages/cli/scripts packages/cli/test packages/react/src packages/geekchart/src packages/geekchart/test",
+    "format": "prettier --write packages/core/src packages/cli/src packages/cli/scripts packages/cli/test packages/react/src packages/geekchart/src packages/geekchart/test",
     "size": "pnpm --filter geekchart size",
     "test": "pnpm --filter @geekchart/cli build && pnpm --filter geekchart build && node --test packages/core/test/*.test.mts packages/cli/test/*.test.mts packages/react/test/*.test.mts packages/geekchart/test/*.test.mts",
     "gallery": "node packages/cli/scripts/gallery.mjs",
@@ -19,6 +20,9 @@
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0"
   }

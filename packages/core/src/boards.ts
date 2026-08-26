@@ -285,7 +285,7 @@ const SLOTS = 6;
 /** A flow of magnitudes: nodes in columns, ribbons in between. */
 function sankey(
   board: Board, scene: Scene, width: Measure, pad: number, titleH: number,
-  parts: string[], marks: Mark[],
+  _parts: string[], marks: Mark[],
 ): Built {
   const links = board.links ?? [];
   const ids = [...new Set([...links.map((l) => l.source), ...links.map((l) => l.target)])];
@@ -523,7 +523,7 @@ function treemap(
 
 /** A board of columns, each holding cards. */
 function kanban(
-  board: Board, scene: Scene, width: Measure, pad: number, titleH: number,
+  board: Board, scene: Scene, _width: Measure, pad: number, titleH: number,
   parts: string[], marks: Mark[],
 ): Built {
   const columns = board.columns ?? [];

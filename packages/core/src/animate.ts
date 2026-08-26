@@ -1,6 +1,5 @@
 import type { AnimationOptions, Analysis, Element } from './types.ts';
 import { paletteFor } from './theme.ts';
-import type { StyleName } from './styles.ts';
 import type { ThemeName } from './types.ts';
 import { hsl } from './tokens.ts';
 
@@ -128,13 +127,11 @@ export function bake(
   analysis: Analysis,
   theme: ThemeName,
   options: Partial<AnimationOptions> = {},
-  style: StyleName = 'blueprint',
 ): BakeResult {
   const o = { ...defaultAnimation, ...options };
   const id = svg.id;
   if (o.preset === 'none') return { css: '', runtime: 0 };
 
-  const palette = paletteFor(theme);
   let runtime = 0;
   let flowIndex = 0;
 
