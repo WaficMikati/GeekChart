@@ -244,3 +244,13 @@ Before changing any drawing or layout code, list which rule numbers the change
 touches and what the measured value will be after. After the change, run
 `pnpm gate` (see `packages/cli/scripts/gate.mjs`) and paste the numbers. The
 gate checks what it can check; the rest is reviewed against the screenshot.
+
+## How the gate measures
+
+`packages/cli/src/measure/` is the executable form of the rules above — one
+check per rule id, one file per section (`canvas.ts`, `grid.ts`, `type.ts`,
+`edges.ts`, `labels.ts`, `charts.ts`). It is bundled to `dist/measure.js` the
+same way the renderer itself is bundled to `dist/renderer.js`, and both
+`packages/cli/scripts/gate.mjs` and the test suite inject that same bundle and
+call it — a rule's arithmetic is defined once, not once per caller. Reading a
+rule's real threshold means reading its check, not this prose.
