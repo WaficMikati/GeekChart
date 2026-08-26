@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/4GeeksAcademy/geekchart.git",
+    "url": "git+https://github.com/WaficMikati/GeekChart.git",
     "directory": "packages/geekchart"
   },
-  "homepage": "https://github.com/4GeeksAcademy/geekchart#readme",
-  "bugs": "https://github.com/4GeeksAcademy/geekchart/issues",
+  "homepage": "https://github.com/WaficMikati/GeekChart#readme",
+  "bugs": "https://github.com/WaficMikati/GeekChart/issues",
   "bin": {
     "geekchart": "./dist/cli.js"
   },
