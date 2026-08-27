@@ -60,6 +60,16 @@ Fonts
       --hold <s>         still seconds after    (default: 0)
       --quiet            only print the output path
 
+      --engine <name>    node | browser
+                         .tsx/.jsx/.svg draw with the Node engine by default —
+                         fontkit measures text, no Playwright needed. .html,
+                         .png and video still draw and capture in a real
+                         headless browser; .png/.mp4/.gif/.webm always do,
+                         since capturing a frame needs one regardless of how
+                         the chart was measured. Pass --engine=browser on a
+                         .tsx/.jsx/.svg export to use the old path instead —
+                         useful for checking the two engines still agree.
+
 Fourteen types are drawn by geekchart's own renderer: flowchart, state, class,
 ER, sequence, timeline, gantt, journey, quadrant, radar, xy, sankey, treemap and
 kanban. Pie, mindmap and gitgraph still go through mermaid's, and ignore --scene.
@@ -115,6 +125,7 @@ export async function main(argv: string[]): Promise<void> {
         lead: { type: 'string', default: '0' },
         hold: { type: 'string', default: '0' },
         quiet: { type: 'boolean', default: false },
+        engine: { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
       },
     });
@@ -169,6 +180,34 @@ export async function main(argv: string[]): Promise<void> {
 
   const isVideo = format === 'mp4' || format === 'gif' || format === 'webm';
   const isReact = format === 'tsx' || format === 'jsx';
+
+  /**
+   * Which engine draws the chart.
+   *
+   * `.tsx`/`.jsx`/`.svg` need nothing beyond the SVG/CSS strings `render()`
+   * hands back, so they draw with the Node engine (fontkit measures text, no
+   * browser) by default. `.html`, `.png` and video still default to the
+   * browser: `.html` because its default output has always been the
+   * browser-measured one and nothing forces a change, `.png`/video because
+   * capturing a frame needs a real browser regardless of which engine drew
+   * the SVG — there is no Node-side screenshot or video encoder here.
+   * `--engine` overrides the default for every format except the captured
+   * ones, where `node` is rejected outright rather than silently ignored.
+   */
+  if (values.engine && values.engine !== 'node' && values.engine !== 'browser') {
+    fail(`--engine must be "node" or "browser", got "${values.engine}"`);
+  }
+  const captured = isVideo || format === 'png';
+  if (values.engine === 'node' && captured) {
+    fail(
+      `--engine=node cannot produce .${format} — capturing a frame still needs a real browser ` +
+        `regardless of which engine drew the chart. Drop --engine, or pass --engine=browser.`,
+    );
+  }
+  const engine: 'node' | 'browser' =
+    (values.engine as 'node' | 'browser' | undefined) ??
+    (captured || format === 'html' ? 'browser' : 'node');
+  const needsSession = engine === 'browser' || captured;
 
   /**
    * Turn the font flags into an override, if any were given.
@@ -233,9 +272,9 @@ export async function main(argv: string[]): Promise<void> {
     // and then shown in whatever the destination uses.
     return { ...spec, measureWith: values['measure-with'] ?? SYSTEM_STACK };
   })();
-  const session = await openSession(isVideo || format === 'png' ? scale : 1);
+  const session = needsSession ? await openSession(isVideo || format === 'png' ? scale : 1) : undefined;
   try {
-    const reply = await renderAny(session.page, source, {
+    const renderOptions = {
       scene: values.scene as 'manim' | 'geeks',
       aspect: values.aspect as 'auto' | '16:9' | '1:1' | '4:5' | '9:16',
       ...(fonts ? { fonts } : {}),
@@ -244,7 +283,28 @@ export async function main(argv: string[]): Promise<void> {
       motion: !values['no-motion'] && format !== 'png' && format !== 'svg',
       width,
       height,
-    });
+    };
+    // `renderNode`'s thrown `ChartError` is mapped to the same `{ ok: false,
+    // error }` shape `renderAny` returns, so everything below this — error
+    // reporting, repairs, warnings — reads one shape regardless of engine.
+    const reply =
+      engine === 'node'
+        ? await (async () => {
+            const { renderNode } = await import('../../core/src/node/render.ts');
+            try {
+              return { ok: true as const, ...(await renderNode(source, renderOptions)) };
+            } catch (err) {
+              const { ChartError } = await import('../../core/src/chart-error.ts');
+              return {
+                ok: false as const,
+                error:
+                  err instanceof ChartError
+                    ? err.detail
+                    : { message: err instanceof Error ? err.message : String(err) },
+              };
+            }
+          })()
+        : await renderAny(session!.page, source, renderOptions);
 
     if (!reply.ok) {
       const where = reply.error.line ? ` on line ${reply.error.line}` : '';
@@ -261,14 +321,14 @@ export async function main(argv: string[]): Promise<void> {
     for (const warning of reply.warnings) {
       process.stderr.write(`\ngeekchart: ${warning}\n\n`);
     }
-    const engine = reply.path === 'flow' ? 'drawn' : 'mermaid';
+    const pipeline = reply.path === 'flow' ? 'drawn' : 'mermaid';
     log(
       `  ${reply.diagram} · ${reply.nodes} nodes · ${reply.edges} edges · ` +
-        `${reply.cycle > 0 ? `${reply.cycle.toFixed(1)}s loop` : 'static'} · ${engine}`,
+        `${reply.cycle > 0 ? `${reply.cycle.toFixed(1)}s loop` : 'static'} · ${pipeline} · ${engine} engine`,
     );
 
     if (isReact) {
-      const component = await bakeReact(session.page, {
+      const bakeInput = {
         fileName: output,
         svg: reply.svg,
         css: reply.css,
@@ -280,7 +340,17 @@ export async function main(argv: string[]): Promise<void> {
         javascript: format === 'jsx',
         inherited: fonts === 'inherit' || Object.values(fonts ?? {}).includes('inherit'),
         measuredWith: fonts && fonts !== 'inherit' ? fonts.measureWith : undefined,
-      });
+      };
+      // `reactComponent`/`componentName` (`@geekchart/core`'s `react.ts`) are
+      // plain string templating with no DOM in reach — `bakeReact` only
+      // exists to call them from inside the browser bundle, which the Node
+      // engine has no reason to load a page for at all.
+      const component =
+        engine === 'node'
+          ? await import('../../core/src/react.ts').then(({ reactComponent, componentName }) =>
+              reactComponent({ ...bakeInput, name: componentName(bakeInput.fileName) }),
+            )
+          : await bakeReact(session!.page, bakeInput);
       writeFileSync(output, component);
     } else if (format === 'html') {
       writeFileSync(output, reply.html);
@@ -288,14 +358,14 @@ export async function main(argv: string[]): Promise<void> {
       writeFileSync(output, reply.svgFile);
     } else if (format === 'png') {
       await captureStill(
-        session.page,
+        session!.page,
         { html: reply.html, runtime: reply.cycle, fps, scale, hold, lead },
         output,
       );
     } else {
       if (reply.cycle <= 0) fail('nothing to capture — motion is off, so use .png or .svg');
       const result = await captureVideo(
-        session.page,
+        session!.page,
         { html: reply.html, runtime: reply.cycle, fps, scale, hold, lead },
         output,
         format as 'mp4' | 'gif' | 'webm',
@@ -303,7 +373,7 @@ export async function main(argv: string[]): Promise<void> {
       log(`  ${result.frames} frames · ${result.seconds.toFixed(1)}s at ${fps}fps`);
     }
   } finally {
-    await session.close();
+    await session?.close();
   }
 
   process.stdout.write(output + '\n');
