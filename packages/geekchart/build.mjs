@@ -111,32 +111,49 @@ const nodeCommon = {
   // `playwright` is a peer dependency, not a bundled one — it ships native
   // browser binaries and must come from whatever install the host app did.
   //
-  // `@geekchart/core` is browser-only code (mermaid, ELK, the drawing and
-  // motion pipeline) that already ships once, fully, inside `dist/renderer.js`
-  // — the CLI drives it in a headless page rather than importing it in Node
-  // (see `browser.ts`). Marking it external rather than just never importing
-  // it is a tripwire: a future static `import from '@geekchart/core'`
-  // anywhere in this build's graph would otherwise get silently re-bundled
-  // into `cli.js`/`server.js` as a second copy of that whole graph — it broke
-  // this way once before (`SYSTEM_STACK`, packages/cli/src/index.ts). With
-  // it external, the same mistake fails loudly at runtime instead.
+  // `@geekchart/core` itself is never imported by its bare specifier from
+  // Node code in this build — `server.ts` and `cli.ts` both reach the Node
+  // renderer (`renderNode`, `reactComponent`) through a relative dynamic
+  // `import('../../core/src/...')` instead, the same trick `browser.ts`'s
+  // own dynamic import uses, and for the same reason: a static import of a
+  // local file does not drag that file's exported *types* into this
+  // package's own `.d.ts` output the way a package import would. Keeping
+  // `@geekchart/core` external regardless is a tripwire, not a size
+  // decision: a future static `import from '@geekchart/core'` anywhere in
+  // this build's graph would otherwise get silently re-bundled as a second,
+  // browser-flavoured copy of the whole graph — it broke this way once
+  // before (`SYSTEM_STACK`, packages/cli/src/index.ts). With it external,
+  // that mistake fails loudly at runtime instead of bloating the tarball
+  // silently.
   external: ['playwright', '@geekchart/core'],
   logLevel: 'error',
 };
 
+// `server.ts` and `cli.ts` both dynamically import the same Node renderer
+// (`@geekchart/core/node`'s `renderNode`, mermaid, ELK, fontkit, linkedom) —
+// one `build()` call across both entries, with splitting on, is what lets
+// esbuild notice that and put it in one shared chunk instead of bundling it
+// twice. Built as two separate `outfile` builds before, `server.js` and
+// `cli.js` each carried their own full copy of that graph (~7.3 MB each) on
+// top of the ~6.3 MB browser bundle `dist/renderer.js` already ships for
+// PNG/MP4 and `engine: 'browser'` — three copies of largely the same code.
+// `chunkNames` gets its own `-node-` prefix so these chunks never collide
+// with the client bundle's `chunk-[hash].js` files sitting in the same
+// `dist/` directory (harmless even if they did, since names are content
+// hashes, but there is no reason to rely on that).
 await build({
   ...nodeCommon,
-  entryPoints: [join(here, 'src', 'server.ts')],
-  outfile: join(dist, 'server.js'),
+  entryPoints: [join(here, 'src', 'server.ts'), join(here, 'src', 'cli.ts')],
+  outdir: dist,
+  entryNames: '[name]',
+  chunkNames: 'chunk-node-[hash]',
+  splitting: true,
 });
-
-await build({
-  ...nodeCommon,
-  entryPoints: [join(here, 'src', 'cli.ts')],
-  outfile: join(dist, 'cli.js'),
-  banner: { js: '#!/usr/bin/env node' },
-});
-chmodSync(join(dist, 'cli.js'), 0o755);
+// `banner` on a multi-entry build would stamp the shebang onto every output,
+// including `server.js` — prepended by hand to `cli.js` alone instead.
+const cliJsPath = join(dist, 'cli.js');
+writeFileSync(cliJsPath, `#!/usr/bin/env node\n${readFileSync(cliJsPath, 'utf8')}`);
+chmodSync(cliJsPath, 0o755);
 
 // Types, generated separately: esbuild only transpiles, it never checks or
 // emits declarations. tsc's own rootDir/outDir rules mean this lands nested
