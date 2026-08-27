@@ -16,12 +16,13 @@ npm install geekchart
 ```
 
 `react` is a peer dependency if you use the component. `playwright` is an
-**optional** peer dependency — only `geekchart/server` and the CLI need a
-browser to render in, and neither requires it installed until you actually
-call them.
+**optional** peer dependency: `geekchart/server` renders in this process by
+default (no browser at all — see below). Only ask for `engine: 'browser'`
+explicitly, or use the CLI (which still drives a real headless Chromium for
+every export), and you'll need it installed.
 
 ```
-npm install playwright   # only if you render on the server or use the CLI
+npm install playwright   # only for engine: 'browser', or the CLI
 npx playwright install chromium
 ```
 
@@ -77,10 +78,16 @@ gets its own id and its own renamed animation keyframes. `renderToSvg` returns
 the pieces separately (`{ svg, css, cycle, summary, repairs, warnings }`) if
 you want to place them yourself.
 
-Both are backed by one headless Chromium session, opened lazily on first call
-and reused for every render after — starting a browser per request would be
-the slow part, not the drawing. Call `closeServer()` when shutting the process
-down. Results are cached in memory by `sha256(version + source + options)` —
+Both render in this process by default (`engine: 'node'`, or leave it unset)
+— `@geekchart/core`'s fontkit measurer and a lazy `linkedom` shim in place of
+a real browser, so nothing here needs Playwright installed at all until you
+ask for `engine: 'browser'`. That option drives the same headless Chromium
+session this used exclusively before: opened lazily on first call and reused
+for every render after (starting a browser per request would be the slow
+part, not the drawing), kept as an escape hatch and for checking the two
+engines still agree. Call `closeServer()` when shutting the process down (a
+no-op if you never asked for the browser engine). Results are cached in
+memory by `sha256(version + source + options)` —
 the installed `geekchart` version is folded into the key automatically, so
 upgrading the package never serves a render the new code wouldn't have
 produced — bounded to 32 MB total rather than a fixed entry count, so a
@@ -135,7 +142,7 @@ app.get('/posts/:slug', async (req, res) => {
 
 `warm(sources, options, concurrency = 4)` renders and caches a list of
 sources up front — a build step or deploy hook, so the first real visitor
-hits a warm cache instead of paying for a browser round trip. `sources` is an
+hits a warm cache instead of paying for the render itself. `sources` is an
 array of mermaid strings or an `AsyncIterable<string>` (a database cursor, a
 line-by-line file read); `options` is whatever `renderToSvg` takes, including
 `cache` — pass `{ cache: diskCache({ dir }) }` to warm a persistent cache.

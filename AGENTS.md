@@ -28,7 +28,16 @@ packages/core/src     the renderer — one file per family
   radial.ts, commits.ts  pie + mindmap, git graph
   scene.ts               the type table, canvas rules, palettes  ← sizes live here, nowhere else
   repair.ts              fixes damaged pastes before parsing
-packages/geekchart      the published npm package: <Geekchart> (client), geekchart/server, CLI
+  node/                  renderNode() — the drawn pipeline with no browser: measure.ts (fontkit
+                         glyph advances, rounded to match Chromium), dom.ts (a lazy linkedom
+                         shim, only for mermaid's own parser), render.ts (the entry point).
+                         Exported as @geekchart/core/node, not from the main index, so a browser
+                         bundle never pulls in fontkit/linkedom by way of it.
+packages/geekchart      the published npm package: <Geekchart> (client), geekchart/server, CLI.
+                        geekchart/server renders with renderNode by default (engine: 'node') —
+                        no Playwright unless a caller asks for engine: 'browser' explicitly. The
+                        CLI still drives a real headless Chromium for every export; switching its
+                        bake/svg exports to the Node engine too is tracked, not done.
 packages/cli            exports, the review gallery (scripts/gallery.mjs), the gate (scripts/gate.mjs),
                         benchmarks (scripts/bench.mjs), and most tests
 fixtures/, fixtures/blog/   the 37 charts everything runs against
@@ -75,7 +84,23 @@ pnpm lint / typecheck / size
 - `pnpm gallery` does not rebuild `packages/cli/dist` — build first.
 - Loop-backs, satellites and wraps have their own rules (DESIGN 6.7, 6.8); read
   them before touching `route.ts` or `layout.ts`'s fold.
-- `geekchart/server` renders in headless Chromium and serialises renders on one
-  page; keep it that way (a concurrency race was real).
+- `geekchart/server`'s `engine: 'browser'` renders in headless Chromium and
+  serialises renders on one page; keep it that way (a concurrency race was
+  real). The default engine (`'node'`) has no shared page, so this only
+  applies when a caller asks for the browser explicitly.
+- `renderNode()`'s module graph (`chart.ts` → `flow.ts` → `graph.ts` →
+  `mermaid`) must load *after* `node/dom.ts`'s shim installs its globals, not
+  before. Mermaid's default import evaluates a DOMPurify singleton
+  immediately against whatever `window`/`document` exist at that instant,
+  with no later hook to redo the detection — a static import of `chart.ts`
+  at the top of a file resolves before any function body in that file runs,
+  so it always loses the race. `node/render.ts` only reaches it with a
+  dynamic `import()`, issued after `ensureNodeDom()` — keep any future
+  Node-side entry point the same way.
+- `pnpm gate` and `pnpm test` still exercise the browser path only — there is
+  no `--engine=node` flag on the gate yet. A change to `node/measure.ts` or
+  `node/dom.ts` needs its own check: `packages/cli/scripts/spike-node.mjs`
+  compares Node against the browser on six fixtures; widen its `FIXTURES`
+  list to all of `fixtures/` for a full sweep before trusting a change there.
 - Deletion goes to the trash (`gio trash`), never an unrecoverable erase. No AI
   attribution in commits, code or docs.
