@@ -1,37 +1,19 @@
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  closeServer,
-  diskCache,
-  renderToHtml,
-  renderToSvg,
-  setPageRecycleEvery,
-  warm,
-  type RenderToSvgResult,
-} from '../src/server.ts';
+import { diskCache, renderToHtml, renderToSvg, warm, type RenderToSvgResult } from '../src/server.ts';
 
 /**
- * `renderToSvg`/`renderToHtml`, mostly against the default Node engine.
- * A few tests below are specifically about the shared Playwright session
- * (page recycling, concurrent access to one page) and pass `engine:
- * 'browser'` to actually exercise it — everything else runs on whichever
- * engine is default, which is the point: an app that never asks for
- * `engine: 'browser'` gets the same behaviour without Playwright.
- * The browser-engine tests need `@geekchart/cli`'s `dist/renderer.js`
- * already built — the root `pnpm test` script builds it first; running this
- * file on its own first needs `pnpm --filter @geekchart/cli build`.
+ * `renderToSvg`/`renderToHtml` — the Node engine only, no browser in reach.
+ * (Node-vs-browser measurement parity is checked separately, outside this
+ * package: `packages/cli/scripts/spike-node.mjs`.)
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
 const flow = readFileSync(join(here, '..', '..', '..', 'fixtures', 'flow.mmd'), 'utf8');
-
-after(async () => {
-  await closeServer();
-});
 
 test('renders flow.mmd to a scoped chart and hits the cache on the second call', async () => {
   let hits = 0;
@@ -81,19 +63,14 @@ test('renderToHtml wraps the SVG in a scoped, self-contained fragment', async ()
 });
 
 test('concurrent renders of different sources each get their own chart', async () => {
-  // The shared page once handed back the wrong chart under concurrency (seen in
-  // the throughput benchmark). Renders are serialised through a queue now; this
-  // fires eight distinct sources at once and checks each result carries its own
-  // label. `engine: 'browser'` on purpose — the Node engine has no shared page
-  // to race in the first place, so only the browser engine actually exercises
-  // the bug this guards against.
+  // Each Node render is independent, in-process work with no shared page to
+  // race — this just confirms eight distinct sources rendered at once each
+  // come back with their own label, not someone else's.
   const sources = Array.from(
     { length: 8 },
     (_, i) => `flowchart LR\n  A${i}["Only-${i}"] --> B${i}["Done-${i}"]`,
   );
-  const results = await Promise.all(
-    sources.map((s) => renderToSvg(s, { cache: false, engine: 'browser' })),
-  );
+  const results = await Promise.all(sources.map((s) => renderToSvg(s, { cache: false })));
   results.forEach((r, i) => {
     assert.ok(r.svg.includes(`Only-${i}`), `render ${i} lost its own label`);
     for (let j = 0; j < sources.length; j++)
@@ -107,20 +84,15 @@ test('diskCache round-trips through the filesystem, not a fresh render', async (
     const first = await renderToSvg(flow, { cache: diskCache({ dir }), scene: 'geeks' });
     assert.ok(first.svg.includes('gc-chart'));
 
-    // `closeServer()` only matters for the browser engine (it drops the
-    // shared Chromium session) — kept here so this test would still catch a
-    // cache miss even if it ran against `engine: 'browser'`. A fresh
-    // `diskCache` instance too, so its in-memory layer starts empty and the
-    // hit can only have come from the file the first call wrote.
-    await closeServer();
-
+    // A fresh `diskCache` instance, so its in-memory layer starts empty and
+    // the hit can only have come from the file the first call wrote.
     const t0 = performance.now();
     const second = await renderToSvg(flow, { cache: diskCache({ dir }), scene: 'geeks' });
     const ms = performance.now() - t0;
 
     assert.equal(second.svg, first.svg);
     assert.equal(second.css, first.css);
-    assert.ok(ms < 200, `expected a disk read (well under a Chromium launch), took ${ms}ms`);
+    assert.ok(ms < 200, `expected a disk read, well under a fresh render, took ${ms}ms`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -171,46 +143,3 @@ test('warm accepts an async iterable of sources', async () => {
   assert.deepEqual(result, { rendered: 4, cached: 0, failed: 0 });
 });
 
-test('recycling the shared page mid-stream leaves renders identical', async () => {
-  // `engine: 'browser'` throughout — page recycling is a property of the
-  // shared Playwright session; the Node engine has no page to recycle, so
-  // this test would pass trivially (and cover nothing) on the default engine.
-  setPageRecycleEvery(3); // low, so the test hits the boundary without 100 real renders
-  try {
-    const results: RenderToSvgResult[] = [];
-    for (let i = 0; i < 7; i++) {
-      results.push(await renderToSvg(flow, { cache: false, scene: 'geeks', engine: 'browser' }));
-    }
-    const [expected] = results;
-    assert.ok(expected);
-    for (const r of results) {
-      assert.equal(r.svg, expected.svg, 'a render after a page recycle should draw the same chart');
-      assert.equal(r.css, expected.css);
-    }
-  } finally {
-    setPageRecycleEvery(100); // restore the default for tests that run after this one
-  }
-});
-
-test('the Node and browser engines draw the same chart within 2 units', async () => {
-  // Not byte-identical — the two engines measure text slightly differently
-  // (packages/core/src/node/measure.ts documents the remaining gap) — but
-  // every box, panel and point should land within a couple of units of each
-  // other, and the two engines must agree on the canvas size exactly.
-  const node = await renderToSvg(flow, { cache: false, engine: 'node', scene: 'geeks' });
-  const browser = await renderToSvg(flow, { cache: false, engine: 'browser', scene: 'geeks' });
-
-  const viewBoxOf = (svg: string) => svg.match(/viewBox="([^"]*)"/)?.[1];
-  assert.equal(viewBoxOf(node.svg), viewBoxOf(browser.svg), 'viewBox should match exactly');
-
-  const numsOf = (svg: string) =>
-    [...svg.matchAll(/\b(?:x|y|width|height)="(-?[\d.]+)"/g)].map((m) => Number(m[1]));
-  const nodeNums = numsOf(node.svg);
-  const browserNums = numsOf(browser.svg);
-  assert.equal(nodeNums.length, browserNums.length, 'same number of boxes drawn');
-  let maxDelta = 0;
-  for (let i = 0; i < nodeNums.length; i++) {
-    maxDelta = Math.max(maxDelta, Math.abs((nodeNums[i] ?? 0) - (browserNums[i] ?? 0)));
-  }
-  assert.ok(maxDelta < 2, `expected every box within 2 units, worst was ${maxDelta}`);
-});

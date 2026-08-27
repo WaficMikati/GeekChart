@@ -20,24 +20,15 @@ const PACKAGE_VERSION: string = (() => {
 })();
 
 /**
- * `@geekchart/cli`'s `browser.ts` and `@geekchart/core`'s `scope.ts` are
- * reached only through dynamic `import()`, never a static one — not for
- * laziness this time (`scopeCss` is a few lines of string manipulation, and
- * `browser.ts` is already loaded lazily for that reason in `getSession`), but
- * because a *static* import of a local file adds it to this package's
- * TypeScript program, and `declaration: true` then emits a mirrored `.d.ts`
- * for it under `dist/` — pulling two private, unpublished packages' internal
- * module layout into what this package ships. A dynamic import used only for
- * its value, inside a function body, does not.
+ * `@geekchart/core`'s `scope.ts` and `node/render.ts` are reached only
+ * through a dynamic `import()`, never a static one — not for laziness
+ * (they're needed on every render), but because a *static* import of a
+ * local file adds it to this package's TypeScript program, and
+ * `declaration: true` then emits a mirrored `.d.ts` for it under `dist/` —
+ * pulling a private, unpublished package's internal module layout into what
+ * this package ships. A dynamic import used only for its value, inside a
+ * function body, does not.
  */
-
-/** A minimal, self-contained stand-in for `@geekchart/cli`'s `Session` — see
- * the note above for why this isn't just imported. */
-interface ChromiumSession {
-  page: unknown;
-  browser: unknown;
-  close(): Promise<void>;
-}
 
 /**
  * The renderer's options — the same shape as `@geekchart/cli`'s internal
@@ -66,34 +57,18 @@ export interface RenderRequest {
     edge?: string;
     surface?: string;
   };
-  /**
-   * `'node'` (the default): render in this process with
-   * `@geekchart/core/node`'s fontkit measurer and a lazy `linkedom` shim —
-   * no browser, no Playwright, nothing to install unless the app also calls
-   * PNG/MP4 export elsewhere. `'browser'` drives the same headless Chromium
-   * session this used exclusively before — kept for parity checks against
-   * the Node path (see `packages/cli/scripts/gate.mjs --engine=node`) and as
-   * an escape hatch if a real difference between the two ever turns up in
-   * production. `playwright` is only ever imported when this is `'browser'`.
-   */
-  engine?: 'node' | 'browser';
 }
 
 /**
- * Node-side rendering.
+ * Node-side rendering, and only that — there is no browser path here.
  *
- * The default (`engine: 'node'`, or left unset) renders in this process:
  * `@geekchart/core/node`'s `renderNode` measures text with fontkit reading
  * the embedded font files directly and installs a `linkedom` shim only for
  * mermaid's own parser, which still wants a `document`. No browser, no
- * Playwright — an app that never asks for `engine: 'browser'` (or PNG/MP4
- * export, elsewhere) never needs Playwright installed at all.
- *
- * `engine: 'browser'` drives the same headless Chromium session the CLI
- * drives, via `openSession`/`renderAny` from `@geekchart/cli`'s
- * `browser.ts`. That module is reached with a dynamic `import()` rather than
- * a static one so a Node-engine-only app never pulls it in, and `playwright`
- * is only a *peer* dependency of this package for exactly that reason.
+ * Playwright, nothing to install: an app using `geekchart/server` never
+ * needs Playwright at all. (Playwright stays in this repo as a *dev*
+ * dependency, used by `packages/cli`'s review gallery, design gate, parity
+ * test and benchmarks — none of that ships in the published package.)
  */
 
 export interface RenderCache {
@@ -229,75 +204,7 @@ function cacheKey(source: string, options: RenderRequest): string {
 
 const defaultCache = new ByteBoundedLru<RenderToSvgResult>(DEFAULT_CACHE_MAX_BYTES, sizeOfResult);
 
-// Lazily created on first render, then reused for every call after — starting
-// Chromium takes real time, so paying that cost once per process instead of
-// once per request is the entire point of a server renderer.
-let sessionPromise: Promise<ChromiumSession> | undefined;
-
-function getSession(): Promise<ChromiumSession> {
-  if (!sessionPromise) {
-    sessionPromise = import('../../cli/src/browser.ts').then(({ openSession }) => openSession());
-    // A session that failed to open must not be cached, or every later call
-    // fails the same way even after whatever was wrong (missing browser
-    // binaries, usually) is fixed.
-    sessionPromise.catch(() => {
-      sessionPromise = undefined;
-    });
-  }
-  return sessionPromise;
-}
-
-let queue: Promise<unknown> = Promise.resolve();
 const inflightByKey = new Map<string, Promise<unknown>>();
-
-/**
- * How many renders share one Playwright page before it is closed and
- * replaced with a fresh one on the same browser. Disabled (`Infinity`) by
- * default — measured, not assumed:
- *
- * Every drawn diagram tidies up its own markup already — `host.remove()` in
- * `@geekchart/core`'s `render.ts` and `flow.ts` removes the off-screen host
- * element a render worked in as soon as that render finishes, success or
- * failure — so the page's own DOM does not, in fact, grow across renders (see
- * `packages/geekchart/test/server.test.mts`'s repeated-render check, and the
- * repeated-render RSS samples in this task's write-up: flat, sometimes
- * *falling*, over 300 sequential renders with no recycling). Turning
- * recycling on made things worse, not better, under
- * `packages/cli/scripts/bench.mjs`'s throughput section: recycling every 100
- * renders raised Chromium's resident memory from ~692 MB to ~1.2 GB, because
- * each recycle re-injects the ~6 MB renderer bundle into a brand-new browser
- * context, and under sustained concurrent load the old context's renderer
- * process had not finished tearing down before the next recycle fired,
- * piling several of them up at once.
- *
- * Left here as an opt-in for a workload this project's fixtures don't
- * represent — a renderer change that starts leaking per-render state, or a
- * process with far higher uptime than anything benchmarked — but turn it on
- * only after measuring that *your* traffic pattern benefits, the way this
- * benchmark showed ours does not.
- *
- * Exported as a setter, not a `renderToSvg` option, because it is a property
- * of the shared session, not of one render — set it once at startup (or
- * lower it in a test, to exercise recycling without waiting for hundreds of
- * real renders) rather than passing it on every call.
- */
-let pageRecycleEvery = Infinity;
-let rendersSincePageRecycle = 0;
-
-export function setPageRecycleEvery(n: number): void {
-  pageRecycleEvery = n > 0 ? n : Infinity;
-}
-
-/** Closes the shared Chromium session, if one was ever opened. Call this when
- * shutting the process down cleanly; nothing else closes it for you. */
-export async function closeServer(): Promise<void> {
-  const pending = sessionPromise;
-  sessionPromise = undefined;
-  rendersSincePageRecycle = 0;
-  if (!pending) return;
-  const session = await pending.catch(() => undefined);
-  if (session) await session.close();
-}
 
 function stripCache(options: RenderToSvgOptions): RenderRequest {
   const { cache: _cache, ...rest } = options;
@@ -305,21 +212,18 @@ function stripCache(options: RenderToSvgOptions): RenderRequest {
 }
 
 /**
- * The Node engine's own render, in the shape `renderToSvg` returns. Errors
- * come back as `GeekchartRenderError` the same way the browser path's do —
- * `ChartError` is `@geekchart/core`'s, caught here rather than let escape as
- * a type this package's own public API (`GeekchartRenderError`) does not
- * declare a static edge to.
+ * `renderNode`'s render, in the shape `renderToSvg` returns. `ChartError` is
+ * `@geekchart/core`'s, caught here rather than let escape as a type this
+ * package's own public API (`GeekchartRenderError`) does not declare a
+ * static edge to.
  *
  * `@geekchart/core/node` is reached with a dynamic `import()`, not a static
- * one, for the same reason `browser.ts` is: an app that only ever renders
- * with `engine: 'browser'` never pays for fontkit or linkedom.
+ * one — see the note at the top of this file for why.
  */
 async function renderWithNode(source: string, request: RenderRequest): Promise<RenderToSvgResult> {
-  const { engine: _engine, ...options } = request;
   const { renderNode } = await import('../../core/src/node/render.ts');
   try {
-    const r = await renderNode(source, options);
+    const r = await renderNode(source, request);
     return {
       svg: r.svg,
       css: r.css,
@@ -337,7 +241,7 @@ async function renderWithNode(source: string, request: RenderRequest): Promise<R
 
 /** Render mermaid source to an animated SVG. Results are cached by
  * `sha256(version + source + options)`, so a page rendering the same chart on
- * every request pays for the browser round trip once. */
+ * every request pays for the render once. */
 export async function renderToSvg(
   source: string,
   options: RenderToSvgOptions = {},
@@ -351,60 +255,15 @@ export async function renderToSvg(
     if (hit) return hit;
   }
 
-  if (request.engine !== 'browser') {
-    // No shared page to serialise through — each Node render is independent,
-    // in-process work. Still deduplicated by key, the same as the browser
-    // path: two callers asking for the same chart at once share one render.
-    const inflight = inflightByKey.get(key || source);
-    if (inflight) return inflight as Promise<RenderToSvgResult>;
-    const run = renderWithNode(source, request).then(async (result) => {
-      if (cache) await cache.set(key, result);
-      return result;
-    });
-    if (key) inflightByKey.set(key, run);
-    try {
-      return await run;
-    } finally {
-      if (key) inflightByKey.delete(key);
-    }
-  }
-
-  const session = await getSession();
-  const { renderAny, recyclePage } = await import('../../cli/src/browser.ts');
-  // One page, one render at a time. `renderAny` evaluates in the shared page,
-  // and two evaluations interleaving there once handed back the wrong chart
-  // for a source (seen under the throughput benchmark). Renders are serialised
-  // through a promise chain; identical in-flight requests share one render.
+  // Each render is independent, in-process work — there is no shared page to
+  // serialise through. Still deduplicated by key: two callers asking for the
+  // same chart at once share one render.
   const inflight = inflightByKey.get(key || source);
   if (inflight) return inflight as Promise<RenderToSvgResult>;
-  const run = queue.then(async () => {
-    // `session.page` is a real Playwright `Page` at runtime (it came from the
-    // same `openSession()` `renderAny` expects it from) — `ChromiumSession`
-    // just doesn't say so statically, per the note at the top of this file.
-    const reply = await renderAny(session.page as never, source, request);
-    if (!reply.ok) throw new GeekchartRenderError(reply.error);
-
-    rendersSincePageRecycle++;
-    if (rendersSincePageRecycle >= pageRecycleEvery) {
-      rendersSincePageRecycle = 0;
-      session.page = await recyclePage(session.browser as never, session.page as never);
-    }
-
-    const result: RenderToSvgResult = {
-      svg: reply.svg,
-      css: reply.css,
-      cycle: reply.cycle,
-      summary: reply.summary,
-      repairs: reply.repairs,
-      warnings: reply.warnings,
-    };
+  const run = renderWithNode(source, request).then(async (result) => {
     if (cache) await cache.set(key, result);
     return result;
   });
-  queue = run.then(
-    () => undefined,
-    () => undefined,
-  );
   if (key) inflightByKey.set(key, run);
   try {
     return await run;
@@ -538,13 +397,11 @@ async function* toAsyncIterable(sources: string[] | AsyncIterable<string>): Asyn
 /**
  * Render and cache a list of sources ahead of time — a build step or a
  * deploy hook that wants the first real visitor to hit a warm cache instead
- * of paying for a browser round trip.
+ * of paying for a render on the request path.
  *
  * Takes the same `options` (including `cache`) `renderToSvg` does, so pass
  * `{ cache: diskCache({ dir }) }` to warm a persistent cache. Runs up to
- * `concurrency` renders at once (default 4) — high enough to pipeline through
- * the browser's own IPC latency, low enough that it doesn't starve a
- * concurrent server process sharing the same session.
+ * `concurrency` renders at once (default 4).
  */
 export async function warm(
   sources: string[] | AsyncIterable<string>,

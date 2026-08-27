@@ -49,13 +49,14 @@
     "test": "node --test test/*.test.mts"
   },
   "peerDependencies": {
-    "playwright": ">=1.40.0",
     "react": ">=17.0.0"
   },
-  "peerDependenciesMeta": {
-    "playwright": {
-      "optional": true
-    }
+  "dependencies": {
+    "@mermaid-js/layout-elk": "^0.2.2",
+    "elkjs": "^0.12.0",
+    "fontkit": "^2.0.4",
+    "linkedom": "^0.18.13",
+    "mermaid": "11.12.0"
   },
   "devDependencies": {
     "@geekchart/core": "workspace:*",
@@ -63,7 +64,6 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "esbuild": "^0.25.0",
-    "playwright": "^1.49.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.7.2"

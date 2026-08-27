@@ -84,6 +84,22 @@ importers:
         version: 5.9.3
 
   packages/geekchart:
+    dependencies:
+      '@mermaid-js/layout-elk':
+        specifier: ^0.2.2
+        version: 0.2.2(mermaid@11.12.0)
+      elkjs:
+        specifier: ^0.12.0
+        version: 0.12.0
+      fontkit:
+        specifier: ^2.0.4
+        version: 2.0.4
+      linkedom:
+        specifier: ^0.18.13
+        version: 0.18.13
+      mermaid:
+        specifier: 11.12.0
+        version: 11.12.0
     devDependencies:
       '@geekchart/core':
         specifier: workspace:*
@@ -100,9 +116,6 @@ importers:
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
-      playwright:
-        specifier: ^1.49.1
-        version: 1.62.1
       react:
         specifier: ^19.0.0
         version: 19.2.8

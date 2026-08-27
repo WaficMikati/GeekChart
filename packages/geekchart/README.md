@@ -15,16 +15,15 @@ ahead of time, and a CLI for one-off exports.
 npm install geekchart
 ```
 
-`react` is a peer dependency if you use the component. `playwright` is an
-**optional** peer dependency: `geekchart/server` renders in this process by
-default (no browser at all — see below). Only ask for `engine: 'browser'`
-explicitly, or use the CLI (which still drives a real headless Chromium for
-every export), and you'll need it installed.
+`react` is a peer dependency if you use the component. Nothing here needs a
+browser: `geekchart/server` and the CLI both render in this process with
+`@geekchart/core`'s fontkit measurer, no Playwright, no Chromium to install.
 
-```
-npm install playwright   # only for engine: 'browser', or the CLI
-npx playwright install chromium
-```
+mermaid, ELK, fontkit and linkedom are ordinary `dependencies` of this
+package, installed by npm alongside it — nothing third-party is bundled into
+`geekchart` itself. In a browser app, that means your own bundler resolves
+and tree-shakes mermaid the same way it does any other dependency, instead of
+receiving one fixed copy baked into this package.
 
 ## The React component — a diagram edited without a deploy
 
@@ -78,35 +77,16 @@ gets its own id and its own renamed animation keyframes. `renderToSvg` returns
 the pieces separately (`{ svg, css, cycle, summary, repairs, warnings }`) if
 you want to place them yourself.
 
-Both render in this process by default (`engine: 'node'`, or leave it unset)
-— `@geekchart/core`'s fontkit measurer and a lazy `linkedom` shim in place of
-a real browser, so nothing here needs Playwright installed at all until you
-ask for `engine: 'browser'`. That option drives the same headless Chromium
-session this used exclusively before: opened lazily on first call and reused
-for every render after (starting a browser per request would be the slow
-part, not the drawing), kept as an escape hatch and for checking the two
-engines still agree. Call `closeServer()` when shutting the process down (a
-no-op if you never asked for the browser engine). Results are cached in
-memory by `sha256(version + source + options)` —
-the installed `geekchart` version is folded into the key automatically, so
-upgrading the package never serves a render the new code wouldn't have
-produced — bounded to 32 MB total rather than a fixed entry count, so a
-handful of large, frequently-varied charts can't push it past a predictable
-memory budget. Pass your own store (Redis, `diskCache(...)` below, anything
-with `get`/`set`) as `{ cache }`, or `{ cache: false }` to skip caching for
-one call.
-
-The one page the session keeps open is *not* recycled by default, on
-measurement rather than assumption: every render already removes its own
-off-screen host element when it finishes, so the page's own DOM does not grow
-across renders, and forcing a recycle (closing the page's context, opening a
-fresh one, re-injecting the renderer bundle) costs more memory than it saves —
-confirmed against `packages/cli/scripts/bench.mjs`'s throughput section,
-where recycling every 100 renders raised Chromium's resident memory from
-~690 MB to ~1.2 GB instead of lowering it. `setPageRecycleEvery(n)` is there
-if your own traffic pattern benefits from it — a renderer change that starts
-leaking per-render state, or far higher sustained throughput than this
-package's benchmarks cover — but measure before turning it on.
+Both render in this process — `@geekchart/core`'s fontkit measurer and a lazy
+`linkedom` shim in place of a real browser, so nothing here needs Playwright
+installed at all. Results are cached in memory by
+`sha256(version + source + options)` — the installed `geekchart` version is
+folded into the key automatically, so upgrading the package never serves a
+render the new code wouldn't have produced — bounded to 32 MB total rather
+than a fixed entry count, so a handful of large, frequently-varied charts
+can't push it past a predictable memory budget. Pass your own store (Redis,
+`diskCache(...)` below, anything with `get`/`set`) as `{ cache }`, or
+`{ cache: false }` to skip caching for one call.
 
 ### Caching to disk
 
@@ -165,15 +145,14 @@ console.log(report); // { rendered: 41, cached: 3, failed: 0 }
 ```
 npx geekchart post.mmd -o components/CohortFunnel.tsx
 npx geekchart post.mmd -o chart.svg
-npx geekchart post.mmd -o chart.mp4
+npx geekchart post.mmd -o chart.html
 ```
 
 `.tsx`/`.jsx` bakes the diagram into a component at build time — no
 dependencies, no client JavaScript, safe inside a Server Component. `.svg` and
-`.html` are self-contained artefacts; `.mp4`/`.gif`/`.webm` render frame by
-frame by seeking a paused animation, so two runs of the same chart produce
-identical files. See `geekchart --help` for every flag (scene, palette, fonts,
-aspect, video settings).
+`.html` are self-contained artefacts. Every format draws with the same Node
+engine as `geekchart/server` — no browser, nothing to install. See
+`geekchart --help` for every flag (scene, palette, fonts, aspect).
 
 ## Which entry to use when
 

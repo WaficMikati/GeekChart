@@ -34,10 +34,10 @@ packages/core/src     the renderer — one file per family
                          Exported as @geekchart/core/node, not from the main index, so a browser
                          bundle never pulls in fontkit/linkedom by way of it.
 packages/geekchart      the published npm package: <Geekchart> (client), geekchart/server, CLI.
-                        geekchart/server renders with renderNode by default (engine: 'node') —
-                        no Playwright unless a caller asks for engine: 'browser' explicitly. The
-                        CLI still drives a real headless Chromium for every export; switching its
-                        bake/svg exports to the Node engine too is tracked, not done.
+                        Both render with renderNode — no browser, no Playwright. Output is SVG,
+                        plus tsx/jsx/html wrappers; PNG/MP4/GIF/WebM export and engine: 'browser'
+                        were dropped. Playwright stays in the repo as a dev dependency only, for
+                        packages/cli's review gallery, gate, parity test and benchmarks.
 packages/cli            exports, the review gallery (scripts/gallery.mjs), the gate (scripts/gate.mjs),
                         benchmarks (scripts/bench.mjs), and most tests
 fixtures/, fixtures/blog/   the 37 charts everything runs against
@@ -84,10 +84,6 @@ pnpm lint / typecheck / size
 - `pnpm gallery` does not rebuild `packages/cli/dist` — build first.
 - Loop-backs, satellites and wraps have their own rules (DESIGN 6.7, 6.8); read
   them before touching `route.ts` or `layout.ts`'s fold.
-- `geekchart/server`'s `engine: 'browser'` renders in headless Chromium and
-  serialises renders on one page; keep it that way (a concurrency race was
-  real). The default engine (`'node'`) has no shared page, so this only
-  applies when a caller asks for the browser explicitly.
 - `renderNode()`'s module graph (`chart.ts` → `flow.ts` → `graph.ts` →
   `mermaid`) must load *after* `node/dom.ts`'s shim installs its globals, not
   before. Mermaid's default import evaluates a DOMPurify singleton

@@ -614,31 +614,16 @@ class SimpleLru {
   }
 }
 
-function psSnapshot() {
-  const out = execFileSync('ps', ['-eo', 'pid,rss,comm']).toString();
-  const map = new Map();
-  for (const line of out.split('\n').slice(1)) {
-    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/);
-    if (m) map.set(Number(m[1]), { rss: Number(m[2]), comm: m[3] });
-  }
-  return map;
-}
-
 /**
- * `engine`: `'browser'` (the shared headless Chromium session `geekchart/
- * server` used exclusively before) or `'node'` (fontkit + a lazy linkedom
- * shim, no browser at all — `renderToHtml`'s default since it gained an
- * `engine` option). Same measurements either way, so the two are directly
- * comparable in the report: `coldStartMs` means "the browser's own launch
- * plus the first render" for `'browser'` and "the first render, including
- * whatever module/font loading was still cold" for `'node'` — there is no
- * browser to launch on that path, but the module graph (mermaid, ELK,
- * fontkit) is exactly as cold on the very first call.
+ * `geekchart/server` is Node-only now (fontkit + a lazy linkedom shim, no
+ * browser) — this used to compare that path against a shared headless
+ * Chromium session (`engine: 'browser'`), which has since been removed from
+ * the published package. `coldStartMs` means "the first render, including
+ * whatever module/font loading was still cold" — there is no browser to
+ * launch on this path.
  */
-async function benchServer(fixtures, engine) {
-  log(
-    `5. server path (geekchart/server, ${engine} engine): start time, warm miss, cache hit, throughput, RSS`,
-  );
+async function benchServer(fixtures) {
+  log('5. server path (geekchart/server): start time, warm miss, cache hit, throughput, RSS');
   const serverModPath = join(geekchartDist, 'server.js');
   if (!existsSync(serverModPath)) {
     note(
@@ -646,11 +631,10 @@ async function benchServer(fixtures, engine) {
     );
     return null;
   }
-  const { renderToHtml, closeServer } = await import(serverModPath);
+  const { renderToHtml } = await import(serverModPath);
   const flow = fixtures.find((f) => f.id === 'flow');
-  const opts = (extra) => ({ engine, ...extra });
+  const opts = (extra) => extra;
 
-  const snap0 = psSnapshot();
   const t0 = performance.now();
   await renderToHtml(flow.source, opts({ cache: false }));
   const coldStartMs = performance.now() - t0;
@@ -690,27 +674,18 @@ async function benchServer(fixtures, engine) {
     log(`  concurrency ${concurrency}: ${stats(runs).median.toFixed(1)} renders/s`);
   }
 
-  const snap1 = psSnapshot();
-  let browserRssKb = 0;
-  for (const [pid, info] of snap1) if (!snap0.has(pid)) browserRssKb += info.rss;
+  // No browser session left to open — geekchart/server is Node-only — so RSS
+  // is just this process's own.
   const nodeRssKb = Math.round(process.memoryUsage().rss / 1024);
 
-  await closeServer();
-  // The Node engine never opens a browser session, so a diff against `ps`
-  // finding no new process is the expected, correct result — not a failed
-  // measurement the way it would be for the browser engine.
-  if (!browserRssKb && engine === 'browser')
-    note('could not isolate the server-path browser process by PID diff — browserRssKb is 0');
-
   return {
-    engine,
     coldStartMs,
     warmMiss: stats(warmMiss),
     cacheHit: stats(cacheHit),
     coldCachePassMs,
     fixtureCount: fixtures.length,
     throughput,
-    rss: { nodeKb: nodeRssKb, browserKb: browserRssKb },
+    rss: { nodeKb: nodeRssKb },
   };
 }
 
@@ -722,13 +697,19 @@ function sizeOf(file) {
 }
 
 function benchBundle() {
-  log('6. bundle sizes (packages/geekchart/dist)');
+  log('6. bundle sizes (packages/geekchart/dist + .probe)');
   if (!existsSync(geekchartDist)) {
     note(
       'packages/geekchart/dist missing — run `pnpm --filter geekchart build` first; skipping section 6',
     );
     return null;
   }
+  // mermaid/ELK are `external` in packages/geekchart/build.mjs (ordinary npm
+  // `dependencies` now, not bundled into dist/) — the lazy-chunk files
+  // `.lazy-chunk.json` lists live in `.probe/`, build.mjs's throwaway
+  // re-bundle of dist/index.js with those dependencies resolved the way a
+  // host bundler would. `dist/` itself only ever had the small entry files.
+  const probeDir = join(repo, 'packages', 'geekchart', '.probe');
   const lazyChunkManifest = join(repo, 'packages', 'geekchart', '.lazy-chunk.json');
   const lazyChunkFiles = existsSync(lazyChunkManifest)
     ? JSON.parse(readFileSync(lazyChunkManifest, 'utf8'))
@@ -739,16 +720,16 @@ function benchBundle() {
   const entrySizes = Object.fromEntries(entries.map((f) => [f, sizeOf(join(geekchartDist, f))]));
   const lazyChunkSizes = lazyChunkFiles.map((f) => ({
     file: f,
-    ...sizeOf(join(geekchartDist, f)),
+    ...sizeOf(join(probeDir, f)),
   }));
   const lazyChunkTotal = lazyChunkSizes.reduce(
     (acc, f) => ({ raw: acc.raw + f.raw, brotli: acc.brotli + f.brotli }),
     { raw: 0, brotli: 0 },
   );
-  const allJs = readdirSync(geekchartDist).filter((f) => f.endsWith('.js'));
-  const furtherLazy = allJs.filter((f) => !entries.includes(f) && !lazyChunkFiles.includes(f));
+  const allProbeJs = existsSync(probeDir) ? readdirSync(probeDir).filter((f) => f.endsWith('.js')) : [];
+  const furtherLazy = allProbeJs.filter((f) => f !== 'index.js' && !lazyChunkFiles.includes(f));
   const furtherLazySizes = furtherLazy
-    .map((f) => sizeOf(join(geekchartDist, f)))
+    .map((f) => sizeOf(join(probeDir, f)))
     .reduce((acc, s) => ({ raw: acc.raw + s.raw, brotli: acc.brotli + s.brotli }), {
       raw: 0,
       brotli: 0,
@@ -809,17 +790,8 @@ const stat3 = (s) => `${ms1(s.min)} / ${ms1(s.median)} / ${ms1(s.max)}`;
 const kb = (bytes) => (bytes / 1024).toFixed(1);
 
 function renderReadme(results) {
-  const {
-    machine,
-    config,
-    renderTime,
-    mermaidBaseline,
-    firstChart,
-    animation,
-    server,
-    serverNode,
-    bundle,
-  } = results;
+  const { machine, config, renderTime, mermaidBaseline, firstChart, animation, serverNode, bundle } =
+    results;
   const lines = [];
   const p = (s = '') => lines.push(s);
 
@@ -918,50 +890,36 @@ function renderReadme(results) {
   p('## 5. Server path (`geekchart/server`)');
   p();
   p(
-    'Both engines behind the same `renderToHtml`/`renderToSvg` API — `engine: \'node\'` ' +
-      "(the default: fontkit measures text, no browser) and `engine: 'browser'` (the shared " +
-      'headless Chromium session, kept for parity checks). Same measurements, run back to back ' +
-      'in this same process.',
+    '`renderToHtml`/`renderToSvg`, Node-only — fontkit measures text, no browser, ' +
+      'no Playwright.',
   );
   p();
-  if (server || serverNode) {
-    p('| | Node engine | Browser engine |');
-    p('|---|---|---|');
-    const cold = (s) =>
-      s
-        ? s.engine === 'browser'
-          ? `${ms1(s.coldStartMs)}ms (browser launch + first render)`
-          : `${ms1(s.coldStartMs)}ms (first render, cold module/font load)`
-        : 'not measured';
-    p(`| cold start | ${cold(serverNode)} | ${cold(server)} |`);
+  if (serverNode) {
+    p('| | Node engine |');
+    p('|---|---|');
+    p(`| cold start | ${ms1(serverNode.coldStartMs)}ms (first render, cold module/font load) |`);
     const cell = (s, pick) => (s ? `${ms1(pick(s).min)} / ${ms1(pick(s).median)} / ${ms1(pick(s).max)}ms` : 'n/a');
+    p(`| warm miss (cache disabled) min/median/max | ${cell(serverNode, (s) => s.warmMiss)} |`);
+    p(`| cache hit min/median/max | ${cell(serverNode, (s) => s.cacheHit)} |`);
     p(
-      `| warm miss (cache disabled) min/median/max | ${cell(serverNode, (s) => s.warmMiss)} | ${cell(server, (s) => s.warmMiss)} |`,
-    );
-    p(
-      `| cache hit min/median/max | ${cell(serverNode, (s) => s.cacheHit)} | ${cell(server, (s) => s.cacheHit)} |`,
-    );
-    const fc = server?.fixtureCount ?? serverNode?.fixtureCount;
-    p(
-      `| cold-cache full pass, all ${fc} fixtures, sequential | ${serverNode ? `${ms1(serverNode.coldCachePassMs)}ms` : 'n/a'} | ${server ? `${ms1(server.coldCachePassMs)}ms` : 'n/a'} |`,
+      `| cold-cache full pass, all ${serverNode.fixtureCount} fixtures, sequential | ${ms1(serverNode.coldCachePassMs)}ms |`,
     );
     for (const c of [1, 4, 8]) {
-      const t = (s) => (s ? `${s.throughput[c].median.toFixed(1)} r/s` : 'n/a');
-      p(`| throughput at concurrency ${c} (median) | ${t(serverNode)} | ${t(server)} |`);
+      p(`| throughput at concurrency ${c} (median) | ${serverNode.throughput[c].median.toFixed(1)} r/s |`);
     }
-    const rss = (s) =>
-      s ? `Node ${(s.rss.nodeKb / 1024).toFixed(0)} MB${s.engine === 'browser' ? `, Chromium ${(s.rss.browserKb / 1024).toFixed(0)} MB` : ''}` : 'n/a';
-    p(`| RSS after the throughput run | ${rss(serverNode)} | ${rss(server)} |`);
+    p(`| RSS after the throughput run | ${(serverNode.rss.nodeKb / 1024).toFixed(0)} MB |`);
     p();
     p(
-      `Fixtures per pass/throughput run: ${fc}. "min/median/max" over ${config.runs} sampled runs after ${config.warmup} warmup run(s), same as every other section.`,
+      `Fixtures per pass/throughput run: ${serverNode.fixtureCount}. "min/median/max" over ${config.runs} sampled runs after ${config.warmup} warmup run(s), same as every other section.`,
     );
   } else {
     p('Not measured — see notes.');
   }
   p();
 
-  p('## 6. Bundle sizes (`packages/geekchart/dist`)');
+  p(
+    '## 6. Bundle sizes (`packages/geekchart/dist`, lazy chunk from `.probe/` — mermaid/ELK resolved as a host bundler would)',
+  );
   p();
   if (bundle) {
     p('| entry | raw | brotli |');
@@ -1020,11 +978,7 @@ async function main() {
     .map((c) => fixtures.find((f) => f.id === c.id));
   const animation = await benchAnimation(heaviest);
 
-  // Node first: its RSS reading is the more useful one (what a Node-only
-  // deployment actually carries), so it goes before anything in this same
-  // process has a reason to load a browser.
-  const serverNode = await benchServer(fixtures, 'node');
-  const serverBrowser = await benchServer(fixtures, 'browser');
+  const serverNode = await benchServer(fixtures);
   const bundle = benchBundle();
 
   rmSync(scratch, { recursive: true, force: true });
@@ -1053,7 +1007,6 @@ async function main() {
     mermaidBaseline,
     firstChart,
     animation,
-    server: serverBrowser,
     serverNode,
     bundle,
     notes,

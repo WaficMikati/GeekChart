@@ -279,7 +279,7 @@ async function draw(): Promise<void> {
     `geekchart chart.mmd --scene ${state.scene}` +
     `${state.aspect === 'auto' ? '' : ` --aspect ${state.aspect}`}` +
     `${state.fonts === 'inherit' ? ' --fonts inherit' : ''}` +
-    `${state.motion ? '' : ' --no-motion'} -o chart.mp4`;
+    `${state.motion ? '' : ' --no-motion'} -o chart.svg`;
 }
 
 let timer: number | undefined;

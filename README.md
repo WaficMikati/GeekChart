@@ -13,7 +13,7 @@ It has three entry points:
 |---|---|---|
 | diagrams as content on a Node site (blog posts, docs) | `geekchart/server` → `renderToHtml(source)` in your markdown pipeline, cached by content | nothing — inline SVG |
 | diagrams edited in the browser, no deploy | the `<Geekchart source>` React component (lazy-loads the parser on first use) | one download of the parser chunk per visitor |
-| a fixed diagram, or a PNG / SVG / MP4 export | the CLI: `npx geekchart chart.mmd -o Chart.tsx` | nothing |
+| a fixed diagram, or an SVG / React / HTML export | the CLI: `npx geekchart chart.mmd -o Chart.tsx` | nothing |
 
 ## This repository
 

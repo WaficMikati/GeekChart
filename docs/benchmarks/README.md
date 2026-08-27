@@ -1,6 +1,6 @@
 # Geekchart performance benchmarks
 
-Generated 2026-08-27T19:25:00.058Z · min / median / max over 10 runs, 1 warm-up run discarded (a "cold cache" pass is a single measurement — see §5).
+Generated 2026-08-27T23:19:48.457Z · min / median / max over 10 runs, 1 warm-up run discarded (a "cold cache" pass is a single measurement — see §5).
 
 ## Machine
 
@@ -15,65 +15,65 @@ Desktop and 4x CPU throttling, via the built renderer (same bundle `gate.mjs` me
 
 | chart | family | desktop min/median/max | 4x CPU min/median/max |
 |---|---|---|---|
-| 4geeks-journey | flow | 13.3 / 15.8 / 25.2 | 48.2 / 51.3 / 59.9 |
-| architecture | flow | 7.6 / 8.6 / 11.1 | 34.2 / 37.5 / 42.4 |
-| blog/bootcamp-worth-it | quadrant | 1.9 / 2.3 / 3.3 | 8.3 / 8.9 / 10.1 |
-| blog/first-ai-app | sequence | 3.1 / 3.7 / 4.7 | 14.1 / 15.7 / 24.2 |
-| blog/geekforce-timeline | timeline | 3.1 / 3.4 / 3.7 | 12.3 / 13.7 / 14.7 |
-| blog/incident-response | flow | 8.6 / 9.7 / 10.5 | 39.8 / 42.2 / 44.9 |
-| blog/learn-js-plan | gantt | 2.1 / 2.5 / 5.6 | 9.0 / 10.3 / 13.0 |
-| blog/outcomes-2024 | xy | 2.6 / 2.9 / 3.8 | 11.5 / 12.5 / 13.5 |
-| blog/platform-layers | flow | 74.4 / 81.9 / 86.0 | 212.0 / 222.6 / 252.0 |
-| blog/prompt-anatomy | flow | 6.2 / 6.8 / 7.9 | 28.6 / 30.5 / 32.0 |
-| blog/pyenv-resolution | flow | 60.2 / 63.3 / 65.0 | 153.9 / 168.1 / 187.8 |
-| blog/python-or-java | flow | 7.5 / 8.3 / 9.9 | 33.7 / 36.4 / 39.3 |
-| blog/regex-engine | state | 12.8 / 14.1 / 20.0 | 59.1 / 60.7 / 65.6 |
-| blog/rigobot-loop | sequence | 3.3 / 4.1 / 5.3 | 15.0 / 17.4 / 20.8 |
-| class | class | 54.9 / 56.4 / 58.4 | 132.2 / 136.0 / 142.1 |
-| control-plane | flow | 8.8 / 10.0 / 11.8 | 44.3 / 45.8 / 48.6 |
-| er | er | 4.8 / 5.4 / 6.1 | 20.5 / 22.6 / 24.9 |
-| flow | flow | 6.3 / 7.1 / 8.6 | 28.6 / 30.7 / 34.0 |
-| gantt | gantt | 1.7 / 2.1 / 2.8 | 8.0 / 8.6 / 10.6 |
-| gantt-states | gantt | 2.2 / 2.4 / 3.2 | 10.3 / 11.1 / 11.9 |
-| gitgraph | gitgraph | 3.9 / 4.5 / 5.2 | 16.8 / 17.9 / 20.7 |
-| journey | journey | 1.8 / 2.2 / 2.8 | 8.3 / 9.0 / 11.4 |
-| kanban | kanban | 2.6 / 3.0 / 3.4 | 10.4 / 11.2 / 12.8 |
-| messy | flow | 4.8 / 5.6 / 7.3 | 22.6 / 27.7 / 30.6 |
-| mindmap | mindmap | 2.7 / 2.9 / 3.9 | 11.1 / 12.5 / 14.2 |
-| org-chart | flow | 56.7 / 58.0 / 59.4 | 142.5 / 146.6 / 193.2 |
-| pie | pie | 1.5 / 2.0 / 2.7 | 7.0 / 8.4 / 10.5 |
-| quadrant | quadrant | 1.8 / 2.2 / 3.5 | 7.9 / 10.1 / 13.5 |
-| radar | radar | 1.5 / 1.7 / 2.5 | 6.5 / 8.1 / 10.7 |
-| sankey | sankey | 3.3 / 3.8 / 4.7 | 14.6 / 15.8 / 19.9 |
-| sequence | sequence | 2.5 / 2.8 / 3.3 | 10.8 / 11.5 / 13.0 |
-| sequence-rich | sequence | 3.3 / 3.8 / 4.9 | 14.9 / 16.0 / 17.1 |
-| state | state | 6.9 / 7.6 / 8.9 | 30.9 / 32.4 / 35.3 |
-| subgraphs | flow | 73.5 / 77.6 / 87.0 | 209.2 / 217.4 / 225.3 |
-| timeline | timeline | 2.9 / 3.3 / 4.1 | 12.9 / 16.2 / 19.3 |
-| treemap | treemap | 1.6 / 2.0 / 3.6 | 6.7 / 8.3 / 11.6 |
-| xy | xy | 3.0 / 3.1 / 4.1 | 12.4 / 14.4 / 17.7 |
+| 4geeks-journey | flow | 12.1 / 13.9 / 22.2 | 45.4 / 51.4 / 56.0 |
+| architecture | flow | 7.5 / 9.0 / 10.0 | 33.1 / 34.9 / 42.0 |
+| blog/bootcamp-worth-it | quadrant | 1.8 / 2.1 / 3.6 | 7.5 / 8.5 / 9.4 |
+| blog/first-ai-app | sequence | 3.4 / 3.6 / 4.2 | 14.1 / 14.9 / 17.8 |
+| blog/geekforce-timeline | timeline | 2.7 / 3.0 / 4.5 | 11.3 / 13.0 / 14.3 |
+| blog/incident-response | flow | 8.4 / 9.1 / 11.3 | 37.8 / 40.7 / 46.7 |
+| blog/learn-js-plan | gantt | 2.0 / 2.3 / 3.1 | 9.3 / 9.6 / 11.1 |
+| blog/outcomes-2024 | xy | 2.6 / 3.3 / 6.0 | 10.9 / 11.1 / 12.8 |
+| blog/platform-layers | flow | 73.7 / 76.7 / 85.4 | 196.1 / 204.8 / 215.7 |
+| blog/prompt-anatomy | flow | 5.9 / 6.3 / 6.9 | 27.3 / 29.3 / 30.7 |
+| blog/pyenv-resolution | flow | 60.2 / 61.4 / 63.7 | 153.4 / 158.7 / 168.6 |
+| blog/python-or-java | flow | 7.6 / 8.0 / 8.6 | 34.0 / 34.6 / 37.7 |
+| blog/regex-engine | state | 12.4 / 13.1 / 14.6 | 56.3 / 60.3 / 61.8 |
+| blog/rigobot-loop | sequence | 3.4 / 3.9 / 5.2 | 15.0 / 16.1 / 17.4 |
+| class | class | 54.1 / 54.7 / 55.5 | 121.9 / 127.5 / 132.3 |
+| control-plane | flow | 9.0 / 9.6 / 10.6 | 42.0 / 43.0 / 44.3 |
+| er | er | 4.2 / 4.7 / 5.6 | 19.5 / 21.3 / 26.7 |
+| flow | flow | 6.5 / 6.8 / 8.3 | 28.2 / 30.3 / 31.0 |
+| gantt | gantt | 1.6 / 2.0 / 2.3 | 7.6 / 8.8 / 10.9 |
+| gantt-states | gantt | 2.0 / 2.4 / 2.7 | 9.5 / 10.1 / 11.2 |
+| gitgraph | gitgraph | 3.9 / 4.5 / 5.2 | 15.6 / 17.1 / 21.6 |
+| journey | journey | 2.0 / 2.1 / 2.5 | 8.3 / 9.0 / 10.5 |
+| kanban | kanban | 2.8 / 3.0 / 3.1 | 10.1 / 10.7 / 12.9 |
+| messy | flow | 4.8 / 5.3 / 5.9 | 22.1 / 23.8 / 26.6 |
+| mindmap | mindmap | 2.7 / 2.9 / 3.8 | 11.4 / 12.5 / 15.4 |
+| org-chart | flow | 55.8 / 56.4 / 57.8 | 134.8 / 140.9 / 153.3 |
+| pie | pie | 1.5 / 1.7 / 2.3 | 6.5 / 7.3 / 7.8 |
+| quadrant | quadrant | 2.1 / 2.3 / 2.7 | 7.3 / 9.4 / 10.1 |
+| radar | radar | 1.5 / 1.8 / 2.0 | 6.7 / 7.3 / 10.2 |
+| sankey | sankey | 3.4 / 3.6 / 4.2 | 13.8 / 16.0 / 18.6 |
+| sequence | sequence | 2.4 / 2.7 / 3.1 | 10.5 / 11.4 / 14.1 |
+| sequence-rich | sequence | 3.3 / 3.7 / 5.0 | 13.8 / 15.3 / 17.1 |
+| state | state | 6.8 / 7.6 / 8.9 | 29.8 / 33.1 / 36.0 |
+| subgraphs | flow | 71.4 / 74.6 / 82.6 | 192.5 / 205.3 / 225.9 |
+| timeline | timeline | 2.8 / 2.9 / 3.4 | 12.5 / 13.3 / 14.7 |
+| treemap | treemap | 1.6 / 1.8 / 2.5 | 6.5 / 7.6 / 9.4 |
+| xy | xy | 3.0 / 3.2 / 4.0 | 12.1 / 13.0 / 15.1 |
 
 Per-family median (of per-chart medians), ms:
 
 | family | n | desktop | 4x CPU |
 |---|---|---|---|
-| flow | 12 | 9.8 | 44.0 |
-| quadrant | 2 | 2.2 | 9.5 |
-| sequence | 4 | 3.7 | 15.8 |
-| timeline | 2 | 3.3 | 14.9 |
-| gantt | 3 | 2.4 | 10.3 |
-| xy | 2 | 3.0 | 13.5 |
-| state | 2 | 10.9 | 46.5 |
-| class | 1 | 56.4 | 136.0 |
-| er | 1 | 5.4 | 22.6 |
-| gitgraph | 1 | 4.5 | 17.9 |
-| journey | 1 | 2.2 | 9.0 |
-| kanban | 1 | 3.0 | 11.2 |
+| flow | 12 | 9.4 | 41.9 |
+| quadrant | 2 | 2.2 | 8.9 |
+| sequence | 4 | 3.6 | 15.1 |
+| timeline | 2 | 2.9 | 13.1 |
+| gantt | 3 | 2.3 | 9.6 |
+| xy | 2 | 3.2 | 12.1 |
+| state | 2 | 10.4 | 46.7 |
+| class | 1 | 54.7 | 127.5 |
+| er | 1 | 4.7 | 21.3 |
+| gitgraph | 1 | 4.5 | 17.1 |
+| journey | 1 | 2.1 | 9.0 |
+| kanban | 1 | 3.0 | 10.7 |
 | mindmap | 1 | 2.9 | 12.5 |
-| pie | 1 | 2.0 | 8.4 |
-| radar | 1 | 1.7 | 8.1 |
-| sankey | 1 | 3.8 | 15.8 |
-| treemap | 1 | 2.0 | 8.3 |
+| pie | 1 | 1.7 | 7.3 |
+| radar | 1 | 1.8 | 7.3 |
+| sankey | 1 | 3.6 | 16.0 |
+| treemap | 1 | 1.8 | 7.6 |
 
 ## 2. Mermaid baseline
 
@@ -81,42 +81,42 @@ mermaid's own `mermaid.render`, same fixtures, desktop only. Bundle: what a brow
 
 | chart | family | desktop min/median/max |
 |---|---|---|
-| 4geeks-journey | flow | 30.9 / 33.0 / 43.8 |
-| architecture | flow | 22.4 / 23.5 / 24.5 |
-| blog/bootcamp-worth-it | quadrant | 1.8 / 2.3 / 3.6 |
-| blog/first-ai-app | sequence | 5.4 / 6.1 / 8.5 |
-| blog/geekforce-timeline | timeline | 7.5 / 9.7 / 14.3 |
-| blog/incident-response | flow | 19.3 / 20.9 / 21.8 |
-| blog/learn-js-plan | gantt | 3.3 / 3.8 / 6.5 |
-| blog/outcomes-2024 | xy | 3.8 / 4.5 / 5.9 |
-| blog/platform-layers | flow | 26.1 / 28.3 / 38.4 |
-| blog/prompt-anatomy | flow | 16.5 / 18.7 / 23.9 |
-| blog/pyenv-resolution | flow | 21.0 / 24.1 / 25.8 |
-| blog/python-or-java | flow | 19.6 / 24.6 / 35.4 |
-| blog/regex-engine | state | 41.1 / 43.3 / 45.2 |
-| blog/rigobot-loop | sequence | 5.3 / 6.5 / 8.1 |
-| class | class | 19.1 / 20.0 / 21.6 |
-| control-plane | flow | 31.1 / 33.1 / 34.1 |
-| er | er | 23.2 / 24.6 / 26.2 |
-| flow | flow | 18.6 / 19.8 / 21.9 |
-| gantt | gantt | 3.3 / 3.7 / 5.1 |
-| gantt-states | gantt | 3.9 / 4.3 / 6.0 |
-| gitgraph | gitgraph | 5.1 / 5.8 / 10.2 |
-| journey | journey | 3.1 / 4.1 / 5.4 |
-| kanban | kanban | 15.5 / 17.5 / 19.6 |
-| mindmap | mindmap | 20.4 / 23.0 / 24.5 |
-| org-chart | flow | 18.6 / 19.9 / 22.0 |
-| pie | pie | 1.7 / 2.1 / 3.6 |
-| quadrant | quadrant | 1.5 / 2.0 / 3.9 |
-| radar | radar | 2.0 / 2.6 / 3.4 |
-| sankey | sankey | 3.4 / 3.9 / 5.2 |
-| sequence | sequence | 3.7 / 4.3 / 5.4 |
-| sequence-rich | sequence | 5.2 / 6.3 / 8.0 |
-| state | state | 21.9 / 24.4 / 27.1 |
-| subgraphs | flow | 20.8 / 22.7 / 25.0 |
-| timeline | timeline | 7.7 / 8.6 / 9.6 |
-| treemap | treemap | 4.3 / 4.9 / 6.5 |
-| xy | xy | 4.4 / 5.1 / 7.4 |
+| 4geeks-journey | flow | 26.7 / 29.4 / 33.4 |
+| architecture | flow | 20.0 / 21.1 / 23.4 |
+| blog/bootcamp-worth-it | quadrant | 1.8 / 2.1 / 3.5 |
+| blog/first-ai-app | sequence | 5.2 / 5.9 / 7.4 |
+| blog/geekforce-timeline | timeline | 7.5 / 8.0 / 10.2 |
+| blog/incident-response | flow | 17.9 / 18.7 / 21.8 |
+| blog/learn-js-plan | gantt | 3.2 / 3.8 / 4.2 |
+| blog/outcomes-2024 | xy | 3.6 / 4.5 / 4.9 |
+| blog/platform-layers | flow | 24.4 / 27.2 / 30.6 |
+| blog/prompt-anatomy | flow | 15.5 / 17.2 / 18.0 |
+| blog/pyenv-resolution | flow | 19.7 / 21.8 / 22.6 |
+| blog/python-or-java | flow | 17.5 / 21.1 / 24.7 |
+| blog/regex-engine | state | 38.8 / 39.9 / 42.4 |
+| blog/rigobot-loop | sequence | 5.2 / 5.7 / 6.6 |
+| class | class | 18.2 / 19.3 / 20.4 |
+| control-plane | flow | 28.3 / 29.8 / 30.8 |
+| er | er | 22.8 / 24.0 / 25.0 |
+| flow | flow | 18.0 / 19.1 / 20.7 |
+| gantt | gantt | 3.4 / 3.8 / 5.2 |
+| gantt-states | gantt | 3.1 / 3.9 / 8.0 |
+| gitgraph | gitgraph | 4.4 / 5.0 / 6.2 |
+| journey | journey | 3.3 / 3.7 / 5.9 |
+| kanban | kanban | 16.0 / 16.8 / 18.9 |
+| mindmap | mindmap | 19.2 / 20.9 / 23.1 |
+| org-chart | flow | 18.2 / 19.3 / 22.6 |
+| pie | pie | 1.5 / 2.1 / 2.4 |
+| quadrant | quadrant | 1.6 / 1.9 / 2.4 |
+| radar | radar | 1.9 / 2.3 / 3.7 |
+| sankey | sankey | 3.4 / 4.0 / 5.5 |
+| sequence | sequence | 3.7 / 4.1 / 5.9 |
+| sequence-rich | sequence | 5.5 / 5.7 / 7.2 |
+| state | state | 21.4 / 23.1 / 23.8 |
+| subgraphs | flow | 20.2 / 21.1 / 23.5 |
+| timeline | timeline | 7.7 / 8.4 / 9.5 |
+| treemap | treemap | 4.2 / 4.9 / 6.9 |
+| xy | xy | 4.4 / 4.8 / 5.4 |
 
 Skipped (mermaid could not render the source as-is): `messy`.
 
@@ -126,10 +126,10 @@ A minimal page mounting `<Geekchart source>` from the built `geekchart` package 
 
 | | min | median | max |
 |---|---|---|---|
-| cold (empty cache) | 8202.1ms | 8305.0ms | 8720.9ms |
-| warm (2nd navigation) | 514.2ms | 537.2ms | 548.7ms |
+| cold (empty cache) | 8079.6ms | 8166.6ms | 8230.3ms |
+| warm (2nd navigation) | 487.0ms | 493.4ms | 507.6ms |
 
-Lighthouse (mobile preset, single run): performance score **0.39**, LCP 6618.9ms, TBT 902.0ms, CLS 0.
+Lighthouse (mobile preset, single run): performance score **0.41**, LCP 6509.7ms, TBT 808.0ms, CLS 0.
 
 ## 4. Animation
 
@@ -141,35 +141,35 @@ fps and worst single-frame time over 3s, on the 6 heaviest charts by desktop ren
 | subgraphs | 60.0 / 60.0 / 60.0 | 16.8 | 60.0 / 60.0 / 60.0 | 16.8 |
 | blog/pyenv-resolution | 60.0 / 60.0 / 60.0 | 16.8 | 60.0 / 60.0 / 60.0 | 16.8 |
 | org-chart | 60.0 / 60.0 / 60.0 | 16.8 | 60.0 / 60.0 / 60.0 | 16.8 |
-| class | 60.0 / 60.0 / 60.0 | 16.8 | 60.0 / 60.0 / 60.0 | 16.8 |
-| 4geeks-journey | 60.0 / 60.0 / 60.0 | 16.8 | 60.0 / 60.0 / 60.0 | 16.8 |
+| class | 60.0 / 60.0 / 60.0 | 16.8 | 58.7 / 60.0 / 60.0 | 66.6 |
+| 4geeks-journey | 60.0 / 60.0 / 60.0 | 16.8 | 59.7 / 60.0 / 60.0 | 33.2 |
 
 ## 5. Server path (`geekchart/server`)
 
-Both engines behind the same `renderToHtml`/`renderToSvg` API — `engine: 'node'` (the default: fontkit measures text, no browser) and `engine: 'browser'` (the shared headless Chromium session, kept for parity checks). Same measurements, run back to back in this same process.
+`renderToHtml`/`renderToSvg`, Node-only — fontkit measures text, no browser, no Playwright.
 
-| | Node engine | Browser engine |
-|---|---|---|
-| cold start | 468.3ms (first render, cold module/font load) | 1896.8ms (browser launch + first render) |
-| warm miss (cache disabled) min/median/max | 13.0 / 15.2 / 20.4ms | 22.5 / 23.6 / 25.6ms |
-| cache hit min/median/max | 0.4 / 0.4 / 0.4ms | 0.4 / 0.4 / 0.4ms |
-| cold-cache full pass, all 37 fixtures, sequential | 1024.8ms | 1090.8ms |
-| throughput at concurrency 1 (median) | 59.6 r/s | 45.3 r/s |
-| throughput at concurrency 4 (median) | 67.2 r/s | 46.6 r/s |
-| throughput at concurrency 8 (median) | 70.9 r/s | 46.7 r/s |
-| RSS after the throughput run | Node 653 MB | Node 657 MB, Chromium 728 MB |
+| | Node engine |
+|---|---|
+| cold start | 877.3ms (first render, cold module/font load) |
+| warm miss (cache disabled) min/median/max | 14.1 / 18.4 / 26.2ms |
+| cache hit min/median/max | 0.4 / 0.4 / 0.4ms |
+| cold-cache full pass, all 37 fixtures, sequential | 1567.5ms |
+| throughput at concurrency 1 (median) | 54.9 r/s |
+| throughput at concurrency 4 (median) | 61.3 r/s |
+| throughput at concurrency 8 (median) | 68.1 r/s |
+| RSS after the throughput run | 591 MB |
 
 Fixtures per pass/throughput run: 37. "min/median/max" over 10 sampled runs after 1 warmup run(s), same as every other section.
 
-## 6. Bundle sizes (`packages/geekchart/dist`)
+## 6. Bundle sizes (`packages/geekchart/dist`, lazy chunk from `.probe/` — mermaid/ELK resolved as a host bundler would)
 
 | entry | raw | brotli |
 |---|---|---|
 | index.js | 1.0 kB | 0.6 kB |
-| server.js | 4.1 kB | 1.8 kB |
-| cli.js | 12.5 kB | 4.6 kB |
-| **lazy chunk (20 files, fetched on first chart mount)** | **733.9 kB** | **196.5 kB** |
-| further lazy (mermaid's own per-diagram-type chunks, 154 files) | 18409.3 kB | 4787.7 kB |
+| server.js | 3.3 kB | 1.5 kB |
+| cli.js | 6.9 kB | 2.7 kB |
+| **lazy chunk (21 files, fetched on first chart mount)** | **734.4 kB** | **196.8 kB** |
+| further lazy (mermaid's own per-diagram-type chunks, 61 files) | 5250.6 kB | 1433.5 kB |
 
 ## Notes
 
