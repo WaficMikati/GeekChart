@@ -66,19 +66,34 @@ export interface RenderRequest {
     edge?: string;
     surface?: string;
   };
+  /**
+   * `'node'` (the default): render in this process with
+   * `@geekchart/core/node`'s fontkit measurer and a lazy `linkedom` shim —
+   * no browser, no Playwright, nothing to install unless the app also calls
+   * PNG/MP4 export elsewhere. `'browser'` drives the same headless Chromium
+   * session this used exclusively before — kept for parity checks against
+   * the Node path (see `packages/cli/scripts/gate.mjs --engine=node`) and as
+   * an escape hatch if a real difference between the two ever turns up in
+   * production. `playwright` is only ever imported when this is `'browser'`.
+   */
+  engine?: 'node' | 'browser';
 }
 
 /**
  * Node-side rendering.
  *
- * The renderer needs a real browser — layout is measured from real text, and
- * mermaid's own parser only runs against a DOM — so this drives the same
- * headless Chromium session the CLI drives, via `openSession`/`renderAny` from
- * `@geekchart/cli`'s `browser.ts`. That module is reached with a dynamic
- * `import()` rather than a static one, and `playwright` is only a *peer*
- * dependency of this package: an app that imports `geekchart/server` but never
- * calls `renderToSvg` or `renderToHtml` never needs playwright installed at
- * all, because nothing here requires it until the first render actually runs.
+ * The default (`engine: 'node'`, or left unset) renders in this process:
+ * `@geekchart/core/node`'s `renderNode` measures text with fontkit reading
+ * the embedded font files directly and installs a `linkedom` shim only for
+ * mermaid's own parser, which still wants a `document`. No browser, no
+ * Playwright — an app that never asks for `engine: 'browser'` (or PNG/MP4
+ * export, elsewhere) never needs Playwright installed at all.
+ *
+ * `engine: 'browser'` drives the same headless Chromium session the CLI
+ * drives, via `openSession`/`renderAny` from `@geekchart/cli`'s
+ * `browser.ts`. That module is reached with a dynamic `import()` rather than
+ * a static one so a Node-engine-only app never pulls it in, and `playwright`
+ * is only a *peer* dependency of this package for exactly that reason.
  */
 
 export interface RenderCache {
@@ -289,6 +304,37 @@ function stripCache(options: RenderToSvgOptions): RenderRequest {
   return rest;
 }
 
+/**
+ * The Node engine's own render, in the shape `renderToSvg` returns. Errors
+ * come back as `GeekchartRenderError` the same way the browser path's do —
+ * `ChartError` is `@geekchart/core`'s, caught here rather than let escape as
+ * a type this package's own public API (`GeekchartRenderError`) does not
+ * declare a static edge to.
+ *
+ * `@geekchart/core/node` is reached with a dynamic `import()`, not a static
+ * one, for the same reason `browser.ts` is: an app that only ever renders
+ * with `engine: 'browser'` never pays for fontkit or linkedom.
+ */
+async function renderWithNode(source: string, request: RenderRequest): Promise<RenderToSvgResult> {
+  const { engine: _engine, ...options } = request;
+  const { renderNode } = await import('../../core/src/node/render.ts');
+  try {
+    const r = await renderNode(source, options);
+    return {
+      svg: r.svg,
+      css: r.css,
+      cycle: r.cycle,
+      summary: r.summary,
+      repairs: r.repairs,
+      warnings: r.warnings,
+    };
+  } catch (err) {
+    const { ChartError } = await import('../../core/src/chart-error.ts');
+    if (err instanceof ChartError) throw new GeekchartRenderError(err.detail);
+    throw new GeekchartRenderError({ message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 /** Render mermaid source to an animated SVG. Results are cached by
  * `sha256(version + source + options)`, so a page rendering the same chart on
  * every request pays for the browser round trip once. */
@@ -303,6 +349,24 @@ export async function renderToSvg(
   if (cache) {
     const hit = await cache.get(key);
     if (hit) return hit;
+  }
+
+  if (request.engine !== 'browser') {
+    // No shared page to serialise through — each Node render is independent,
+    // in-process work. Still deduplicated by key, the same as the browser
+    // path: two callers asking for the same chart at once share one render.
+    const inflight = inflightByKey.get(key || source);
+    if (inflight) return inflight as Promise<RenderToSvgResult>;
+    const run = renderWithNode(source, request).then(async (result) => {
+      if (cache) await cache.set(key, result);
+      return result;
+    });
+    if (key) inflightByKey.set(key, run);
+    try {
+      return await run;
+    } finally {
+      if (key) inflightByKey.delete(key);
+    }
   }
 
   const session = await getSession();
