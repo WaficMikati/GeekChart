@@ -183,14 +183,19 @@ const tiles = [
     sub: 'brotli, first mount',
   },
   {
-    label: 'Server throughput',
+    label: 'Server throughput, Node engine',
+    value: results.serverNode ? `${results.serverNode.throughput['8'].median.toFixed(0)}/s` : '—',
+    sub: 'concurrency 8, no browser',
+  },
+  {
+    label: 'Server throughput, browser engine',
     value: results.server ? `${results.server.throughput['8'].median.toFixed(0)}/s` : '—',
     sub: 'concurrency 8',
   },
   {
     label: 'RSS after run',
-    value: results.server ? `${(results.server.rss.browserKb / 1024).toFixed(0)} MB` : '—',
-    sub: 'Chromium, server path',
+    value: results.serverNode ? `${(results.serverNode.rss.nodeKb / 1024).toFixed(0)} MB` : '—',
+    sub: 'Node process, Node engine',
   },
   {
     label: '60fps',
@@ -244,17 +249,52 @@ const fpsTable = table(
   ]),
 );
 
-const throughputTable = results.server
-  ? table(
-      ['concurrency', 'renders/s min', 'median', 'max'],
-      [1, 4, 8].map((c) => [
-        c,
-        results.server.throughput[c].min.toFixed(1),
-        results.server.throughput[c].median.toFixed(1),
-        results.server.throughput[c].max.toFixed(1),
-      ]),
-    )
-  : '<p class="dim">Not measured — see notes.</p>';
+const throughputTable =
+  results.serverNode || results.server
+    ? table(
+        ['concurrency', 'Node engine renders/s (min/median/max)', 'Browser engine renders/s (min/median/max)'],
+        [1, 4, 8].map((c) => [
+          c,
+          results.serverNode
+            ? `${results.serverNode.throughput[c].min.toFixed(1)} / ${results.serverNode.throughput[c].median.toFixed(1)} / ${results.serverNode.throughput[c].max.toFixed(1)}`
+            : 'n/a',
+          results.server
+            ? `${results.server.throughput[c].min.toFixed(1)} / ${results.server.throughput[c].median.toFixed(1)} / ${results.server.throughput[c].max.toFixed(1)}`
+            : 'n/a',
+        ]),
+      )
+    : '<p class="dim">Not measured — see notes.</p>';
+
+const serverEngineTable =
+  results.serverNode || results.server
+    ? table(
+        ['', 'Node engine', 'Browser engine'],
+        [
+          [
+            'cold start',
+            results.serverNode ? `${round1(results.serverNode.coldStartMs)}ms` : 'n/a',
+            results.server ? `${round1(results.server.coldStartMs)}ms` : 'n/a',
+          ],
+          [
+            'warm miss, median',
+            results.serverNode ? `${round1(results.serverNode.warmMiss.median)}ms` : 'n/a',
+            results.server ? `${round1(results.server.warmMiss.median)}ms` : 'n/a',
+          ],
+          [
+            'cache hit, median',
+            results.serverNode ? `${round1(results.serverNode.cacheHit.median)}ms` : 'n/a',
+            results.server ? `${round1(results.server.cacheHit.median)}ms` : 'n/a',
+          ],
+          [
+            'RSS after throughput run',
+            results.serverNode ? `${(results.serverNode.rss.nodeKb / 1024).toFixed(0)} MB (Node)` : 'n/a',
+            results.server
+              ? `${(results.server.rss.nodeKb / 1024).toFixed(0)} MB (Node) + ${(results.server.rss.browserKb / 1024).toFixed(0)} MB (Chromium)`
+              : 'n/a',
+          ],
+        ],
+      )
+    : '<p class="dim">Not measured — see notes.</p>';
 
 const bundleTable = results.bundle
   ? table(
@@ -398,7 +438,8 @@ const page = `<meta charset="utf-8">
 
   <section class="card">
     <h2>Server throughput (<code>geekchart/server</code>)</h2>
-    <p class="note">${results.server ? `${results.server.fixtureCount} fixtures per run, <code>Promise.all</code> batches. Cold start ${round1(results.server.coldStartMs)}ms, warm miss ${round1(results.server.warmMiss.median)}ms, cache hit ${round1(results.server.cacheHit.median)}ms, cold-cache full pass ${round1(results.server.coldCachePassMs)}ms (single measurement).` : 'Not measured — see notes.'}</p>
+    <p class="note">Node engine (fontkit, no browser — the default) vs. browser engine (the shared headless Chromium session), same <code>renderToHtml</code>/<code>renderToSvg</code> API, run back to back in this same process. ${results.serverNode ? `${results.serverNode.fixtureCount} fixtures per run, <code>Promise.all</code> batches.` : ''}</p>
+    ${serverEngineTable}
     ${throughputTable}
   </section>
 

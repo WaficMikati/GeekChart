@@ -624,8 +624,21 @@ function psSnapshot() {
   return map;
 }
 
-async function benchServer(fixtures) {
-  log('5. server path (geekchart/server): start time, warm miss, cache hit, throughput, RSS');
+/**
+ * `engine`: `'browser'` (the shared headless Chromium session `geekchart/
+ * server` used exclusively before) or `'node'` (fontkit + a lazy linkedom
+ * shim, no browser at all — `renderToHtml`'s default since it gained an
+ * `engine` option). Same measurements either way, so the two are directly
+ * comparable in the report: `coldStartMs` means "the browser's own launch
+ * plus the first render" for `'browser'` and "the first render, including
+ * whatever module/font loading was still cold" for `'node'` — there is no
+ * browser to launch on that path, but the module graph (mermaid, ELK,
+ * fontkit) is exactly as cold on the very first call.
+ */
+async function benchServer(fixtures, engine) {
+  log(
+    `5. server path (geekchart/server, ${engine} engine): start time, warm miss, cache hit, throughput, RSS`,
+  );
   const serverModPath = join(geekchartDist, 'server.js');
   if (!existsSync(serverModPath)) {
     note(
@@ -635,22 +648,23 @@ async function benchServer(fixtures) {
   }
   const { renderToHtml, closeServer } = await import(serverModPath);
   const flow = fixtures.find((f) => f.id === 'flow');
+  const opts = (extra) => ({ engine, ...extra });
 
   const snap0 = psSnapshot();
   const t0 = performance.now();
-  await renderToHtml(flow.source, { cache: false });
+  await renderToHtml(flow.source, opts({ cache: false }));
   const coldStartMs = performance.now() - t0;
 
   const warmMiss = await sampled(WARMUP, N, async () => {
     const a = performance.now();
-    await renderToHtml(flow.source, { cache: false });
+    await renderToHtml(flow.source, opts({ cache: false }));
     return performance.now() - a;
   });
 
-  await renderToHtml(flow.source); // populate the default cache
+  await renderToHtml(flow.source, opts({})); // populate the default cache
   const cacheHit = await sampled(WARMUP, N, async () => {
     const a = performance.now();
-    await renderToHtml(flow.source);
+    await renderToHtml(flow.source, opts({}));
     return performance.now() - a;
   });
 
@@ -658,7 +672,7 @@ async function benchServer(fixtures) {
   // second time through, the cache from the first pass makes it warm.
   const coldCache = new SimpleLru(200);
   const coldPassStart = performance.now();
-  for (const fx of fixtures) await renderToHtml(fx.source, { cache: coldCache });
+  for (const fx of fixtures) await renderToHtml(fx.source, opts({ cache: coldCache }));
   const coldCachePassMs = performance.now() - coldPassStart;
 
   const throughput = {};
@@ -667,7 +681,7 @@ async function benchServer(fixtures) {
       const start = performance.now();
       for (let i = 0; i < fixtures.length; i += concurrency) {
         const batch = fixtures.slice(i, i + concurrency);
-        await Promise.all(batch.map((fx) => renderToHtml(fx.source, { cache: false })));
+        await Promise.all(batch.map((fx) => renderToHtml(fx.source, opts({ cache: false }))));
       }
       const seconds = (performance.now() - start) / 1000;
       return fixtures.length / seconds;
@@ -682,10 +696,14 @@ async function benchServer(fixtures) {
   const nodeRssKb = Math.round(process.memoryUsage().rss / 1024);
 
   await closeServer();
-  if (!browserRssKb)
+  // The Node engine never opens a browser session, so a diff against `ps`
+  // finding no new process is the expected, correct result — not a failed
+  // measurement the way it would be for the browser engine.
+  if (!browserRssKb && engine === 'browser')
     note('could not isolate the server-path browser process by PID diff — browserRssKb is 0');
 
   return {
+    engine,
     coldStartMs,
     warmMiss: stats(warmMiss),
     cacheHit: stats(cacheHit),
@@ -791,8 +809,17 @@ const stat3 = (s) => `${ms1(s.min)} / ${ms1(s.median)} / ${ms1(s.max)}`;
 const kb = (bytes) => (bytes / 1024).toFixed(1);
 
 function renderReadme(results) {
-  const { machine, config, renderTime, mermaidBaseline, firstChart, animation, server, bundle } =
-    results;
+  const {
+    machine,
+    config,
+    renderTime,
+    mermaidBaseline,
+    firstChart,
+    animation,
+    server,
+    serverNode,
+    bundle,
+  } = results;
   const lines = [];
   const p = (s = '') => lines.push(s);
 
@@ -890,35 +917,44 @@ function renderReadme(results) {
 
   p('## 5. Server path (`geekchart/server`)');
   p();
-  if (server) {
-    p(`Browser start + first render (cache disabled): ${ms1(server.coldStartMs)}ms.`);
-    p();
-    p('| | min | median | max |');
-    p('|---|---|---|---|');
+  p(
+    'Both engines behind the same `renderToHtml`/`renderToSvg` API — `engine: \'node\'` ' +
+      "(the default: fontkit measures text, no browser) and `engine: 'browser'` (the shared " +
+      'headless Chromium session, kept for parity checks). Same measurements, run back to back ' +
+      'in this same process.',
+  );
+  p();
+  if (server || serverNode) {
+    p('| | Node engine | Browser engine |');
+    p('|---|---|---|');
+    const cold = (s) =>
+      s
+        ? s.engine === 'browser'
+          ? `${ms1(s.coldStartMs)}ms (browser launch + first render)`
+          : `${ms1(s.coldStartMs)}ms (first render, cold module/font load)`
+        : 'not measured';
+    p(`| cold start | ${cold(serverNode)} | ${cold(server)} |`);
+    const cell = (s, pick) => (s ? `${ms1(pick(s).min)} / ${ms1(pick(s).median)} / ${ms1(pick(s).max)}ms` : 'n/a');
     p(
-      `| warm miss (cache disabled) | ${ms1(server.warmMiss.min)}ms | ${ms1(server.warmMiss.median)}ms | ${ms1(server.warmMiss.max)}ms |`,
+      `| warm miss (cache disabled) min/median/max | ${cell(serverNode, (s) => s.warmMiss)} | ${cell(server, (s) => s.warmMiss)} |`,
     );
     p(
-      `| cache hit | ${ms1(server.cacheHit.min)}ms | ${ms1(server.cacheHit.median)}ms | ${ms1(server.cacheHit.max)}ms |`,
+      `| cache hit min/median/max | ${cell(serverNode, (s) => s.cacheHit)} | ${cell(server, (s) => s.cacheHit)} |`,
     );
-    p();
+    const fc = server?.fixtureCount ?? serverNode?.fixtureCount;
     p(
-      `Cold-cache full pass, all ${server.fixtureCount} fixtures, sequential, fresh cache: **${ms1(server.coldCachePassMs)}ms** (single measurement — repeating it would no longer be cold).`,
+      `| cold-cache full pass, all ${fc} fixtures, sequential | ${serverNode ? `${ms1(serverNode.coldCachePassMs)}ms` : 'n/a'} | ${server ? `${ms1(server.coldCachePassMs)}ms` : 'n/a'} |`,
     );
-    p();
-    p(
-      `Throughput, ${server.fixtureCount} fixtures per run, \`Promise.all\` batches (renders/second):`,
-    );
-    p();
-    p('| concurrency | min | median | max |');
-    p('|---|---|---|---|');
     for (const c of [1, 4, 8]) {
-      const t = server.throughput[c];
-      p(`| ${c} | ${t.min.toFixed(1)} | ${t.median.toFixed(1)} | ${t.max.toFixed(1)} |`);
+      const t = (s) => (s ? `${s.throughput[c].median.toFixed(1)} r/s` : 'n/a');
+      p(`| throughput at concurrency ${c} (median) | ${t(serverNode)} | ${t(server)} |`);
     }
+    const rss = (s) =>
+      s ? `Node ${(s.rss.nodeKb / 1024).toFixed(0)} MB${s.engine === 'browser' ? `, Chromium ${(s.rss.browserKb / 1024).toFixed(0)} MB` : ''}` : 'n/a';
+    p(`| RSS after the throughput run | ${rss(serverNode)} | ${rss(server)} |`);
     p();
     p(
-      `RSS after the throughput run: Node ${(server.rss.nodeKb / 1024).toFixed(0)} MB, Chromium (all processes) ${(server.rss.browserKb / 1024).toFixed(0)} MB.`,
+      `Fixtures per pass/throughput run: ${fc}. "min/median/max" over ${config.runs} sampled runs after ${config.warmup} warmup run(s), same as every other section.`,
     );
   } else {
     p('Not measured — see notes.');
@@ -984,7 +1020,11 @@ async function main() {
     .map((c) => fixtures.find((f) => f.id === c.id));
   const animation = await benchAnimation(heaviest);
 
-  const server = await benchServer(fixtures);
+  // Node first: its RSS reading is the more useful one (what a Node-only
+  // deployment actually carries), so it goes before anything in this same
+  // process has a reason to load a browser.
+  const serverNode = await benchServer(fixtures, 'node');
+  const serverBrowser = await benchServer(fixtures, 'browser');
   const bundle = benchBundle();
 
   rmSync(scratch, { recursive: true, force: true });
@@ -1013,7 +1053,8 @@ async function main() {
     mermaidBaseline,
     firstChart,
     animation,
-    server,
+    server: serverBrowser,
+    serverNode,
     bundle,
     notes,
   };

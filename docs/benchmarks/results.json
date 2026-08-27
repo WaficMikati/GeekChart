@@ -1,1491 +1,1533 @@
 {
- "generatedAt": "2026-08-25T18:59:20.067Z",
- "machine": {
-  "cpuModel": "AMD Ryzen 9 5900HX with Radeon Graphics",
-  "cpuCores": 16,
-  "ramGb": 15,
-  "os": "CachyOS (7.1.8-1-cachyos)",
-  "nodeVersion": "v24.16.0",
-  "chromiumVersion": "151.0.7922.34",
-  "pnpmWorkspace": true
- },
- "config": {
-  "runs": 10,
-  "warmup": 1,
-  "renderOptions": {
-   "width": 1180
-  }
- },
- "fixtureCount": 37,
- "heaviestCharts": [
-  "blog/platform-layers",
-  "subgraphs",
-  "blog/pyenv-resolution",
-  "org-chart",
-  "class",
-  "4geeks-journey"
- ],
- "renderTime": {
-  "perChart": [
-   {
-    "id": "4geeks-journey",
-    "family": "flow",
-    "desktop": {
-     "min": 10.100000008940697,
-     "median": 11.799999997019768,
-     "max": 17.5,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 38,
-     "median": 39.80000000447035,
-     "max": 48.20000000298023,
-     "n": 10
-    }
-   },
-   {
-    "id": "architecture",
-    "family": "flow",
-    "desktop": {
-     "min": 6.5,
-     "median": 7.25,
-     "max": 8,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 27,
-     "median": 28.649999998509884,
-     "max": 30.200000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/bootcamp-worth-it",
-    "family": "quadrant",
-    "desktop": {
-     "min": 1.2999999970197678,
-     "median": 1.5500000044703484,
-     "max": 2.4000000059604645,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 5.299999997019768,
-     "median": 6.149999998509884,
-     "max": 7.5999999940395355,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/first-ai-app",
-    "family": "sequence",
-    "desktop": {
-     "min": 2.2000000029802322,
-     "median": 2.5499999970197678,
-     "max": 3.3999999910593033,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 9.200000002980232,
-     "median": 9.950000002980232,
-     "max": 11.399999991059303,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/geekforce-timeline",
-    "family": "timeline",
-    "desktop": {
-     "min": 2,
-     "median": 2.199999988079071,
-     "max": 2.7000000029802322,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 8,
-     "median": 8.5,
-     "max": 9.400000005960464,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/incident-response",
-    "family": "flow",
-    "desktop": {
-     "min": 7.4000000059604645,
-     "median": 7.799999997019768,
-     "max": 9,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 31,
-     "median": 32.29999999701977,
-     "max": 34.79999999701977,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/learn-js-plan",
-    "family": "gantt",
-    "desktop": {
-     "min": 1.5,
-     "median": 1.6999999955296516,
-     "max": 2.199999988079071,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 5.899999991059303,
-     "median": 6.9000000059604645,
-     "max": 8.100000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/outcomes-2024",
-    "family": "xy",
-    "desktop": {
-     "min": 1.7999999970197678,
-     "median": 1.9000000059604645,
-     "max": 2.8999999910593033,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 7.0999999940395355,
-     "median": 7.6500000059604645,
-     "max": 9.900000005960464,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/platform-layers",
-    "family": "flow",
-    "desktop": {
-     "min": 61.599999994039536,
-     "median": 65.79999999701977,
-     "max": 75.6000000089407,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 139.8999999910593,
-     "median": 148.24999999254942,
-     "max": 169.29999999701977,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/prompt-anatomy",
-    "family": "flow",
-    "desktop": {
-     "min": 4.799999997019768,
-     "median": 5.4000000059604645,
-     "max": 5.9000000059604645,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 22.299999997019768,
-     "median": 23.549999997019768,
-     "max": 29.200000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/pyenv-resolution",
-    "family": "flow",
-    "desktop": {
-     "min": 52.30000001192093,
-     "median": 52.8999999910593,
-     "max": 55,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 114.09999999403954,
-     "median": 116.44999999552965,
-     "max": 119.79999999701977,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/python-or-java",
-    "family": "flow",
-    "desktop": {
-     "min": 6,
-     "median": 6.550000004470348,
-     "max": 7.100000008940697,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 26.799999997019768,
-     "median": 28.5,
-     "max": 31,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/regex-engine",
-    "family": "state",
-    "desktop": {
-     "min": 10.099999994039536,
-     "median": 10.5,
-     "max": 13.099999994039536,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 42.19999998807907,
-     "median": 44.69999999552965,
-     "max": 45.900000005960464,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/rigobot-loop",
-    "family": "sequence",
-    "desktop": {
-     "min": 2.5999999940395355,
-     "median": 2.75,
-     "max": 3.4000000059604645,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 10.700000002980232,
-     "median": 11.550000004470348,
-     "max": 12.299999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "class",
-    "family": "class",
-    "desktop": {
-     "min": 47.900000005960464,
-     "median": 48.49999999254942,
-     "max": 49.900000005960464,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 96.40000000596046,
-     "median": 98.99999999254942,
-     "max": 113.59999999403954,
-     "n": 10
-    }
-   },
-   {
-    "id": "control-plane",
-    "family": "flow",
-    "desktop": {
-     "min": 8.099999994039536,
-     "median": 8.799999997019768,
-     "max": 11.599999994039536,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 35.79999999701977,
-     "median": 36.849999994039536,
-     "max": 67.59999999403954,
-     "n": 10
-    }
-   },
-   {
-    "id": "er",
-    "family": "er",
-    "desktop": {
-     "min": 4,
-     "median": 4.200000002980232,
-     "max": 5,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 17.5,
-     "median": 18.5,
-     "max": 19.799999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "flow",
-    "family": "flow",
-    "desktop": {
-     "min": 5.899999991059303,
-     "median": 6.049999997019768,
-     "max": 6.200000002980232,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 23.799999997019768,
-     "median": 25.400000005960464,
-     "max": 26.69999998807907,
-     "n": 10
-    }
-   },
-   {
-    "id": "gantt",
-    "family": "gantt",
-    "desktop": {
-     "min": 1.199999988079071,
-     "median": 1.3500000014901161,
-     "max": 1.7000000029802322,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 4.9000000059604645,
-     "median": 5.949999995529652,
-     "max": 7.200000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "gantt-states",
-    "family": "gantt",
-    "desktop": {
-     "min": 1.5,
-     "median": 1.6999999955296516,
-     "max": 2.2000000029802322,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 6.399999991059303,
-     "median": 7.1500000059604645,
-     "max": 7.9000000059604645,
-     "n": 10
-    }
-   },
-   {
-    "id": "gitgraph",
-    "family": "gitgraph",
-    "desktop": {
-     "min": 2.7999999970197678,
-     "median": 3.2000000029802322,
-     "max": 3.6000000089406967,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 10.899999991059303,
-     "median": 12.349999994039536,
-     "max": 13.100000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "journey",
-    "family": "journey",
-    "desktop": {
-     "min": 1.199999988079071,
-     "median": 1.4000000059604645,
-     "max": 2.2000000029802322,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 5.5,
-     "median": 5.549999997019768,
-     "max": 7.899999991059303,
-     "n": 10
-    }
-   },
-   {
-    "id": "kanban",
-    "family": "kanban",
-    "desktop": {
-     "min": 1.699999988079071,
-     "median": 1.9500000029802322,
-     "max": 2.2999999970197678,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 6.600000008940697,
-     "median": 7.399999998509884,
-     "max": 8.100000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "messy",
-    "family": "flow",
-    "desktop": {
-     "min": 4.200000002980232,
-     "median": 4.649999991059303,
-     "max": 6.700000002980232,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 17.399999991059303,
-     "median": 18.200000002980232,
-     "max": 20.100000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "mindmap",
-    "family": "mindmap",
-    "desktop": {
-     "min": 1.7999999970197678,
-     "median": 2.1500000059604645,
-     "max": 2.3999999910593033,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 7.899999991059303,
-     "median": 8.300000004470348,
-     "max": 9.200000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "org-chart",
-    "family": "flow",
-    "desktop": {
-     "min": 49.8999999910593,
-     "median": 50.400000005960464,
-     "max": 52.79999999701977,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 103,
-     "median": 104.84999999403954,
-     "max": 123.20000000298023,
-     "n": 10
-    }
-   },
-   {
-    "id": "pie",
-    "family": "pie",
-    "desktop": {
-     "min": 1,
-     "median": 1.2000000029802322,
-     "max": 1.7000000029802322,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 4,
-     "median": 5,
-     "max": 6.4000000059604645,
-     "n": 10
-    }
-   },
-   {
-    "id": "quadrant",
-    "family": "quadrant",
-    "desktop": {
-     "min": 1.2000000029802322,
-     "median": 1.3500000014901161,
-     "max": 1.5,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 5.200000002980232,
-     "median": 5.899999998509884,
-     "max": 6.5999999940395355,
-     "n": 10
-    }
-   },
-   {
-    "id": "radar",
-    "family": "radar",
-    "desktop": {
-     "min": 1.0999999940395355,
-     "median": 1.1000000089406967,
-     "max": 1.300000011920929,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 4.699999988079071,
-     "median": 5.25,
-     "max": 6.299999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "sankey",
-    "family": "sankey",
-    "desktop": {
-     "min": 2.2999999970197678,
-     "median": 2.5999999940395355,
-     "max": 2.9000000059604645,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 9.400000005960464,
-     "median": 10.24999999254942,
-     "max": 10.799999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "sequence",
-    "family": "sequence",
-    "desktop": {
-     "min": 1.5999999940395355,
-     "median": 1.7000000029802322,
-     "max": 2.3999999910593033,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 7.200000002980232,
-     "median": 7.8499999940395355,
-     "max": 8.799999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "sequence-rich",
-    "family": "sequence",
-    "desktop": {
-     "min": 2.199999988079071,
-     "median": 2.5,
-     "max": 3.2000000029802322,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 9.900000005960464,
-     "median": 10.950000002980232,
-     "max": 11.899999991059303,
-     "n": 10
-    }
-   },
-   {
-    "id": "state",
-    "family": "state",
-    "desktop": {
-     "min": 5.600000008940697,
-     "median": 5.800000004470348,
-     "max": 6.5,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 23.700000002980232,
-     "median": 25.549999997019768,
-     "max": 26.399999991059303,
-     "n": 10
-    }
-   },
-   {
-    "id": "subgraphs",
-    "family": "flow",
-    "desktop": {
-     "min": 61.5,
-     "median": 64,
-     "max": 68,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 147.90000000596046,
-     "median": 152.10000000149012,
-     "max": 156.6000000089407,
-     "n": 10
-    }
-   },
-   {
-    "id": "timeline",
-    "family": "timeline",
-    "desktop": {
-     "min": 1.8999999910593033,
-     "median": 2.100000001490116,
-     "max": 2.5,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 8.5,
-     "median": 9.050000004470348,
-     "max": 10.599999994039536,
-     "n": 10
-    }
-   },
-   {
-    "id": "treemap",
-    "family": "treemap",
-    "desktop": {
-     "min": 1.2000000029802322,
-     "median": 1.3000000044703484,
-     "max": 1.6000000089406967,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 4.700000002980232,
-     "median": 5.799999997019768,
-     "max": 6.600000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "xy",
-    "family": "xy",
-    "desktop": {
-     "min": 1.9000000059604645,
-     "median": 2.300000011920929,
-     "max": 2.5,
-     "n": 10
-    },
-    "cpu4x": {
-     "min": 8.899999991059303,
-     "median": 9.549999997019768,
-     "max": 11.200000002980232,
-     "n": 10
-    }
-   }
-  ],
-  "perFamily": {
-   "flow": {
-    "desktopMedian": 8.299999997019768,
-    "cpu4xMedian": 34.57499999552965,
-    "count": 12
-   },
-   "quadrant": {
-    "desktopMedian": 1.4500000029802322,
-    "cpu4xMedian": 6.024999998509884,
-    "count": 2
-   },
-   "sequence": {
-    "desktopMedian": 2.524999998509884,
-    "cpu4xMedian": 10.450000002980232,
-    "count": 4
-   },
-   "timeline": {
-    "desktopMedian": 2.1499999947845936,
-    "cpu4xMedian": 8.775000002235174,
-    "count": 2
-   },
-   "gantt": {
-    "desktopMedian": 1.6999999955296516,
-    "cpu4xMedian": 6.9000000059604645,
-    "count": 3
-   },
-   "xy": {
-    "desktopMedian": 2.1000000089406967,
-    "cpu4xMedian": 8.600000001490116,
-    "count": 2
-   },
-   "state": {
-    "desktopMedian": 8.150000002235174,
-    "cpu4xMedian": 35.12499999627471,
-    "count": 2
-   },
-   "class": {
-    "desktopMedian": 48.49999999254942,
-    "cpu4xMedian": 98.99999999254942,
-    "count": 1
-   },
-   "er": {
-    "desktopMedian": 4.200000002980232,
-    "cpu4xMedian": 18.5,
-    "count": 1
-   },
-   "gitgraph": {
-    "desktopMedian": 3.2000000029802322,
-    "cpu4xMedian": 12.349999994039536,
-    "count": 1
-   },
-   "journey": {
-    "desktopMedian": 1.4000000059604645,
-    "cpu4xMedian": 5.549999997019768,
-    "count": 1
-   },
-   "kanban": {
-    "desktopMedian": 1.9500000029802322,
-    "cpu4xMedian": 7.399999998509884,
-    "count": 1
-   },
-   "mindmap": {
-    "desktopMedian": 2.1500000059604645,
-    "cpu4xMedian": 8.300000004470348,
-    "count": 1
-   },
-   "pie": {
-    "desktopMedian": 1.2000000029802322,
-    "cpu4xMedian": 5,
-    "count": 1
-   },
-   "radar": {
-    "desktopMedian": 1.1000000089406967,
-    "cpu4xMedian": 5.25,
-    "count": 1
-   },
-   "sankey": {
-    "desktopMedian": 2.5999999940395355,
-    "cpu4xMedian": 10.24999999254942,
-    "count": 1
-   },
-   "treemap": {
-    "desktopMedian": 1.3000000044703484,
-    "cpu4xMedian": 5.799999997019768,
-    "count": 1
-   }
-  }
- },
- "mermaidBaseline": {
-  "perChart": [
-   {
-    "id": "4geeks-journey",
-    "family": "flow",
-    "desktop": {
-     "min": 20.5,
-     "median": 22.69999999552965,
-     "max": 26.100000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "architecture",
-    "family": "flow",
-    "desktop": {
-     "min": 14.400000005960464,
-     "median": 16,
-     "max": 17.200000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/bootcamp-worth-it",
-    "family": "quadrant",
-    "desktop": {
-     "min": 1.2999999970197678,
-     "median": 1.3500000014901161,
-     "max": 2.1000000089406967,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/first-ai-app",
-    "family": "sequence",
-    "desktop": {
-     "min": 3.7999999970197678,
-     "median": 4.1500000059604645,
-     "max": 4.799999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/geekforce-timeline",
-    "family": "timeline",
-    "desktop": {
-     "min": 5.4000000059604645,
-     "median": 6.199999995529652,
-     "max": 10.700000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/incident-response",
-    "family": "flow",
-    "desktop": {
-     "min": 13.299999997019768,
-     "median": 14.549999997019768,
-     "max": 16.200000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/learn-js-plan",
-    "family": "gantt",
-    "desktop": {
-     "min": 2.4000000059604645,
-     "median": 2.5499999970197678,
-     "max": 3.9000000059604645,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/outcomes-2024",
-    "family": "xy",
-    "desktop": {
-     "min": 2.7999999970197678,
-     "median": 3.0499999970197678,
-     "max": 4.200000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/platform-layers",
-    "family": "flow",
-    "desktop": {
-     "min": 17.400000005960464,
-     "median": 18.5,
-     "max": 22.200000002980232,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/prompt-anatomy",
-    "family": "flow",
-    "desktop": {
-     "min": 11.5,
-     "median": 12.350000001490116,
-     "max": 13.599999994039536,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/pyenv-resolution",
-    "family": "flow",
-    "desktop": {
-     "min": 14.699999988079071,
-     "median": 15.650000005960464,
-     "max": 16.80000001192093,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/python-or-java",
-    "family": "flow",
-    "desktop": {
-     "min": 13.899999991059303,
-     "median": 15.75000000745058,
-     "max": 18.299999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/regex-engine",
-    "family": "state",
-    "desktop": {
-     "min": 28.700000002980232,
-     "median": 30.49999999254942,
-     "max": 32.29999999701977,
-     "n": 10
-    }
-   },
-   {
-    "id": "blog/rigobot-loop",
-    "family": "sequence",
-    "desktop": {
-     "min": 3.800000011920929,
-     "median": 3.9500000029802322,
-     "max": 4.600000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "class",
-    "family": "class",
-    "desktop": {
-     "min": 13.400000005960464,
-     "median": 14.5,
-     "max": 16.5,
-     "n": 10
-    }
-   },
-   {
-    "id": "control-plane",
-    "family": "flow",
-    "desktop": {
-     "min": 21.400000005960464,
-     "median": 22.549999997019768,
-     "max": 24.100000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "er",
-    "family": "er",
-    "desktop": {
-     "min": 16.100000008940697,
-     "median": 17.200000002980232,
-     "max": 18.299999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "flow",
-    "family": "flow",
-    "desktop": {
-     "min": 13.5,
-     "median": 14.300000004470348,
-     "max": 21,
-     "n": 10
-    }
-   },
-   {
-    "id": "gantt",
-    "family": "gantt",
-    "desktop": {
-     "min": 2.300000011920929,
-     "median": 2.5,
-     "max": 4.600000008940697,
-     "n": 10
-    }
-   },
-   {
-    "id": "gantt-states",
-    "family": "gantt",
-    "desktop": {
-     "min": 2.2999999970197678,
-     "median": 2.4000000059604645,
-     "max": 2.7999999970197678,
-     "n": 10
-    }
-   },
-   {
-    "id": "gitgraph",
-    "family": "gitgraph",
-    "desktop": {
-     "min": 3,
-     "median": 3.4500000029802322,
-     "max": 4.0999999940395355,
-     "n": 10
-    }
-   },
-   {
-    "id": "journey",
-    "family": "journey",
-    "desktop": {
-     "min": 2.1000000089406967,
-     "median": 2.3500000089406967,
-     "max": 3.2999999970197678,
-     "n": 10
-    }
-   },
-   {
-    "id": "kanban",
-    "family": "kanban",
-    "desktop": {
-     "min": 11.200000002980232,
-     "median": 12.800000004470348,
-     "max": 13.799999997019768,
-     "n": 10
-    }
-   },
-   {
-    "id": "mindmap",
-    "family": "mindmap",
-    "desktop": {
-     "min": 14.200000002980232,
-     "median": 15.650000005960464,
-     "max": 18.400000005960464,
-     "n": 10
-    }
-   },
-   {
-    "id": "org-chart",
-    "family": "flow",
-    "desktop": {
-     "min": 13.700000002980232,
-     "median": 14.700000002980232,
-     "max": 15.099999994039536,
-     "n": 10
-    }
-   },
-   {
-    "id": "pie",
-    "family": "pie",
-    "desktop": {
-     "min": 1.0999999940395355,
-     "median": 1.3999999985098839,
-     "max": 1.7000000029802322,
-     "n": 10
-    }
-   },
-   {
-    "id": "quadrant",
-    "family": "quadrant",
-    "desktop": {
-     "min": 1.199999988079071,
-     "median": 1.25,
-     "max": 1.7999999970197678,
-     "n": 10
-    }
-   },
-   {
-    "id": "radar",
-    "family": "radar",
-    "desktop": {
-     "min": 1.3999999910593033,
-     "median": 1.5999999940395355,
-     "max": 1.9000000059604645,
-     "n": 10
-    }
-   },
-   {
-    "id": "sankey",
-    "family": "sankey",
-    "desktop": {
-     "min": 2.3999999910593033,
-     "median": 2.75,
-     "max": 3.8999999910593033,
-     "n": 10
-    }
-   },
-   {
-    "id": "sequence",
-    "family": "sequence",
-    "desktop": {
-     "min": 2.5,
-     "median": 2.8499999940395355,
-     "max": 3.7000000029802322,
-     "n": 10
-    }
-   },
-   {
-    "id": "sequence-rich",
-    "family": "sequence",
-    "desktop": {
-     "min": 3.7999999970197678,
-     "median": 4.149999998509884,
-     "max": 5.0999999940395355,
-     "n": 10
-    }
-   },
-   {
-    "id": "state",
-    "family": "state",
-    "desktop": {
-     "min": 16.099999994039536,
-     "median": 17.05000000447035,
-     "max": 19.19999998807907,
-     "n": 10
-    }
-   },
-   {
-    "id": "subgraphs",
-    "family": "flow",
-    "desktop": {
-     "min": 15,
-     "median": 15.949999995529652,
-     "max": 23.599999994039536,
-     "n": 10
-    }
-   },
-   {
-    "id": "timeline",
-    "family": "timeline",
-    "desktop": {
-     "min": 5.5,
-     "median": 5.950000002980232,
-     "max": 6.5,
-     "n": 10
-    }
-   },
-   {
-    "id": "treemap",
-    "family": "treemap",
-    "desktop": {
-     "min": 2.7999999970197678,
-     "median": 3.0000000074505806,
-     "max": 3.5,
-     "n": 10
-    }
-   },
-   {
-    "id": "xy",
-    "family": "xy",
-    "desktop": {
-     "min": 3,
-     "median": 3.25,
-     "max": 4.700000002980232,
-     "n": 10
-    }
-   }
-  ],
-  "skipped": [
-   {
-    "id": "messy",
-    "reason": "No diagram type detected matching given configuration for text: ```mermaid\nflowchart TD\n  A[Start (fast)] \u2014> B{Is it OK?}\n  B -->|yes| C[Ship it]\n  B \u2014> D[Fix ("
-   }
-  ],
-  "bundle": {
-   "raw": 539202,
-   "brotli": 139201,
-   "files": [
-    "mermaid-bundle.js",
-    "mermaid-chunk-PX3IPTLM.js",
-    "mermaid-chunk-GFU5Z5MP.js",
-    "mermaid-chunk-BZI55U22.js",
-    "mermaid-chunk-3UOTX33O.js",
-    "mermaid-chunk-4SKLSEZZ.js",
-    "mermaid-chunk-VP4MNQZE.js",
-    "mermaid-chunk-DXCKKX4D.js",
-    "mermaid-chunk-GQAWR626.js",
-    "mermaid-chunk-IUCNWTWP.js",
-    "mermaid-chunk-NQCKEXPJ.js",
-    "mermaid-chunk-UBUL6D7I.js",
-    "mermaid-chunk-QVVLJATG.js",
-    "mermaid-chunk-NR5LOBQE.js",
-    "mermaid-chunk-4WPCC2WB.js",
-    "mermaid-chunk-ZYPWSDB6.js",
-    "mermaid-chunk-JRVXKBOE.js",
-    "mermaid-chunk-2TTE3QF7.js"
-   ]
-  }
- },
- "firstChart": {
-  "timeline": {
-   "cold": {
-    "min": 7051.100000008941,
-    "median": 7076.20000000298,
-    "max": 7278.29999999702,
-    "n": 10
-   },
-   "warm": {
-    "min": 351.79999999701977,
-    "median": 357.5,
-    "max": 408.29999999701977,
-    "n": 10
-   }
+  "generatedAt": "2026-08-27T19:25:00.058Z",
+  "machine": {
+    "cpuModel": "AMD Ryzen 9 5900HX with Radeon Graphics",
+    "cpuCores": 16,
+    "ramGb": 15,
+    "os": "CachyOS (7.2.0-1-cachyos)",
+    "nodeVersion": "v24.16.0",
+    "chromiumVersion": "151.0.7922.34",
+    "pnpmWorkspace": true
   },
-  "lighthouse": {
-   "performanceScore": 0.47,
-   "lcpMs": 6453.673400000001,
-   "tbtMs": 588.9999999999998,
-   "cls": 0
-  }
- },
- "animation": [
-  {
-   "id": "blog/platform-layers",
-   "desktop": {
-    "fps": {
-     "min": 60.002000066668856,
-     "median": 60.00200006666893,
-     "max": 60.004000266684464,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.799999999999272,
-     "median": 16.800000000002,
-     "max": 16.80000000000291,
-     "n": 10
+  "config": {
+    "runs": 10,
+    "warmup": 1,
+    "renderOptions": {
+      "width": 1180
     }
-   },
-   "cpu4x": {
-    "fps": {
-     "min": 60.002000066668856,
-     "median": 60.0030001666767,
-     "max": 60.004000266684535,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.80000000000291,
-     "median": 16.80000000000291,
-     "max": 16.80000000000291,
-     "n": 10
-    }
-   }
   },
-  {
-   "id": "subgraphs",
-   "desktop": {
-    "fps": {
-     "min": 60.00132002904047,
-     "median": 60.00332018371678,
-     "max": 60.00532047174856,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.80000000000291,
-     "median": 16.80000000000291,
-     "max": 16.80000000000291,
-     "n": 10
-    }
-   },
-   "cpu4x": {
-    "fps": {
-     "min": 60.00200006666842,
-     "median": 60.00266012519289,
-     "max": 60.00400026668468,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.80000000000291,
-     "median": 16.80000000000291,
-     "max": 16.800000000017462,
-     "n": 10
-    }
-   }
-  },
-  {
-   "id": "blog/pyenv-resolution",
-   "desktop": {
-    "fps": {
-     "min": 60.00200006666842,
-     "median": 60.002000066669005,
-     "max": 60.00400026668468,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.800000000017462,
-     "median": 16.800000000017462,
-     "max": 16.800000000017462,
-     "n": 10
-    }
-   },
-   "cpu4x": {
-    "fps": {
-     "min": 60,
-     "median": 60.002000066669005,
-     "max": 60.00400026668468,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.79999999998836,
-     "median": 16.800000000017462,
-     "max": 16.800000000017462,
-     "n": 10
-    }
-   }
-  },
-  {
-   "id": "org-chart",
-   "desktop": {
-    "fps": {
-     "min": 60.002000066669005,
-     "median": 60.00332018371678,
-     "max": 60.00400026668468,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.800000000017462,
-     "median": 16.800000000017462,
-     "max": 16.800000000017462,
-     "n": 10
-    }
-   },
-   "cpu4x": {
-    "fps": {
-     "min": 60.001320029041054,
-     "median": 60.00266012519289,
-     "max": 60.00400026668468,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.79999999998836,
-     "median": 16.800000000017462,
-     "max": 16.800000000046566,
-     "n": 10
-    }
-   }
-  },
-  {
-   "id": "class",
-   "desktop": {
-    "fps": {
-     "min": 60.00200006666842,
-     "median": 60.00366022520044,
-     "max": 60.00400026668468,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.79999999998836,
-     "median": 16.800000000046566,
-     "max": 16.800000000046566,
-     "n": 10
-    }
-   },
-   "cpu4x": {
-    "fps": {
-     "min": 60.00200006666842,
-     "median": 60.00332018371737,
-     "max": 60.00400026668468,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.79999999998836,
-     "median": 16.800000000046566,
-     "max": 16.800000000046566,
-     "n": 10
-    }
-   }
-  },
-  {
-   "id": "4geeks-journey",
-   "desktop": {
-    "fps": {
-     "min": 60.00200006666842,
-     "median": 60.00266012519289,
-     "max": 60.00400026668468,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.79999999998836,
-     "median": 16.800000000046566,
-     "max": 16.800000000046566,
-     "n": 10
-    }
-   },
-   "cpu4x": {
-    "fps": {
-     "min": 60,
-     "median": 60.00266012519289,
-     "max": 60.00532047174856,
-     "n": 10
-    },
-    "worstFrameMs": {
-     "min": 16.79999999998836,
-     "median": 16.800000000046566,
-     "max": 16.800000000046566,
-     "n": 10
-    }
-   }
-  }
- ],
- "server": {
-  "coldStartMs": 1598.875515999971,
-  "warmMiss": {
-   "min": 17.8992970000254,
-   "median": 18.657027499983087,
-   "max": 20.37447100004647,
-   "n": 10
-  },
-  "cacheHit": {
-   "min": 0.25763699994422495,
-   "median": 0.30574199999682605,
-   "max": 0.5772000000579283,
-   "n": 10
-  },
-  "coldCachePassMs": 920.198497000034,
   "fixtureCount": 37,
-  "throughput": {
-   "1": {
-    "min": 53.28433202472457,
-    "median": 55.2074581182736,
-    "max": 56.98551700610787,
-    "n": 10
-   },
-   "4": {
-    "min": 69.79293387211868,
-    "median": 71.95260012297743,
-    "max": 73.38597645281273,
-    "n": 10
-   },
-   "8": {
-    "min": 68.92445599453737,
-    "median": 74.74754497704103,
-    "max": 83.48412201606986,
-    "n": 10
-   }
-  },
-  "rss": {
-   "nodeKb": 458044,
-   "browserKb": 699568
-  }
- },
- "bundle": {
-  "entries": {
-   "index.js": {
-    "raw": 1035,
-    "brotli": 589
-   },
-   "server.js": {
-    "raw": 3905,
-    "brotli": 1761
-   },
-   "cli.js": {
-    "raw": 2759790,
-    "brotli": 605129
-   }
-  },
-  "lazyChunk": {
-   "files": [
-    {
-     "file": "chunk-5UG4H5UF.js",
-     "raw": 303,
-     "brotli": 201
-    },
-    {
-     "file": "chunk-63NPULAZ.js",
-     "raw": 3889,
-     "brotli": 1404
-    },
-    {
-     "file": "chunk-7J6FCEU4.js",
-     "raw": 914,
-     "brotli": 438
-    },
-    {
-     "file": "chunk-E35XLW7L.js",
-     "raw": 156089,
-     "brotli": 43350
-    },
-    {
-     "file": "chunk-FDTULMSB.js",
-     "raw": 1896,
-     "brotli": 654
-    },
-    {
-     "file": "chunk-H3CL7UG5.js",
-     "raw": 132589,
-     "brotli": 25328
-    },
-    {
-     "file": "chunk-H5JNJMLR.js",
-     "raw": 78761,
-     "brotli": 26106
-    },
-    {
-     "file": "chunk-HC3VFWSO.js",
-     "raw": 13669,
-     "brotli": 5507
-    },
-    {
-     "file": "chunk-HQVGVQLZ.js",
-     "raw": 8731,
-     "brotli": 3369
-    },
-    {
-     "file": "chunk-J6ZKLHTR.js",
-     "raw": 8310,
-     "brotli": 2902
-    },
-    {
-     "file": "chunk-JGP645TB.js",
-     "raw": 99989,
-     "brotli": 27715
-    },
-    {
-     "file": "chunk-KQAMCC32.js",
-     "raw": 121064,
-     "brotli": 26733
-    },
-    {
-     "file": "chunk-KY5PRQP7.js",
-     "raw": 52326,
-     "brotli": 15672
-    },
-    {
-     "file": "chunk-OGZJB64Y.js",
-     "raw": 1227,
-     "brotli": 572
-    },
-    {
-     "file": "chunk-OTQWPZTI.js",
-     "raw": 277,
-     "brotli": 169
-    },
-    {
-     "file": "chunk-QSDMRCPB.js",
-     "raw": 1895,
-     "brotli": 750
-    },
-    {
-     "file": "chunk-QYYUDYSS.js",
-     "raw": 1203,
-     "brotli": 563
-    },
-    {
-     "file": "chunk-RKBDRT6B.js",
-     "raw": 1844,
-     "brotli": 789
-    },
-    {
-     "file": "chunk-SMEX3NBK.js",
-     "raw": 21649,
-     "brotli": 5353
-    },
-    {
-     "file": "chunk-VH76QQHV.js",
-     "raw": 42531,
-     "brotli": 13003
+  "heaviestCharts": [
+    "blog/platform-layers",
+    "subgraphs",
+    "blog/pyenv-resolution",
+    "org-chart",
+    "class",
+    "4geeks-journey"
+  ],
+  "renderTime": {
+    "perChart": [
+      {
+        "id": "4geeks-journey",
+        "family": "flow",
+        "desktop": {
+          "min": 13.300000000745058,
+          "median": 15.75,
+          "max": 25.200000000186265,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 48.200000000186265,
+          "median": 51.25,
+          "max": 59.90000000037253,
+          "n": 10
+        }
+      },
+      {
+        "id": "architecture",
+        "family": "flow",
+        "desktop": {
+          "min": 7.599999999627471,
+          "median": 8.649999999906868,
+          "max": 11.099999999627471,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 34.200000000186265,
+          "median": 37.450000000186265,
+          "max": 42.39999999944121,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/bootcamp-worth-it",
+        "family": "quadrant",
+        "desktop": {
+          "min": 1.900000000372529,
+          "median": 2.25,
+          "max": 3.300000000745058,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 8.299999999813735,
+          "median": 8.850000000093132,
+          "max": 10.100000000558794,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/first-ai-app",
+        "family": "sequence",
+        "desktop": {
+          "min": 3.099999999627471,
+          "median": 3.7499999995343387,
+          "max": 4.7000000001862645,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 14.099999999627471,
+          "median": 15.650000000372529,
+          "max": 24.199999999254942,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/geekforce-timeline",
+        "family": "timeline",
+        "desktop": {
+          "min": 3.099999999627471,
+          "median": 3.3500000000931323,
+          "max": 3.7000000001862645,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 12.299999999813735,
+          "median": 13.699999999720603,
+          "max": 14.699999999254942,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/incident-response",
+        "family": "flow",
+        "desktop": {
+          "min": 8.599999999627471,
+          "median": 9.700000000186265,
+          "max": 10.5,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 39.799999999813735,
+          "median": 42.1999999997206,
+          "max": 44.89999999944121,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/learn-js-plan",
+        "family": "gantt",
+        "desktop": {
+          "min": 2.099999999627471,
+          "median": 2.5499999998137355,
+          "max": 5.599999999627471,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 9,
+          "median": 10.25,
+          "max": 13,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/outcomes-2024",
+        "family": "xy",
+        "desktop": {
+          "min": 2.6000000005587935,
+          "median": 2.8999999999068677,
+          "max": 3.7999999998137355,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 11.5,
+          "median": 12.5,
+          "max": 13.5,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/platform-layers",
+        "family": "flow",
+        "desktop": {
+          "min": 74.40000000037253,
+          "median": 81.85000000009313,
+          "max": 86,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 212,
+          "median": 222.64999999990687,
+          "max": 252,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/prompt-anatomy",
+        "family": "flow",
+        "desktop": {
+          "min": 6.199999999254942,
+          "median": 6.750000000465661,
+          "max": 7.900000000372529,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 28.59999999962747,
+          "median": 30.549999999813735,
+          "max": 32,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/pyenv-resolution",
+        "family": "flow",
+        "desktop": {
+          "min": 60.200000000186265,
+          "median": 63.25000000046566,
+          "max": 65,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 153.90000000037253,
+          "median": 168.14999999990687,
+          "max": 187.79999999981374,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/python-or-java",
+        "family": "flow",
+        "desktop": {
+          "min": 7.5,
+          "median": 8.299999999813735,
+          "max": 9.900000000372529,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 33.700000000186265,
+          "median": 36.39999999990687,
+          "max": 39.299999999813735,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/regex-engine",
+        "family": "state",
+        "desktop": {
+          "min": 12.799999999813735,
+          "median": 14.100000000093132,
+          "max": 20,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 59.10000000055879,
+          "median": 60.6999999997206,
+          "max": 65.59999999962747,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/rigobot-loop",
+        "family": "sequence",
+        "desktop": {
+          "min": 3.2999999998137355,
+          "median": 4.050000000279397,
+          "max": 5.2999999998137355,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 15,
+          "median": 17.40000000037253,
+          "max": 20.799999999813735,
+          "n": 10
+        }
+      },
+      {
+        "id": "class",
+        "family": "class",
+        "desktop": {
+          "min": 54.90000000037253,
+          "median": 56.4499999997206,
+          "max": 58.39999999944121,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 132.20000000018626,
+          "median": 135.99999999953434,
+          "max": 142.1000000005588,
+          "n": 10
+        }
+      },
+      {
+        "id": "control-plane",
+        "family": "flow",
+        "desktop": {
+          "min": 8.800000000745058,
+          "median": 9.950000000186265,
+          "max": 11.800000000745058,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 44.299999999813735,
+          "median": 45.75,
+          "max": 48.59999999962747,
+          "n": 10
+        }
+      },
+      {
+        "id": "er",
+        "family": "er",
+        "desktop": {
+          "min": 4.7999999998137355,
+          "median": 5.399999999906868,
+          "max": 6.099999999627471,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 20.5,
+          "median": 22.649999999906868,
+          "max": 24.90000000037253,
+          "n": 10
+        }
+      },
+      {
+        "id": "flow",
+        "family": "flow",
+        "desktop": {
+          "min": 6.2999999998137355,
+          "median": 7.050000000279397,
+          "max": 8.599999999627471,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 28.59999999962747,
+          "median": 30.700000000186265,
+          "max": 34,
+          "n": 10
+        }
+      },
+      {
+        "id": "gantt",
+        "family": "gantt",
+        "desktop": {
+          "min": 1.7000000001862645,
+          "median": 2.1000000000931323,
+          "max": 2.800000000745058,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 8,
+          "median": 8.600000000093132,
+          "max": 10.600000000558794,
+          "n": 10
+        }
+      },
+      {
+        "id": "gantt-states",
+        "family": "gantt",
+        "desktop": {
+          "min": 2.2000000001862645,
+          "median": 2.400000000372529,
+          "max": 3.199999999254942,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 10.299999999813735,
+          "median": 11.149999999906868,
+          "max": 11.900000000372529,
+          "n": 10
+        }
+      },
+      {
+        "id": "gitgraph",
+        "family": "gitgraph",
+        "desktop": {
+          "min": 3.8999999994412065,
+          "median": 4.5499999998137355,
+          "max": 5.2000000001862645,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 16.799999999813735,
+          "median": 17.850000000093132,
+          "max": 20.700000000186265,
+          "n": 10
+        }
+      },
+      {
+        "id": "journey",
+        "family": "journey",
+        "desktop": {
+          "min": 1.7999999998137355,
+          "median": 2.2000000001862645,
+          "max": 2.7999999998137355,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 8.299999999813735,
+          "median": 9.049999999813735,
+          "max": 11.400000000372529,
+          "n": 10
+        }
+      },
+      {
+        "id": "kanban",
+        "family": "kanban",
+        "desktop": {
+          "min": 2.6000000005587935,
+          "median": 3,
+          "max": 3.400000000372529,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 10.399999999441206,
+          "median": 11.200000000186265,
+          "max": 12.799999999813735,
+          "n": 10
+        }
+      },
+      {
+        "id": "messy",
+        "family": "flow",
+        "desktop": {
+          "min": 4.7999999998137355,
+          "median": 5.6499999994412065,
+          "max": 7.2999999998137355,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 22.59999999962747,
+          "median": 27.65000000037253,
+          "max": 30.59999999962747,
+          "n": 10
+        }
+      },
+      {
+        "id": "mindmap",
+        "family": "mindmap",
+        "desktop": {
+          "min": 2.7000000001862645,
+          "median": 2.900000000372529,
+          "max": 3.900000000372529,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 11.099999999627471,
+          "median": 12.450000000186265,
+          "max": 14.200000000186265,
+          "n": 10
+        }
+      },
+      {
+        "id": "org-chart",
+        "family": "flow",
+        "desktop": {
+          "min": 56.700000000186265,
+          "median": 57.950000000186265,
+          "max": 59.39999999944121,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 142.5,
+          "median": 146.60000000009313,
+          "max": 193.20000000018626,
+          "n": 10
+        }
+      },
+      {
+        "id": "pie",
+        "family": "pie",
+        "desktop": {
+          "min": 1.5,
+          "median": 2.0499999998137355,
+          "max": 2.7000000001862645,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 7,
+          "median": 8.350000000093132,
+          "max": 10.5,
+          "n": 10
+        }
+      },
+      {
+        "id": "quadrant",
+        "family": "quadrant",
+        "desktop": {
+          "min": 1.7999999998137355,
+          "median": 2.2000000001862645,
+          "max": 3.5,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 7.8999999994412065,
+          "median": 10.149999999906868,
+          "max": 13.5,
+          "n": 10
+        }
+      },
+      {
+        "id": "radar",
+        "family": "radar",
+        "desktop": {
+          "min": 1.5,
+          "median": 1.7000000001862645,
+          "max": 2.5,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 6.5,
+          "median": 8.099999999627471,
+          "max": 10.699999999254942,
+          "n": 10
+        }
+      },
+      {
+        "id": "sankey",
+        "family": "sankey",
+        "desktop": {
+          "min": 3.2999999998137355,
+          "median": 3.7999999998137355,
+          "max": 4.699999999254942,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 14.599999999627471,
+          "median": 15.750000000465661,
+          "max": 19.90000000037253,
+          "n": 10
+        }
+      },
+      {
+        "id": "sequence",
+        "family": "sequence",
+        "desktop": {
+          "min": 2.5,
+          "median": 2.7999999998137355,
+          "max": 3.2999999998137355,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 10.799999999813735,
+          "median": 11.5,
+          "max": 13,
+          "n": 10
+        }
+      },
+      {
+        "id": "sequence-rich",
+        "family": "sequence",
+        "desktop": {
+          "min": 3.2999999998137355,
+          "median": 3.75,
+          "max": 4.900000000372529,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 14.899999999441206,
+          "median": 16,
+          "max": 17.100000000558794,
+          "n": 10
+        }
+      },
+      {
+        "id": "state",
+        "family": "state",
+        "desktop": {
+          "min": 6.900000000372529,
+          "median": 7.649999999906868,
+          "max": 8.900000000372529,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 30.90000000037253,
+          "median": 32.39999999990687,
+          "max": 35.299999999813735,
+          "n": 10
+        }
+      },
+      {
+        "id": "subgraphs",
+        "family": "flow",
+        "desktop": {
+          "min": 73.5,
+          "median": 77.64999999990687,
+          "max": 87,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 209.20000000018626,
+          "median": 217.39999999990687,
+          "max": 225.29999999981374,
+          "n": 10
+        }
+      },
+      {
+        "id": "timeline",
+        "family": "timeline",
+        "desktop": {
+          "min": 2.8999999994412065,
+          "median": 3.349999999627471,
+          "max": 4.099999999627471,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 12.900000000372529,
+          "median": 16.15000000037253,
+          "max": 19.299999999813735,
+          "n": 10
+        }
+      },
+      {
+        "id": "treemap",
+        "family": "treemap",
+        "desktop": {
+          "min": 1.599999999627471,
+          "median": 2.0499999998137355,
+          "max": 3.6000000005587935,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 6.7000000001862645,
+          "median": 8.25,
+          "max": 11.599999999627471,
+          "n": 10
+        }
+      },
+      {
+        "id": "xy",
+        "family": "xy",
+        "desktop": {
+          "min": 3,
+          "median": 3.1000000000931323,
+          "max": 4.099999999627471,
+          "n": 10
+        },
+        "cpu4x": {
+          "min": 12.400000000372529,
+          "median": 14.400000000372529,
+          "max": 17.700000000186265,
+          "n": 10
+        }
+      }
+    ],
+    "perFamily": {
+      "flow": {
+        "desktopMedian": 9.825000000186265,
+        "cpu4xMedian": 43.9749999998603,
+        "count": 12
+      },
+      "quadrant": {
+        "desktopMedian": 2.2250000000931323,
+        "cpu4xMedian": 9.5,
+        "count": 2
+      },
+      "sequence": {
+        "desktopMedian": 3.7499999997671694,
+        "cpu4xMedian": 15.825000000186265,
+        "count": 4
+      },
+      "timeline": {
+        "desktopMedian": 3.3499999998603016,
+        "cpu4xMedian": 14.925000000046566,
+        "count": 2
+      },
+      "gantt": {
+        "desktopMedian": 2.400000000372529,
+        "cpu4xMedian": 10.25,
+        "count": 3
+      },
+      "xy": {
+        "desktopMedian": 3,
+        "cpu4xMedian": 13.450000000186265,
+        "count": 2
+      },
+      "state": {
+        "desktopMedian": 10.875,
+        "cpu4xMedian": 46.549999999813735,
+        "count": 2
+      },
+      "class": {
+        "desktopMedian": 56.4499999997206,
+        "cpu4xMedian": 135.99999999953434,
+        "count": 1
+      },
+      "er": {
+        "desktopMedian": 5.399999999906868,
+        "cpu4xMedian": 22.649999999906868,
+        "count": 1
+      },
+      "gitgraph": {
+        "desktopMedian": 4.5499999998137355,
+        "cpu4xMedian": 17.850000000093132,
+        "count": 1
+      },
+      "journey": {
+        "desktopMedian": 2.2000000001862645,
+        "cpu4xMedian": 9.049999999813735,
+        "count": 1
+      },
+      "kanban": {
+        "desktopMedian": 3,
+        "cpu4xMedian": 11.200000000186265,
+        "count": 1
+      },
+      "mindmap": {
+        "desktopMedian": 2.900000000372529,
+        "cpu4xMedian": 12.450000000186265,
+        "count": 1
+      },
+      "pie": {
+        "desktopMedian": 2.0499999998137355,
+        "cpu4xMedian": 8.350000000093132,
+        "count": 1
+      },
+      "radar": {
+        "desktopMedian": 1.7000000001862645,
+        "cpu4xMedian": 8.099999999627471,
+        "count": 1
+      },
+      "sankey": {
+        "desktopMedian": 3.7999999998137355,
+        "cpu4xMedian": 15.750000000465661,
+        "count": 1
+      },
+      "treemap": {
+        "desktopMedian": 2.0499999998137355,
+        "cpu4xMedian": 8.25,
+        "count": 1
+      }
     }
-   ],
-   "total": {
-    "raw": 749156,
-    "brotli": 200578
-   }
   },
-  "furtherLazy": {
-   "count": 62,
-   "total": {
-    "raw": 11636162,
-    "brotli": 2992907
-   }
-  }
- },
- "notes": [
-  "mermaid baseline skipped 1 fixture(s) it cannot render: messy",
-  "While building this report, one out of several spot-checks of concurrent renderToHtml() calls returned identical output for genuinely different sources \u2014 a rare race, not reproduced in two follow-up isolated tests. A dedicated repro against the exact section-5 scenario (all 37 fixtures, batches of 4 and 8, output diffed against a sequential reference) found zero mismatches, so the throughput numbers above are trustworthy \u2014 but the rare case observed elsewhere suggests renderToHtml on a shared browser session is not fully hardened for concurrent use and deserves a closer look. \u2014 Fixed after this run: renderToSvg now serialises renders through a queue on the shared page and de-duplicates identical in-flight requests (packages/geekchart/src/server.ts); a test fires eight distinct sources concurrently and checks each result carries only its own labels."
- ]
+  "mermaidBaseline": {
+    "perChart": [
+      {
+        "id": "4geeks-journey",
+        "family": "flow",
+        "desktop": {
+          "min": 30.899999999441206,
+          "median": 33,
+          "max": 43.799999999813735,
+          "n": 10
+        }
+      },
+      {
+        "id": "architecture",
+        "family": "flow",
+        "desktop": {
+          "min": 22.399999999441206,
+          "median": 23.49999999953434,
+          "max": 24.5,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/bootcamp-worth-it",
+        "family": "quadrant",
+        "desktop": {
+          "min": 1.7999999998137355,
+          "median": 2.349999999627471,
+          "max": 3.599999999627471,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/first-ai-app",
+        "family": "sequence",
+        "desktop": {
+          "min": 5.400000000372529,
+          "median": 6.149999999906868,
+          "max": 8.5,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/geekforce-timeline",
+        "family": "timeline",
+        "desktop": {
+          "min": 7.5,
+          "median": 9.699999999720603,
+          "max": 14.300000000745058,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/incident-response",
+        "family": "flow",
+        "desktop": {
+          "min": 19.300000000745058,
+          "median": 20.850000000558794,
+          "max": 21.799999999813735,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/learn-js-plan",
+        "family": "gantt",
+        "desktop": {
+          "min": 3.2999999998137355,
+          "median": 3.8000000002793968,
+          "max": 6.5,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/outcomes-2024",
+        "family": "xy",
+        "desktop": {
+          "min": 3.7999999998137355,
+          "median": 4.4500000001862645,
+          "max": 5.900000000372529,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/platform-layers",
+        "family": "flow",
+        "desktop": {
+          "min": 26.100000000558794,
+          "median": 28.25,
+          "max": 38.40000000037253,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/prompt-anatomy",
+        "family": "flow",
+        "desktop": {
+          "min": 16.5,
+          "median": 18.699999999720603,
+          "max": 23.90000000037253,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/pyenv-resolution",
+        "family": "flow",
+        "desktop": {
+          "min": 21,
+          "median": 24.149999999906868,
+          "max": 25.799999999813735,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/python-or-java",
+        "family": "flow",
+        "desktop": {
+          "min": 19.59999999962747,
+          "median": 24.600000000093132,
+          "max": 35.39999999944121,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/regex-engine",
+        "family": "state",
+        "desktop": {
+          "min": 41.10000000055879,
+          "median": 43.3000000002794,
+          "max": 45.200000000186265,
+          "n": 10
+        }
+      },
+      {
+        "id": "blog/rigobot-loop",
+        "family": "sequence",
+        "desktop": {
+          "min": 5.300000000745058,
+          "median": 6.4500000001862645,
+          "max": 8.099999999627471,
+          "n": 10
+        }
+      },
+      {
+        "id": "class",
+        "family": "class",
+        "desktop": {
+          "min": 19.100000000558794,
+          "median": 20.00000000046566,
+          "max": 21.59999999962747,
+          "n": 10
+        }
+      },
+      {
+        "id": "control-plane",
+        "family": "flow",
+        "desktop": {
+          "min": 31.100000000558794,
+          "median": 33.10000000009313,
+          "max": 34.09999999962747,
+          "n": 10
+        }
+      },
+      {
+        "id": "er",
+        "family": "er",
+        "desktop": {
+          "min": 23.200000000186265,
+          "median": 24.550000000279397,
+          "max": 26.200000000186265,
+          "n": 10
+        }
+      },
+      {
+        "id": "flow",
+        "family": "flow",
+        "desktop": {
+          "min": 18.59999999962747,
+          "median": 19.799999999813735,
+          "max": 21.90000000037253,
+          "n": 10
+        }
+      },
+      {
+        "id": "gantt",
+        "family": "gantt",
+        "desktop": {
+          "min": 3.300000000745058,
+          "median": 3.6999999997206032,
+          "max": 5.099999999627471,
+          "n": 10
+        }
+      },
+      {
+        "id": "gantt-states",
+        "family": "gantt",
+        "desktop": {
+          "min": 3.8999999994412065,
+          "median": 4.25,
+          "max": 6,
+          "n": 10
+        }
+      },
+      {
+        "id": "gitgraph",
+        "family": "gitgraph",
+        "desktop": {
+          "min": 5.1000000005587935,
+          "median": 5.849999999627471,
+          "max": 10.200000000186265,
+          "n": 10
+        }
+      },
+      {
+        "id": "journey",
+        "family": "journey",
+        "desktop": {
+          "min": 3.1000000005587935,
+          "median": 4.099999999627471,
+          "max": 5.400000000372529,
+          "n": 10
+        }
+      },
+      {
+        "id": "kanban",
+        "family": "kanban",
+        "desktop": {
+          "min": 15.5,
+          "median": 17.549999999813735,
+          "max": 19.59999999962747,
+          "n": 10
+        }
+      },
+      {
+        "id": "mindmap",
+        "family": "mindmap",
+        "desktop": {
+          "min": 20.399999999441206,
+          "median": 23.00000000046566,
+          "max": 24.5,
+          "n": 10
+        }
+      },
+      {
+        "id": "org-chart",
+        "family": "flow",
+        "desktop": {
+          "min": 18.59999999962747,
+          "median": 19.90000000037253,
+          "max": 22,
+          "n": 10
+        }
+      },
+      {
+        "id": "pie",
+        "family": "pie",
+        "desktop": {
+          "min": 1.7000000001862645,
+          "median": 2.099999999627471,
+          "max": 3.599999999627471,
+          "n": 10
+        }
+      },
+      {
+        "id": "quadrant",
+        "family": "quadrant",
+        "desktop": {
+          "min": 1.5,
+          "median": 1.9999999995343387,
+          "max": 3.8999999994412065,
+          "n": 10
+        }
+      },
+      {
+        "id": "radar",
+        "family": "radar",
+        "desktop": {
+          "min": 2,
+          "median": 2.6000000000931323,
+          "max": 3.3999999994412065,
+          "n": 10
+        }
+      },
+      {
+        "id": "sankey",
+        "family": "sankey",
+        "desktop": {
+          "min": 3.3999999994412065,
+          "median": 3.8999999999068677,
+          "max": 5.2000000001862645,
+          "n": 10
+        }
+      },
+      {
+        "id": "sequence",
+        "family": "sequence",
+        "desktop": {
+          "min": 3.699999999254942,
+          "median": 4.25,
+          "max": 5.3999999994412065,
+          "n": 10
+        }
+      },
+      {
+        "id": "sequence-rich",
+        "family": "sequence",
+        "desktop": {
+          "min": 5.199999999254942,
+          "median": 6.25,
+          "max": 8,
+          "n": 10
+        }
+      },
+      {
+        "id": "state",
+        "family": "state",
+        "desktop": {
+          "min": 21.899999999441206,
+          "median": 24.40000000037253,
+          "max": 27.100000000558794,
+          "n": 10
+        }
+      },
+      {
+        "id": "subgraphs",
+        "family": "flow",
+        "desktop": {
+          "min": 20.799999999813735,
+          "median": 22.700000000186265,
+          "max": 25,
+          "n": 10
+        }
+      },
+      {
+        "id": "timeline",
+        "family": "timeline",
+        "desktop": {
+          "min": 7.7000000001862645,
+          "median": 8.600000000093132,
+          "max": 9.599999999627471,
+          "n": 10
+        }
+      },
+      {
+        "id": "treemap",
+        "family": "treemap",
+        "desktop": {
+          "min": 4.2999999998137355,
+          "median": 4.8500000005587935,
+          "max": 6.5,
+          "n": 10
+        }
+      },
+      {
+        "id": "xy",
+        "family": "xy",
+        "desktop": {
+          "min": 4.400000000372529,
+          "median": 5.149999999906868,
+          "max": 7.400000000372529,
+          "n": 10
+        }
+      }
+    ],
+    "skipped": [
+      {
+        "id": "messy",
+        "reason": "No diagram type detected matching given configuration for text: ```mermaid\nflowchart TD\n  A[Start (fast)] —> B{Is it OK?}\n  B -->|yes| C[Ship it]\n  B —> D[Fix ("
+      }
+    ],
+    "bundle": {
+      "raw": 539202,
+      "brotli": 139214,
+      "files": [
+        "mermaid-bundle.js",
+        "mermaid-chunk-PQB4THTP.js",
+        "mermaid-chunk-2I3EGZLW.js",
+        "mermaid-chunk-5DIWN7JN.js",
+        "mermaid-chunk-Y7KHLSX6.js",
+        "mermaid-chunk-4SKLSEZZ.js",
+        "mermaid-chunk-LWEPEHL4.js",
+        "mermaid-chunk-DFX36KMB.js",
+        "mermaid-chunk-IM6XUAT5.js",
+        "mermaid-chunk-NMJ4VXI3.js",
+        "mermaid-chunk-LYSJLIVD.js",
+        "mermaid-chunk-Z5NBG7NZ.js",
+        "mermaid-chunk-DYPUSWI5.js",
+        "mermaid-chunk-PCQT5KMA.js",
+        "mermaid-chunk-3HZRDHXE.js",
+        "mermaid-chunk-7IGZVO2Z.js",
+        "mermaid-chunk-HGFYLECT.js",
+        "mermaid-chunk-EBOOK35P.js"
+      ]
+    }
+  },
+  "firstChart": {
+    "timeline": {
+      "cold": {
+        "min": 8202.100000000559,
+        "median": 8305.049999999814,
+        "max": 8720.899999999441,
+        "n": 10
+      },
+      "warm": {
+        "min": 514.2000000001863,
+        "median": 537.2000000001863,
+        "max": 548.7000000001863,
+        "n": 10
+      }
+    },
+    "lighthouse": {
+      "performanceScore": 0.39,
+      "lcpMs": 6618.88215,
+      "tbtMs": 902.0000000000002,
+      "cls": 0
+    }
+  },
+  "animation": [
+    {
+      "id": "blog/platform-layers",
+      "desktop": {
+        "fps": {
+          "min": 60.002000066668856,
+          "median": 60.0030001666767,
+          "max": 60.004000266684464,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.800000000000182,
+          "median": 16.80000000000291,
+          "max": 16.80000000000291,
+          "n": 10
+        }
+      },
+      "cpu4x": {
+        "fps": {
+          "min": 60.002000066668856,
+          "median": 60.00200006666893,
+          "max": 60.004000266684535,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.80000000000291,
+          "median": 16.80000000000291,
+          "max": 16.80000000000291,
+          "n": 10
+        }
+      }
+    },
+    {
+      "id": "subgraphs",
+      "desktop": {
+        "fps": {
+          "min": 60.00132002904076,
+          "median": 60.002000066669005,
+          "max": 60.00532047174827,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.80000000000291,
+          "median": 16.80000000000291,
+          "max": 16.80000000000291,
+          "n": 10
+        }
+      },
+      "cpu4x": {
+        "fps": {
+          "min": 60.00132002904047,
+          "median": 60.00266012519289,
+          "max": 60.004000266684386,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.80000000000291,
+          "median": 16.80000000000291,
+          "max": 16.800000000017462,
+          "n": 10
+        }
+      }
+    },
+    {
+      "id": "blog/pyenv-resolution",
+      "desktop": {
+        "fps": {
+          "min": 60,
+          "median": 60.002000066669005,
+          "max": 60.00400026668468,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.800000000017462,
+          "median": 16.800000000017462,
+          "max": 16.800000000017462,
+          "n": 10
+        }
+      },
+      "cpu4x": {
+        "fps": {
+          "min": 60.00200006666842,
+          "median": 60.002000066669005,
+          "max": 60.00400026668468,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.800000000017462,
+          "median": 16.800000000017462,
+          "max": 16.800000000017462,
+          "n": 10
+        }
+      }
+    },
+    {
+      "id": "org-chart",
+      "desktop": {
+        "fps": {
+          "min": 60.001320029041054,
+          "median": 60.00332018371678,
+          "max": 60.0040002666841,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.800000000017462,
+          "median": 16.800000000017462,
+          "max": 16.800000000017462,
+          "n": 10
+        }
+      },
+      "cpu4x": {
+        "fps": {
+          "min": 60,
+          "median": 60.00366022520044,
+          "max": 60.00400026668468,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.800000000017462,
+          "median": 16.800000000017462,
+          "max": 16.800000000046566,
+          "n": 10
+        }
+      }
+    },
+    {
+      "id": "class",
+      "desktop": {
+        "fps": {
+          "min": 60.00132002904047,
+          "median": 60.00200006666959,
+          "max": 60.00532047174856,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.79999999998836,
+          "median": 16.800000000046566,
+          "max": 16.800000000046566,
+          "n": 10
+        }
+      },
+      "cpu4x": {
+        "fps": {
+          "min": 60.00200006666842,
+          "median": 60.00266012519348,
+          "max": 60.00400026668468,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.79999999998836,
+          "median": 16.800000000046566,
+          "max": 16.800000000046566,
+          "n": 10
+        }
+      }
+    },
+    {
+      "id": "4geeks-journey",
+      "desktop": {
+        "fps": {
+          "min": 60.00132002904047,
+          "median": 60.00332018371737,
+          "max": 60.00532047174856,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.79999999998836,
+          "median": 16.800000000046566,
+          "max": 16.800000000046566,
+          "n": 10
+        }
+      },
+      "cpu4x": {
+        "fps": {
+          "min": 60.00200006666842,
+          "median": 60.00332018371737,
+          "max": 60.00400026668468,
+          "n": 10
+        },
+        "worstFrameMs": {
+          "min": 16.79999999998836,
+          "median": 16.800000000046566,
+          "max": 16.800000000046566,
+          "n": 10
+        }
+      }
+    }
+  ],
+  "server": {
+    "engine": "browser",
+    "coldStartMs": 1896.7832589999307,
+    "warmMiss": {
+      "min": 22.507261999999173,
+      "median": 23.579439499997534,
+      "max": 25.612996999989264,
+      "n": 10
+    },
+    "cacheHit": {
+      "min": 0.3799989999970421,
+      "median": 0.38539850001689047,
+      "max": 0.40736100007779896,
+      "n": 10
+    },
+    "coldCachePassMs": 1090.7642329999944,
+    "fixtureCount": 37,
+    "throughput": {
+      "1": {
+        "min": 43.90772438559661,
+        "median": 45.30435515190645,
+        "max": 46.99881138227339,
+        "n": 10
+      },
+      "4": {
+        "min": 44.42958542990417,
+        "median": 46.57942711220891,
+        "max": 47.34798546005576,
+        "n": 10
+      },
+      "8": {
+        "min": 45.4323808712558,
+        "median": 46.66655417040407,
+        "max": 47.786376197137066,
+        "n": 10
+      }
+    },
+    "rss": {
+      "nodeKb": 672908,
+      "browserKb": 745232
+    }
+  },
+  "serverNode": {
+    "engine": "node",
+    "coldStartMs": 468.30394100002013,
+    "warmMiss": {
+      "min": 12.971942999982275,
+      "median": 15.239473499997985,
+      "max": 20.395067999954335,
+      "n": 10
+    },
+    "cacheHit": {
+      "min": 0.39370499993674457,
+      "median": 0.400037000013981,
+      "max": 0.4303040000377223,
+      "n": 10
+    },
+    "coldCachePassMs": 1024.8437519998988,
+    "fixtureCount": 37,
+    "throughput": {
+      "1": {
+        "min": 55.71446492126238,
+        "median": 59.56743381477264,
+        "max": 61.0863617056784,
+        "n": 10
+      },
+      "4": {
+        "min": 66.20381930442763,
+        "median": 67.17342169831903,
+        "max": 67.78796150624619,
+        "n": 10
+      },
+      "8": {
+        "min": 70.25103217136007,
+        "median": 70.92348184220705,
+        "max": 71.28701701906695,
+        "n": 10
+      }
+    },
+    "rss": {
+      "nodeKb": 668764,
+      "browserKb": 4500
+    }
+  },
+  "bundle": {
+    "entries": {
+      "index.js": {
+        "raw": 1035,
+        "brotli": 589
+      },
+      "server.js": {
+        "raw": 4244,
+        "brotli": 1795
+      },
+      "cli.js": {
+        "raw": 12756,
+        "brotli": 4676
+      }
+    },
+    "lazyChunk": {
+      "files": [
+        {
+          "file": "chunk-2NOCP75M.js",
+          "raw": 1203,
+          "brotli": 562
+        },
+        {
+          "file": "chunk-37EGVMMY.js",
+          "raw": 121064,
+          "brotli": 26746
+        },
+        {
+          "file": "chunk-63NPULAZ.js",
+          "raw": 3889,
+          "brotli": 1404
+        },
+        {
+          "file": "chunk-7J6FCEU4.js",
+          "raw": 914,
+          "brotli": 438
+        },
+        {
+          "file": "chunk-DOUEOVJB.js",
+          "raw": 132330,
+          "brotli": 25170
+        },
+        {
+          "file": "chunk-FDTULMSB.js",
+          "raw": 1896,
+          "brotli": 654
+        },
+        {
+          "file": "chunk-HQVGVQLZ.js",
+          "raw": 8731,
+          "brotli": 3369
+        },
+        {
+          "file": "chunk-J6ZKLHTR.js",
+          "raw": 8310,
+          "brotli": 2902
+        },
+        {
+          "file": "chunk-JGP645TB.js",
+          "raw": 99989,
+          "brotli": 27715
+        },
+        {
+          "file": "chunk-MI4GC227.js",
+          "raw": 79349,
+          "brotli": 26325
+        },
+        {
+          "file": "chunk-OGZJB64Y.js",
+          "raw": 1227,
+          "brotli": 572
+        },
+        {
+          "file": "chunk-ORTGSEYK.js",
+          "raw": 158333,
+          "brotli": 44042
+        },
+        {
+          "file": "chunk-OTQWPZTI.js",
+          "raw": 277,
+          "brotli": 169
+        },
+        {
+          "file": "chunk-QLHVZKJB.js",
+          "raw": 42298,
+          "brotli": 12897
+        },
+        {
+          "file": "chunk-QSDMRCPB.js",
+          "raw": 1895,
+          "brotli": 750
+        },
+        {
+          "file": "chunk-S7BRCGWN.js",
+          "raw": 52326,
+          "brotli": 15699
+        },
+        {
+          "file": "chunk-TO67KFFT.js",
+          "raw": 21649,
+          "brotli": 5352
+        },
+        {
+          "file": "chunk-UBDNXPGF.js",
+          "raw": 13669,
+          "brotli": 5494
+        },
+        {
+          "file": "chunk-W4FNQCRE.js",
+          "raw": 303,
+          "brotli": 201
+        },
+        {
+          "file": "chunk-ZVHJJZAN.js",
+          "raw": 1844,
+          "brotli": 791
+        }
+      ],
+      "total": {
+        "raw": 751496,
+        "brotli": 201252
+      }
+    },
+    "furtherLazy": {
+      "count": 154,
+      "total": {
+        "raw": 18851111,
+        "brotli": 4902640
+      }
+    }
+  },
+  "notes": [
+    "mermaid baseline skipped 1 fixture(s) it cannot render: messy"
+  ]
 }
