@@ -1,16 +1,27 @@
 /**
  * Design gate: measure every chart in gallery.html against DESIGN.md.
  *
- *   pnpm gallery && pnpm gate            # all charts
+ *   pnpm gallery && pnpm gate            # all charts, browser-rendered
  *   pnpm gate flow control-plane         # just these
  *   pnpm gate --shots                    # also write PNGs to .gate/
  *   pnpm gate --json                     # the same results as JSON, for tests
+ *   pnpm gallery --engine=node && pnpm gate --engine=node
+ *                                         # same 47 checks against renderNode()'s SVGs
  *
  * Prints one line per chart with the rules it breaks (rule numbers are the
  * section numbers in DESIGN.md) and exits 1 if anything is a FAIL. WARN lines
  * are things the gate can only approximate; a human decides those from the
  * screenshot. The point is that "looks fine" is not an argument — the numbers
  * are.
+ *
+ * `--engine=node` only changes which gallery file this reads by default
+ * (`gallery-node.html`, from `pnpm gallery --engine=node`, instead of
+ * `gallery.html`) — it does not change how the gate measures. This still
+ * runs in a real headless Chromium either way: the checks themselves
+ * (packages/cli/src/measure/) are DOM code, and mounting a chart plus
+ * reading its computed geometry needs a real browser regardless of which
+ * engine drew the SVG being measured. What changes is only where that SVG
+ * came from.
  *
  * The checks themselves live in packages/cli/src/measure/ (one file per
  * DESIGN.md section, one check per rule id) and are bundled to dist/measure.js
@@ -27,10 +38,13 @@ const repo = join(here, '..', '..', '..');
 const args = process.argv.slice(2);
 const shots = args.includes('--shots');
 const asJson = args.includes('--json');
+const engine = args.find((a) => a.startsWith('--engine='))?.slice('--engine='.length) === 'node' ? 'node' : 'browser';
 const only = new Set(args.filter((a) => !a.startsWith('--')));
-const page = args.find((a) => a.startsWith('--file='))?.slice(7) ?? join(repo, 'gallery.html');
+const defaultPage = join(repo, engine === 'node' ? 'gallery-node.html' : 'gallery.html');
+const page = args.find((a) => a.startsWith('--file='))?.slice(7) ?? defaultPage;
 if (!existsSync(page)) {
-  console.error(`no ${page} — run "pnpm gallery" first`);
+  const how = engine === 'node' ? 'pnpm gallery --engine=node' : 'pnpm gallery';
+  console.error(`no ${page} — run "${how}" first`);
   process.exit(2);
 }
 const measureJs = join(here, '..', 'dist', 'measure.js');

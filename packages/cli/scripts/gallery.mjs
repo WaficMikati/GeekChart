@@ -7,17 +7,21 @@
  * ends of the conversation looking at the same thing.
  *
  * Regenerate it whenever the renderer changes:
- *   pnpm gallery
+ *   pnpm gallery                 # browser engine, writes gallery.html
+ *   pnpm gallery --engine=node   # renderNode(), writes gallery-node.html
+ *   pnpm gallery some/path.html  # either engine, explicit output path
  */
 import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openSession, renderAny } from '../src/browser.ts';
 import { scopeCss } from '../../core/src/scope.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..', '..');
 const fixturesRoot = join(repo, 'fixtures');
+const argv = process.argv.slice(2);
+const engine = argv.find((a) => a.startsWith('--engine='))?.slice('--engine='.length) === 'node' ? 'node' : 'browser';
+const explicitOut = argv.find((a) => !a.startsWith('--'));
 const fixturesBlog = join(fixturesRoot, 'blog');
 
 /**
@@ -167,13 +171,37 @@ const esc = (t) =>
 // share the same pipeline families).
 for (const group of GROUPS) group.key = `${group.section}·${group.name}`;
 
-const session = await openSession(1);
+// `renderOne`/`closeEngine` hide which engine drew the chart from everything
+// below this point — the rest of the file (page markup, gate.mjs reading it
+// back) does not care whether an entry's `svg` came from a headless browser
+// or `renderNode()`.
+let renderOne;
+let closeEngine = async () => {};
+if (engine === 'node') {
+  const { renderNode } = await import('../../core/src/node/render.ts');
+  const { ChartError } = await import('../../core/src/chart-error.ts');
+  renderOne = async (source, options) => {
+    try {
+      const r = await renderNode(source, options);
+      return { ok: true, ...r };
+    } catch (err) {
+      if (err instanceof ChartError) return { ok: false, error: err.detail };
+      return { ok: false, error: { message: err instanceof Error ? err.message : String(err) } };
+    }
+  };
+} else {
+  const { openSession, renderAny } = await import('../src/browser.ts');
+  const session = await openSession(1);
+  renderOne = (source, options) => renderAny(session.page, source, options);
+  closeEngine = () => session.close();
+}
+
 const entries = [];
 try {
   for (const group of GROUPS) {
     for (const [file, title, keyword] of group.items) {
       const source = readFileSync(join(group.dir, `${file}.mmd`), 'utf8');
-      const reply = await renderAny(session.page, source, { width: 1180 });
+      const reply = await renderOne(source, { width: 1180 });
       if (!reply.ok) {
         process.stderr.write(`  ${file}: ${reply.error.message}\n`);
         continue;
@@ -198,7 +226,7 @@ try {
     }
   }
 } finally {
-  await session.close();
+  await closeEngine();
 }
 
 const missing = [fixturesRoot, fixturesBlog]
@@ -552,9 +580,9 @@ const page = `<meta charset="utf-8">
 </script>
 `;
 
-const out = process.argv[2] ?? join(repo, 'gallery.html');
+const out = explicitOut ?? join(repo, engine === 'node' ? 'gallery-node.html' : 'gallery.html');
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, page);
 process.stderr.write(
-  `\nwrote ${out} — ${(page.length / 1024).toFixed(0)} kB, ${entries.length} charts\n`,
+  `\nwrote ${out} (${engine} engine) — ${(page.length / 1024).toFixed(0)} kB, ${entries.length} charts\n`,
 );

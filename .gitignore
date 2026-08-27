@@ -3,5 +3,6 @@ dist/
 .gate/
 *.tgz
 gallery.html
+gallery-node.html
 packages/geekchart/.lazy-chunk.json
 packages/geekchart/.gc-ssr-*

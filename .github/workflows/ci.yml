@@ -38,8 +38,11 @@ jobs:
       - name: Install Playwright's Chromium
         run: pnpm --filter @geekchart/cli exec playwright install --with-deps chromium
 
-      - name: Render the gallery and run the design gate
+      - name: Render the gallery and run the design gate (browser engine)
         run: pnpm gallery && pnpm gate
+
+      - name: Render the gallery and run the design gate (Node engine)
+        run: pnpm gallery --engine=node && pnpm gate --engine=node
 
       - name: Test
         run: pnpm test
