@@ -220,21 +220,30 @@ export function makeNodeMeasurer(measureWith?: string): Measurer & { warnings: s
           unitsAdvance = position.xAdvance;
         }
         // Chromium positions each glyph on the whole-device-pixel grid at
-        // these sizes (confirmed with `probe-mono-scratch.mjs` against the
-        // real embedded fonts: every glyph in an untracked run — JetBrains
-        // Mono's uniform 6.6px advance, Archivo's per-glyph 4-8px advances
-        // alike — comes back from `getComputedTextLength` as a whole number
-        // that is that glyph's own raw advance rounded to the nearest
-        // integer, not the sum rounded once at the end). Summing the raw
-        // advance and rounding once, as this used to, left the JetBrains
-        // Mono captions the largest single source of Node/browser drift
-        // (up to 14 units on a long label). This does not hold once
-        // `letter-spacing` is non-zero — a separate, still-open case, see
-        // `trackingPx` below.
+        // these sizes — confirmed against the real embedded fonts with a
+        // throwaway `<text>` probe: every glyph in an untracked run
+        // (JetBrains Mono's uniform 6.6px advance, Archivo's per-glyph
+        // 4-8px advances alike) comes back from `getComputedTextLength` as a
+        // whole number that is that glyph's own raw advance rounded to the
+        // nearest integer, not the sum rounded once at the end. Summing the
+        // raw advance and rounding once, as this used to, left the JetBrains
+        // Mono captions the largest single source of Node/browser drift (up
+        // to 14 units on a long label).
         widthPx += Math.round((unitsAdvance / face.unitsPerEm) * size);
       }
       const chars = [...text].length;
-      return widthPx + trackingPx(tracking, size) * Math.max(0, chars - 1);
+      // `letter-spacing` changes which glyphs this adds tracking after. The
+      // same probe, repeated with `letter-spacing` set, found Chromium adds
+      // it after *every* glyph, including the last — not just between pairs
+      // (`chars - 1`, this file's own first guess, and the usual mental
+      // model for "space between characters"). Measured against a five-step
+      // ramp of tracked runs, `chars` matched every step to within 0.03px;
+      // `chars - 1` was still off by a whole tracking-width on the shortest.
+      // Left uncaught, that shows up compounded: `gitgraph`'s tracked,
+      // tightly-packed commit tags sum many short labels left to right, and
+      // the missing tracking on each one added up to an 8-unit-tall wrong
+      // viewBox before this was found.
+      return widthPx + trackingPx(tracking, size) * chars;
     },
     done() {
       // Nothing to release — there is no host element, unlike `makeMeasurer`.
