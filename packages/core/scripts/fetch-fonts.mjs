@@ -9,7 +9,7 @@
  * Run this only when the brand fonts change:
  *   node packages/core/scripts/fetch-fonts.mjs
  */
-import { writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,8 +27,18 @@ const CHROME_UA =
 // whatever serif and monospace the render host happened to have. The same chart
 // came out differently on a different machine, which is the exact failure
 // embedding exists to prevent.
+//
+// Archivo is not fetched here: a variable font's own default instance is
+// whatever its `fvar` table says (600, for Google's file), not the 400 a
+// browser actually renders at with no `font-weight` set. That mismatch is
+// invisible in a browser (it always asks the variable font for the instance
+// it wants) but not to a tool that reads the file's outlines directly — see
+// `packages/core/src/node/measure.ts`. `scripts/fonts/build-fonts.py` bakes
+// three static instances (400, 500, 600 — the weights `tokens.ts`'s type
+// table and `theme.ts` use) into `fonts/archivo/*.woff2`, committed to the
+// repo; this script only folds those already-built files in below.
 const QUERY =
-  'https://fonts.googleapis.com/css2?family=Archivo:wght@400..700&family=Lato:wght@400;700' +
+  'https://fonts.googleapis.com/css2?family=Lato:wght@400;700' +
   '&family=Source+Serif+4:opsz,wght@8..60,400..600&family=JetBrains+Mono:wght@400..500&display=swap';
 
 const css = await (await fetch(QUERY, { headers: { 'User-Agent': CHROME_UA } })).text();
@@ -45,6 +55,22 @@ for (const [, subset, body] of css.matchAll(/\/\*\s*([\w[\]-]+)\s*\*\/\s*@font-f
   const bytes = Buffer.from(await (await fetch(url)).arrayBuffer());
   faces.push({ family, weight, style, base64: bytes.toString('base64'), bytes: bytes.length });
   process.stderr.write(`  ${family} ${weight}  ${(bytes.length / 1024).toFixed(1)} kB\n`);
+}
+
+// Fold in the static Archivo instances build-fonts.py already wrote.
+const archivoDir = join(here, '..', 'fonts', 'archivo');
+for (const file of readdirSync(archivoDir).sort()) {
+  const m = /^archivo-(\d+)\.woff2$/.exec(file);
+  if (!m) continue;
+  const bytes = readFileSync(join(archivoDir, file));
+  faces.push({
+    family: 'Archivo',
+    weight: m[1],
+    style: 'normal',
+    base64: bytes.toString('base64'),
+    bytes: bytes.length,
+  });
+  process.stderr.write(`  Archivo ${m[1]}  ${(bytes.length / 1024).toFixed(1)} kB (static, from fonts/archivo/)\n`);
 }
 
 const total = faces.reduce((sum, f) => sum + f.bytes, 0);
