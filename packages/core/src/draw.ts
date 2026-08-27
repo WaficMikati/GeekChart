@@ -183,6 +183,18 @@ export interface Drawing {
    * briefly — paints a second depth cue that the static rule never intended.
    */
   inPanelNodes: string[];
+  /**
+   * The tight bounding box of everything actually drawn — nodes, panels,
+   * every edge's routed line, and every label plate — in the same coordinate
+   * space as `node.x`/`node.y`. This is what `fitToCanvas` in `flow.ts` frames
+   * the chart to. It used to mount the finished SVG and call `getBBox()`,
+   * which needs a browser; this is the geometric answer to the same question,
+   * built from boxes and points this function already placed, so a Node
+   * render can compute it too. Ink extent (glyph overshoot) is not included —
+   * only advance-width boxes and routed points — which is the one way this
+   * can read a hair tighter than the `getBBox()` it replaces.
+   */
+  extent: { x: number; y: number; width: number; height: number };
 }
 
 /**
@@ -487,14 +499,13 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
 
   // Labels are placed only once every route exists, because where one can go
   // depends on where the others ended up.
-  parts.push(
-    ...placeLabels(
-      pendingLabels,
-      placed.map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height })),
-      scene,
-      edgeSegments,
-    ),
+  const labelResult = placeLabels(
+    pendingLabels,
+    placed.map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height })),
+    scene,
+    edgeSegments,
   );
+  parts.push(...labelResult.markup);
 
   // Every mark is drawn from its own line's tangent rather than hung off an SVG
   // marker, so there is nothing left in `defs` for an edge to point at — and no
@@ -504,6 +515,20 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     `<svg class="gc-chart" data-gc="${uid}" data-flow="${graph.direction}" viewBox="${viewBox}" role="img" xmlns="${SVG}">` +
     `${parts.join('')}${endLabels.join('')}${sparks.join('')}${arrows.join('')}</svg>`;
 
+  // The union of everything actually drawn, in the same coordinates the
+  // pieces above were placed in — see `Drawing.extent`.
+  const extentBoxes: Extent[] = [...drawnBoxes, ...labelResult.boxes];
+  const extentPoints: Point[] = edgeSegments.flatMap((s) => s.points);
+  const exs = [...extentBoxes.map((b) => b.x), ...extentPoints.map((p) => p.x)];
+  const exs1 = [...extentBoxes.map((b) => b.x + b.width), ...extentPoints.map((p) => p.x)];
+  const eys = [...extentBoxes.map((b) => b.y), ...extentPoints.map((p) => p.y)];
+  const eys1 = [...extentBoxes.map((b) => b.y + b.height), ...extentPoints.map((p) => p.y)];
+  const ex0 = Math.min(...exs);
+  const ey0 = Math.min(...eys);
+  const ex1 = Math.max(...exs1);
+  const ey1 = Math.max(...eys1);
+  const extent = { x: ex0, y: ey0, width: ex1 - ex0, height: ey1 - ey0 };
+
   return {
     svg,
     width: size.width + pad * 2,
@@ -512,6 +537,7 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     edges: drawnEdges,
     clusters: drawnClusters,
     inPanelNodes: drawnNodes.filter((id) => inPanel.has(id)),
+    extent,
   };
 }
 
@@ -689,7 +715,7 @@ function placeLabels(
   nodes: Box[],
   scene: Scene,
   edgeSegments: EdgeSegments[],
-): string[] {
+): { markup: string[]; boxes: Box[] } {
   const taken: Box[] = [];
   const out: string[] = [];
   const order = [...requests].sort((a, b) => b.width - a.width);
@@ -848,5 +874,5 @@ function placeLabels(
         `</g>`,
     );
   }
-  return out;
+  return { markup: out, boxes: taken };
 }

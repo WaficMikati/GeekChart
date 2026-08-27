@@ -1,5 +1,5 @@
 import { parseWith } from './graph.ts';
-import { makeMeasurer } from './layout.ts';
+import { resolveMeasurer, type Measurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
 import { WAVE_LAG } from './tokens.ts';
@@ -248,8 +248,8 @@ function squarify(
   return out;
 }
 
-export function drawBoard(board: Board, scene: Scene, measureWith?: string): BoardDrawing {
-  const measurer = makeMeasurer(measureWith);
+export function drawBoard(board: Board, scene: Scene, measureWith?: string | Measurer): BoardDrawing {
+  const measurer = resolveMeasurer(measureWith);
   const width: Measure = (t, f, s, tr) => measurer.measure(t, f, s, tr);
 
   // The canvas owns the margin. DESIGN 1.3.

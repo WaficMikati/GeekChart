@@ -8,16 +8,25 @@ import type { Scene } from '../scene.ts';
  */
 
 /**
+ * What every family's draw function actually needs from a measurer: width a
+ * string, then release whatever host element it built. `makeMeasurer` (a
+ * hidden SVG `<text>` + `getBBox()`) and `makeNodeMeasurer` in
+ * `../node/measure.ts` (fontkit glyph advances, no browser at all) both
+ * implement this, so a draw function that takes one doesn't care which.
+ */
+export interface Measurer {
+  measure: (text: string, font: string, size: number, tracking?: string) => number;
+  done: () => void;
+}
+
+/**
  * Measure a string without laying anything out permanently.
  *
  * `measureWith` is what the font role `inherit` resolves to here. The measuring
  * element inherits from this host, so naming the page's stack once makes every
  * inherited measurement match what the chart will meet when it gets there.
  */
-export function makeMeasurer(measureWith?: string): {
-  measure: (text: string, font: string, size: number, tracking?: string) => number;
-  done: () => void;
-} {
+export function makeMeasurer(measureWith?: string): Measurer {
   const host = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   host.setAttribute('aria-hidden', 'true');
   host.style.cssText =
@@ -39,6 +48,19 @@ export function makeMeasurer(measureWith?: string): {
       host.remove();
     },
   };
+}
+
+/**
+ * Every family draw function used to call `makeMeasurer(measureWith)` itself,
+ * which hard-wires it to the browser. `measureWith` here is either that same
+ * string (build the usual browser measurer) or an already-built `Measurer` —
+ * the Node one, or a browser one a caller wants to reuse across renders —
+ * passed straight through. This is the one place that distinction is made, so
+ * `layout()`, `drawSequence`, `drawChronicle` and the rest stay one line each.
+ */
+export function resolveMeasurer(measureWith?: string | Measurer): Measurer {
+  if (measureWith && typeof measureWith === 'object') return measureWith;
+  return makeMeasurer(measureWith);
 }
 
 /**

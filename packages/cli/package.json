@@ -18,6 +18,7 @@
     "@types/node": "^22.10.0",
     "esbuild": "^0.25.0",
     "lighthouse": "^13.4.1",
+    "linkedom": "^0.18.13",
     "typescript": "^5.7.2"
   }
 }

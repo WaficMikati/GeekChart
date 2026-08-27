@@ -30,6 +30,7 @@ export {
   sceneCss,
 } from './flow.ts';
 export type { FlowResult, FlowOptions } from './flow.ts';
+export type { Measurer } from './layout/measure.ts';
 export { toGraph } from './graph.ts';
 export { toUnifiedGraph } from './unified.ts';
 export { drawSequence, sequenceCss } from './sequence.ts';

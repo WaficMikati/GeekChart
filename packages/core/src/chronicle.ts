@@ -1,5 +1,5 @@
 import { parseWith } from './graph.ts';
-import { makeMeasurer } from './layout.ts';
+import { resolveMeasurer, type Measurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
 import { WAVE_LAG } from './tokens.ts';
@@ -282,9 +282,9 @@ interface Beat {
 export function drawChronicle(
   chronicle: Chronicle,
   scene: Scene,
-  measureWith?: string,
+  measureWith?: string | Measurer,
 ): ChronicleDrawing {
-  const measurer = makeMeasurer(measureWith);
+  const measurer = resolveMeasurer(measureWith);
   const width = (t: string, font: string, size: number, tracking?: string) =>
     measurer.measure(t, font, size, tracking);
 

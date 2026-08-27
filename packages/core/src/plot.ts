@@ -1,5 +1,5 @@
 import { parseWith } from './graph.ts';
-import { makeMeasurer } from './layout.ts';
+import { resolveMeasurer, type Measurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
 import { PRESS_EASE, WAVE_LAG } from './tokens.ts';
@@ -233,8 +233,8 @@ function niceTicks(min: number, max: number, count = 5): number[] {
   return out;
 }
 
-export function drawPlot(plot: Plot, scene: Scene, measureWith?: string): PlotDrawing {
-  const measurer = makeMeasurer(measureWith);
+export function drawPlot(plot: Plot, scene: Scene, measureWith?: string | Measurer): PlotDrawing {
+  const measurer = resolveMeasurer(measureWith);
   const width: Measure = (t, font, size, tracking) => measurer.measure(t, font, size, tracking);
 
   // The canvas owns the margin. DESIGN 1.3.

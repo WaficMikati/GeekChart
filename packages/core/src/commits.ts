@@ -1,5 +1,5 @@
 import { parseWith } from './graph.ts';
-import { makeMeasurer } from './layout.ts';
+import { resolveMeasurer, type Measurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
 import { PRESS_EASE, WAVE_LAG } from './tokens.ts';
@@ -182,8 +182,8 @@ function bendHugging(x1: number, y1: number, x2: number, y2: number, hug: 'start
   };
 }
 
-export function drawCommits(g: Commits, scene: Scene, measureWith?: string): CommitsDrawing {
-  const measurer = makeMeasurer(measureWith);
+export function drawCommits(g: Commits, scene: Scene, measureWith?: string | Measurer): CommitsDrawing {
+  const measurer = resolveMeasurer(measureWith);
   const width: Measure = (t, f, s, tr) => measurer.measure(t, f, s, tr);
   const pad = scene.canvas.margin;
 

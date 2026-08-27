@@ -1,5 +1,5 @@
 import { parseWith } from './graph.ts';
-import { makeMeasurer } from './layout.ts';
+import { resolveMeasurer, type Measurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { fitCanvas, frameTransform, type Scene } from './scene.ts';
 import { BOX_SIZES, GUTTER, PRESS_EASE, WAVE_LAG } from './tokens.ts';
@@ -104,8 +104,8 @@ function fitLabel(text: string, maxW: number, font: string, size: number, width:
   return `${cut}…`;
 }
 
-export function drawRadial(radial: Radial, scene: Scene, measureWith?: string): RadialDrawing {
-  const measurer = makeMeasurer(measureWith);
+export function drawRadial(radial: Radial, scene: Scene, measureWith?: string | Measurer): RadialDrawing {
+  const measurer = resolveMeasurer(measureWith);
   const width: Measure = (t, f, s, tr) => measurer.measure(t, f, s, tr);
   const pad = scene.canvas.margin;
   const parts: string[] = [];

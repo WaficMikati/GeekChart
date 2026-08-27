@@ -1,5 +1,5 @@
 import { parseWith, splitLabel } from './graph.ts';
-import { makeMeasurer } from './layout.ts';
+import { resolveMeasurer, type Measurer } from './layout.ts';
 import { Track } from './motion.ts';
 import { tipPath } from './tips.ts';
 import type { EdgeTip } from './graph.ts';
@@ -219,7 +219,7 @@ export interface SequenceResult {
 export async function drawSequence(
   source: string,
   scene: Scene,
-  measureWith?: string,
+  measureWith?: string | Measurer,
 ): Promise<SequenceResult> {
   const db = await parseWith(source);
   if (typeof db.getActorKeys !== 'function') {
@@ -229,7 +229,7 @@ export async function drawSequence(
   const messages = ((db.getMessages?.() as RawMessage[]) ?? []).filter(Boolean);
   if (keys.length === 0) throw new Error('Nothing to draw — the diagram has no participants.');
 
-  const measurer = makeMeasurer(measureWith);
+  const measurer = resolveMeasurer(measureWith);
   const textWidth = (t: string, font: string, size: number, tracking?: string) =>
     measurer.measure(t, font, size, tracking);
 

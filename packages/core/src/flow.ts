@@ -1,6 +1,6 @@
 import { toGraph, type Graph } from './graph.ts';
 import { toUnifiedGraph, type UnifiedType } from './unified.ts';
-import { layout } from './layout.ts';
+import { layout, type Measurer } from './layout.ts';
 import { draw, type Drawing } from './draw.ts';
 import { animate } from './motion.ts';
 import {
@@ -163,50 +163,44 @@ export function sceneCss(scene: Scene): string {
  * always, so a name set at 12 units is 12px on screen in every chart in the
  * library — and the drawing is centred inside it with the outer margin clear.
  *
- * The bounds are measured rather than taken from the layout, because ELK reports
- * where it put the *nodes*: a retry edge bows below the bottom row and an
- * arrowhead reaches past the box it points at. Framing to the layout's size
- * silently crops both. Measuring the assembled SVG is exact and costs one
- * offscreen mount.
+ * The bounds used to be measured rather than taken from the layout, with a
+ * `getBBox()` on the assembled SVG: ELK reports where it put the *nodes*, and a
+ * retry edge bows below the bottom row, an arrowhead reaches past the box it
+ * points at. Framing to the layout's size alone silently crops both. That
+ * `getBBox()` needed a browser — a hidden div, mounted and measured — for a
+ * question `draw()` already has the answer to: it placed every node, panel,
+ * edge and label plate, so `drawing.extent` is their union, computed the same
+ * way whether this runs in a browser or in Node. See
+ * `packages/cli/scripts/spike-node.mjs` for a side-by-side comparison against
+ * the real `getBBox()`-measured browser render.
  */
-function fitToCanvas(svg: string, canvas: Canvas, css: string): string {
-  if (typeof document === 'undefined') return svg;
-  const host = document.createElement('div');
-  host.setAttribute('aria-hidden', 'true');
-  host.style.cssText =
-    'position:fixed;left:-99999px;top:0;width:4000px;opacity:0;pointer-events:none;';
-  // The static scene rules, so text measures at its real font and size instead
-  // of the browser default — otherwise the bbox this centres on is the wrong
-  // shape (DESIGN 7.3).
-  host.innerHTML = `<style>${css}</style>${svg}`;
-  document.body.appendChild(host);
-  try {
-    const root = host.querySelector('svg');
-    const box = root?.getBBox();
-    if (!root || !box || !box.width) return svg;
-    const m = canvas.margin;
-    const frame = fitCanvas(
-      { x: box.x - m, y: box.y - m, width: box.width + m * 2, height: box.height + m * 2 },
-      canvas,
+function fitToCanvas(svg: string, canvas: Canvas, extent: Drawing['extent']): string {
+  if (!extent.width) return svg;
+  const m = canvas.margin;
+  const frame = fitCanvas(
+    { x: extent.x - m, y: extent.y - m, width: extent.width + m * 2, height: extent.height + m * 2 },
+    canvas,
+  );
+  const open = svg.match(/^<svg[^>]*>/);
+  const close = svg.endsWith('</svg>');
+  if (!open || !close) return svg; // not the shape `draw()` produces — leave it alone
+  const inner = svg.slice(open[0].length, -'</svg>'.length);
+  // One group holding everything, so the offset is a single transform rather
+  // than an offset baked into every coordinate — which would put the drawing
+  // and the motion layer's `--gc-cx` hints in different spaces.
+  const wrapped = `<g class="gc-frame" transform="${frameTransform(frame)}">${inner}</g>`;
+  // Intrinsic width/height, so `max-height` on the frame can actually hold it.
+  // Without them the SVG has no natural size and stretches to fill any width,
+  // which turns a tall diagram into a billboard.
+  const openTag = open[0]
+    .replace(/\s+viewBox="[^"]*"/, '')
+    .replace(/\s+width="[^"]*"/, '')
+    .replace(/\s+height="[^"]*"/, '')
+    .replace(
+      />$/,
+      ` viewBox="0 0 ${frame.width} ${frame.height}" width="${frame.width}" height="${frame.height}">`,
     );
-    // One group holding everything, so the offset is a single transform rather
-    // than an offset baked into every coordinate — which would put the drawing
-    // and the motion layer's `--gc-cx` hints in different spaces.
-    const shift = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    shift.setAttribute('class', 'gc-frame');
-    shift.setAttribute('transform', frameTransform(frame));
-    while (root.firstChild) shift.appendChild(root.firstChild);
-    root.appendChild(shift);
-    root.setAttribute('viewBox', `0 0 ${frame.width} ${frame.height}`);
-    // Intrinsic dimensions, so `max-height` on the frame can actually hold it.
-    // Without them the SVG has no natural size and stretches to fill any width,
-    // which turns a tall diagram into a billboard.
-    root.setAttribute('width', String(frame.width));
-    root.setAttribute('height', String(frame.height));
-    return root.outerHTML;
-  } finally {
-    host.remove();
-  }
+  return `${openTag}${wrapped}</svg>`;
 }
 
 /** Every diagram type the drawn pipeline handles. */
@@ -248,6 +242,15 @@ export interface FlowOptions {
    */
   fonts?: FontOptions | 'inherit';
   /**
+   * Measure text with this instead of building the usual hidden-SVG browser
+   * measurer. The one non-browser caller today is `makeNodeMeasurer` in
+   * `./node/measure.ts`, which reads the embedded font files directly with
+   * fontkit — see `docs/dev/` for what that does and does not match. Wins over
+   * `fonts.measureWith`, since naming an actual measurer is more specific than
+   * naming a stack for one to be built from.
+   */
+  measurer?: Measurer;
+  /**
    * Override any of the scene's seven colours. Everything left out keeps the
    * scene's value, so a single accent swap is a one-line change.
    */
@@ -284,6 +287,15 @@ function pickScene(options: FlowOptions): Scene {
 function measurementStack(options: FlowOptions): string | undefined {
   if (!inheritsFonts(options.fonts)) return undefined;
   return options.fonts !== 'inherit' ? options.fonts?.measureWith : undefined;
+}
+
+/**
+ * What every render function actually measures with: the caller's own
+ * `Measurer` (the Node one, most often) if it gave one, otherwise the usual
+ * stack name that `makeMeasurer` turns into a hidden-SVG measurer.
+ */
+function measurerFor(options: FlowOptions): string | Measurer | undefined {
+  return options.measurer ?? measurementStack(options);
 }
 
 const GENERIC = new Set([
@@ -337,8 +349,12 @@ function fontPresent(family: string): boolean {
  * of those always measures the real face. Anything else has to be installed
  * where the render runs.
  */
-function checkMeasurementFont(stack: string | undefined): string[] {
-  if (!stack || typeof document === 'undefined') return [];
+function checkMeasurementFont(stack: string | Measurer | undefined): string[] {
+  // An injected `Measurer` (the Node one, or a reused browser one) is not a
+  // stack name — there is nothing here to check it against, and the check
+  // this runs (`fontPresent`, below) means nothing off a live `document`
+  // anyway.
+  if (!stack || typeof stack === 'object' || typeof document === 'undefined') return [];
   const first = stack
     .split(',')[0]
     ?.trim()
@@ -403,7 +419,7 @@ export async function renderSequence(
 ): Promise<SequenceRender> {
   await ensureFonts(options.fonts);
   const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
-  const measureWith = measurementStack(options);
+  const measureWith = measurerFor(options);
   const drawn = await drawSequence(source, scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + sequenceCss(scene) + motion;
@@ -433,7 +449,7 @@ export async function renderChronicle(
 ): Promise<ChronicleRender> {
   await ensureFonts(options.fonts);
   const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
-  const measureWith = measurementStack(options);
+  const measureWith = measurerFor(options);
   const drawn = drawChronicle(await toChronicle(source, kind), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + chronicleCss(scene) + motion;
@@ -457,7 +473,7 @@ export async function renderBoard(
 ): Promise<ChronicleRender> {
   await ensureFonts(options.fonts);
   const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
-  const measureWith = measurementStack(options);
+  const measureWith = measurerFor(options);
   const drawn = drawBoard(await toBoard(source, kind), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + boardCss(scene) + motion;
@@ -481,7 +497,7 @@ export async function renderPlot(
 ): Promise<ChronicleRender> {
   await ensureFonts(options.fonts);
   const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
-  const measureWith = measurementStack(options);
+  const measureWith = measurerFor(options);
   const drawn = drawPlot(await toPlot(source, kind), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + plotCss(scene) + motion;
@@ -505,7 +521,7 @@ export async function renderRadial(
 ): Promise<ChronicleRender> {
   await ensureFonts(options.fonts);
   const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
-  const measureWith = measurementStack(options);
+  const measureWith = measurerFor(options);
   const drawn = drawRadial(await toRadial(source, kind), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + radialCss(scene) + motion;
@@ -528,7 +544,7 @@ export async function renderCommits(
 ): Promise<ChronicleRender> {
   await ensureFonts(options.fonts);
   const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
-  const measureWith = measurementStack(options);
+  const measureWith = measurerFor(options);
   const drawn = drawCommits(await toCommits(source), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
   const css = sceneCss(scene) + commitsCss(scene) + motion;
@@ -571,7 +587,7 @@ export interface SequenceRender {
 export async function renderFlow(source: string, options: FlowOptions = {}): Promise<FlowResult> {
   await ensureFonts(options.fonts);
   const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
-  const measureWith = measurementStack(options);
+  const measureWith = measurerFor(options);
 
   const kind = options.kind ?? 'flowchart';
   // Narrowed one at a time rather than with `includes`, which does not narrow.
@@ -584,12 +600,10 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   const size = await layout(graph, scene, measureWith);
   const drawing = draw(graph, scene, size);
   // The static rules only — not the motion CSS, whose transforms would move
-  // geometry out from under the measurement (DESIGN 7.3). Without at least the
-  // static rules, labels measure in the browser's default font and size, which
-  // is never the drawn font, so the bbox this centres on is the wrong shape and
-  // the result reads centred on the wrong content.
+  // geometry out from under a viewer's eye without moving `drawing.extent`,
+  // which is computed from the same pre-motion placement either way (DESIGN 7.3).
   const staticCss = sceneCss(scene);
-  const framed = { ...drawing, svg: fitToCanvas(drawing.svg, scene.canvas, staticCss) };
+  const framed = { ...drawing, svg: fitToCanvas(drawing.svg, scene.canvas, drawing.extent) };
   const timeline = options.motion === false ? null : animate(drawing, graph, scene);
   const css = staticCss + (timeline?.css ?? '');
 

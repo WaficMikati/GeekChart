@@ -6,14 +6,22 @@ import { square } from './align.ts';
 import type { ElkNode } from './elk.ts';
 import { getElk } from './elk.ts';
 import { fold } from './fold.ts';
-import { extentOf, fitShape, makeMeasurer, wrapTitle, type Metrics } from './measure.ts';
+import {
+  extentOf,
+  fitShape,
+  makeMeasurer,
+  resolveMeasurer,
+  wrapTitle,
+  type Measurer,
+  type Metrics,
+} from './measure.ts';
 import { identifySatellites, placeSatellites } from './satellites.ts';
 
 // Re-exported because `makeMeasurer` is a public entry point in its own
 // right: every non-ELK chart family (boards, plot, radial, chronicle,
 // sequence, commits) imports it directly for text measurement, without ever
 // calling `layout()` itself.
-export { makeMeasurer };
+export { makeMeasurer, resolveMeasurer, type Measurer };
 
 /**
  * Size the nodes, then let ELK place them.
@@ -47,9 +55,9 @@ export interface LayoutResult {
 export async function layout(
   graph: Graph,
   scene: Scene,
-  measureWith?: string,
+  measureWith?: string | Measurer,
 ): Promise<LayoutResult> {
-  const measurer = makeMeasurer(measureWith);
+  const measurer = resolveMeasurer(measureWith);
   const flow = graph.direction === 'LR' || graph.direction === 'RL' ? 'horizontal' : 'vertical';
 
   // Shapes that solve their own geometry from the label (a diamond, a note)
