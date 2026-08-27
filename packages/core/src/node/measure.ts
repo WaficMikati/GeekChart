@@ -199,7 +199,23 @@ export function makeNodeMeasurer(measureWith?: string): Measurer & { warnings: s
 
   return {
     measure(value, font, size, tracking = 'normal') {
-      const text = value || ' ';
+      // SVG text content is normalized before layout the same way CSS
+      // `white-space: normal` normalizes any inline text — the XML/HTML
+      // default every browser applies to a `<text>` node: leading and
+      // trailing whitespace is dropped entirely, and interior runs collapse
+      // to one space. `makeMeasurer`'s hidden `<text>` + `getBBox()`
+      // measures whatever that normalization already left, because the
+      // browser does it before `getBBox()` ever runs. fontkit has no such
+      // rule; it shapes exactly the string it is given, whitespace and all.
+      // Found on an ER record row ("string name  PK", a double space from
+      // column padding in the source): browser measured "string name PK"
+      // (98px, the trimmed, collapsed string), fontkit measured the literal
+      // two spaces (105px) — confirmed against the real embedded fonts that
+      // leading/trailing space is dropped outright, not just collapsed to
+      // one ("  leading" and "leading" measured identically). Normalizing
+      // here matches what the browser already did to the string before it
+      // ever measured it.
+      const text = (value ?? '').trim().replace(/\s+/g, ' ') || ' ';
       const face = resolveFamily(font, measureWith, warn);
       const run = face.layout(text);
       let widthPx = 0;
