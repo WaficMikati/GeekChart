@@ -428,9 +428,32 @@ function attemptDraw(
           const trueCentre = (aboveBottom + to.y) / 2;
           const clearsRoundingFloor = to.y - 24 - arrowStub;
           const gapY = Math.min(trueCentre, clearsRoundingFloor);
+          // The edge leaves the parent the way its siblings' edges do — from
+          // the bottom face's centre, so the wrap reads as one more branch
+          // of the same trunk (6.4's shared start) — drops into the gap
+          // below the parent, runs right to the corridor, and only then
+          // down. A line that began at the corridor's x on the parent's
+          // bottom y started 28 units out in space (6.2-departs-source).
+          const startX = from.x + from.width / 2;
+          const fromBottom = from.y + from.height;
+          const firstRun1 = Math.min(startX, trunkX);
+          const firstRun2 = Math.max(startX, trunkX);
+          const belowParent = placed.filter(
+            (n) =>
+              n.id !== edge.from &&
+              n.x! < firstRun2 &&
+              n.x! + n.width! > firstRun1 &&
+              n.y! >= fromBottom - 0.5,
+          );
+          const nextTop = belowParent.length
+            ? Math.min(...belowParent.map((n) => n.y!))
+            : fromBottom + GUTTER.panel;
+          const firstGapY = Math.round((fromBottom + nextTop) / 2 / GRID) * GRID;
           return {
             points: [
-              { x: trunkX, y: from.y + from.height },
+              { x: startX, y: fromBottom },
+              { x: startX, y: firstGapY },
+              { x: trunkX, y: firstGapY },
               { x: trunkX, y: gapY },
               { x: arriveX, y: gapY },
               { x: arriveX, y: to.y },
@@ -1267,6 +1290,11 @@ function placeLabels(
       // that would ever pull the origin back to meet a candidate above or
       // left of it.
       if (box.x < 0 || box.y < 0) return true;
+      // The declared display width is a hard wall on the right too (DESIGN
+      // 1.1): a label past it cannot be hugged, it can only force the frame
+      // wider than the column — which is what a plate beside the phone
+      // layout's corridor did, 120 units out, and cost the whole wrap.
+      if (box.x + box.width > scene.canvas.width - scene.canvas.margin * 2) return true;
       for (const n of nodes) {
         if (tooClose(box, n, NODE_CLEAR)) return true;
       }

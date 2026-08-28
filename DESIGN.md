@@ -81,33 +81,14 @@ and the check that enforces it cannot drift apart.
   shared parent rather than under whichever one wrapping happened to compute
   first. Wrapping happens before scaling; a chart is scaled only when a
   single box plus margins cannot fit. A parent's edge into a sibling on any
-  row but the first is drawn the way 1.5's own leaf trunk is: a hanging port
-  off the parent, straight down a corridor, one turn into the sibling — but
-  on the sibling's **right**, not its left, and 24 past the *widest* row's
-  own right edge, not the parent's: a stacked fan's own leaf column already
-  reaches right of its parent (1.5's indent), so a corridor there sits inside
-  room the drawing already claims, and measuring against the widest row
-  clears every row the trunk passes on its way down, not just the one it
-  parks beside. The edge's own label, if it carries one, is not run through
-  the ordinary placer — built for a short edge, it reads a run the length of
-  a whole row as space to roam and drifts the label away from either end, or
-  fed just the short branch, lands it hard against whatever is already
-  beside that arrival. It goes instead in the row's own gap, hand-centred
-  against the trunk: 6.9's 8-clear on both faces needs more room than the
-  ordinary 32 between rows holds, so that gap grows to fit it, the same
-  "make room rather than crowd it" 2.7 and 6.10 already do for a label
-  elsewhere. A parent whose every wrapped child now reads as one column is
-  re-centred onto it (7.3) — ELK placed it over the pair spread side by
-  side, which is off-centre once they no longer are; skipped whenever a row
-  mixes children of more than one parent, since no single centre line is
-  right for all of them then. A trunk's own reach is a routing necessity,
-  not content, so it is left out of both the drawing's own centring math and
-  the gate's 7.3 check — a corridor that has to clear a whole row nothing
-  else reaches into would otherwise read as content pulling the centre
-  toward whichever side needed it. (Added 2026-08-28: two of DESIGN 1.5's
-  own leaf-stacked fans, each already as narrow as 1.5 can make one, still
-  came to 232 + 32 + 232 side by side — wider than a 358px phone column even
-  though neither fan alone was.)
+  row but the first leaves the parent's bottom face at its centre, like the
+  edges to its first-row siblings (6.4's shared start), drops into the gap
+  below the parent, runs right to a corridor 24 past the widest row's right
+  edge, down past the rows between, left along the gap above the sibling to
+  its centre, and into its top face (6.2) — four bends, the loop-back's
+  allowance, one arrowhead. Every edge starts on its source's outline
+  (gate `6.2-departs-source`); the first version of this bus started at the
+  corridor's x on the parent's bottom y, a line beginning in space.
 
 ## 2. Grid and sizing
 

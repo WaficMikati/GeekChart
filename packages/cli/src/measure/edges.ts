@@ -128,8 +128,11 @@ export function edgeShapeStats(ctx: Ctx): {
         prev = dir;
       }
       if (
-        (!back && bends > RULES['6.1-bends-forward']!.threshold!) ||
-        (back && bends > RULES['6.1-bends-loop']!.threshold!)
+        // DESIGN 1.6: a wrap edge goes around the rows between parent and
+        // sibling — out of the bottom, across to the corridor, down, back to
+        // the sibling's centre, in — four bends, the loop-back's allowance.
+        (!back && !e.classList.contains('gc-wrap') && bends > RULES['6.1-bends-forward']!.threshold!) ||
+        ((back || e.classList.contains('gc-wrap')) && bends > RULES['6.1-bends-loop']!.threshold!)
       ) {
         overBent++;
         bentIds.push(`${e.dataset.id}:${bends}`);
@@ -491,6 +494,56 @@ export const arrivalSide: Check = {
           {
             severity: 'fail',
             message: `6.2 ${wrongArrive} edges arriving on the wrong side (${arriveIds.slice(0, 3).join(' ')})`,
+          },
+        ]
+      : [];
+  },
+};
+
+/**
+ * DESIGN 6.2: an edge leaves its source from that node's own outline. A line
+ * whose first point floats in space — 1.6's first wrap bus began at the
+ * corridor's x on the diamond's bottom y, 28 units right of the diamond —
+ * reads as a line starting nowhere. Measured on the bounding box: the first
+ * point sits on one of its four sides, within 1.5 units.
+ */
+export const departsSource: Check = {
+  id: '6.2-departs-source',
+  rule: '6.2',
+  run(svg, ctx) {
+    const ids = nodeById(ctx);
+    let floating = 0;
+    const floatIds: string[] = [];
+    for (const e of edgeEls(ctx)) {
+      const { from } = edgeFromTo(e);
+      const node = from ? ids.get(from) : undefined;
+      const ctm = e.getScreenCTM();
+      if (!node || !ctm) continue;
+      const pts = pathPointsHV(e.getAttribute('d'), ctm);
+      const p = pts[0];
+      if (!p) continue;
+      const nb = rect(outline(node));
+      // A line starts a few units off the outline on purpose (the start
+      // stub, DESIGN 10.3) — so "on the node" means: within 16 of one side,
+      // and within that side's own span. The floating wrap bus began 28
+      // right of the diamond's bounding box, outside any side's span.
+      const tol = 32 * ctx.unit; // 16 for a plain stub, more for an ER crow's-foot glyph the line starts past
+      const spanX = p[0] >= nb.left - 1 && p[0] <= nb.right + 1;
+      const spanY = p[1] >= nb.top - 1 && p[1] <= nb.bottom + 1;
+      const onSide =
+        (spanX && (Math.abs(p[1] - nb.top) <= tol || Math.abs(p[1] - nb.bottom) <= tol)) ||
+        (spanY && (Math.abs(p[0] - nb.left) <= tol || Math.abs(p[0] - nb.right) <= tol)) ||
+        (spanX && spanY);
+      if (!onSide) {
+        floating++;
+        floatIds.push(`${e.dataset.id}:${Math.round((p[0] - nb.left) / ctx.unit)},${Math.round((p[1] - nb.top) / ctx.unit)}`);
+      }
+    }
+    return floating
+      ? [
+          {
+            severity: 'fail',
+            message: `6.2 ${floating} edges starting off their source node (${floatIds.slice(0, 3).join(' ')})`,
           },
         ]
       : [];
