@@ -215,10 +215,10 @@ describe('canvas', () => {
       await mount(named(name));
       const m = await measure();
       const ink = m.ink!;
-      // Half a unit of slack: a 1.25 hairline is drawn centred on its path, so
-      // the outermost ink sits a fraction outside the geometry it belongs to.
+      // 0.8 of slack: a 1.5 hairline (DESIGN 4.1) is drawn centred on its path,
+      // so the outermost ink sits 0.75 outside the geometry it belongs to.
       assert.ok(
-        ink.left > -0.5 && ink.right < m.width + 0.5,
+        ink.left > -0.8 && ink.right < m.width + 0.8,
         `${name}: content runs off the canvas (DESIGN 7.5)`,
       );
       assert.ok(

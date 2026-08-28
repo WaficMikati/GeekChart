@@ -91,8 +91,9 @@ most **three** of these (name, caption, label); the title block adds its two:
 
 ## 4. Strokes, fills, depth
 
-- **4.1** Hairlines. Node outlines 1.25, edges 1.2, cluster boxes 1, dividers
-  0.8 at 50% opacity. The accent path may be 1.6. Nothing above 2 except a
+- **4.1** Hairlines. Node outlines 1.5, edges 1.5, cluster boxes 1, dividers
+  0.8 at 50% opacity. (Raised from 1.25/1.2 on 2026-08-28: in a 612px blog
+  column a 1.2 edge drew at 0.75px.) The accent path may be 1.8. Nothing above 2 except a
   deliberate thick-edge style (3.6) used once per chart at most.
 - **4.2** **One depth cue per box**: either an outline or a fill, never both,
   and never a shadow. Lyzr uses solid dark tiles inside the panel and outlined

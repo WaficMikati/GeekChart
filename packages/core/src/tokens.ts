@@ -170,7 +170,7 @@ export const GUTTER = { sibling: 24, panel: 32 } as const;
 /** DESIGN 4.1: hairline stroke weights. Node outlines, edges, cluster/panel
  *  boxes and the dividers inside a record row each get their own weight, and
  *  nothing else is allowed to invent a fifth. */
-export const STROKE = { node: 1.25, edge: 1.2, cluster: 1, divider: 0.8 } as const;
+export const STROKE = { node: 1.5, edge: 1.5, cluster: 1, divider: 0.8 } as const;
 
 /**
  * Clearances: DESIGN 6.1/6.8's 16 units an edge keeps from a node it does not
