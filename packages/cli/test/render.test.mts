@@ -162,10 +162,27 @@ describe('DESIGN 8.4: a chart plays once instead of looping', () => {
     assert.match(reply.svg, gcHeldOnce, 'the once-looping accent now plays once and holds');
     assert.ok(
       reply.svg.includes(
-        '[data-gc-play="in-view"]:not([data-gc-playing]) * { animation-play-state: paused; }',
+        '[data-gc-play="in-view"]:not([data-gc-playing]) * { animation-play-state: paused !important; }',
       ),
       'ships paused until geekchart/observe\'s playInView() runs',
     );
+    // Measured, not just grepped: every per-element `animation` shorthand sits
+    // under a two-id selector and implies `running`; without !important the
+    // outlines, labels and captions kept running off-screen (18 of 39 here).
+    const session = await getSession();
+    await session.page.setContent(`<style>${reply.css}</style>${reply.svg}`);
+    const count = () =>
+      session.page.evaluate(() => {
+        const svg = document.querySelector('svg')!;
+        const all = svg.getAnimations({ subtree: true });
+        return { total: all.length, running: all.filter((a) => a.playState === 'running').length };
+      });
+    const paused = await count();
+    assert.ok(paused.total > 0, 'the chart has animations');
+    assert.equal(paused.running, 0, `${paused.running} of ${paused.total} animations run before the chart is in view`);
+    await session.page.evaluate(() => document.querySelector('svg')!.setAttribute('data-gc-playing', ''));
+    const playing = await count();
+    assert.equal(playing.running, playing.total, 'everything runs once data-gc-playing is set');
   });
 
   test('play: "once" plays immediately, holding the finished frame with no observer needed', async () => {

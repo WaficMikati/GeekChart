@@ -311,7 +311,10 @@ ${s} .gc-node { animation-name: gc-rise, gc-pulse;
 export function playModeCss(play: PlayMode): string {
   if (play !== 'in-view') return '';
   return (
-    `\n[data-gc-play="in-view"]:not([data-gc-playing]) * { animation-play-state: paused; }\n` +
+    // !important: every animated element also carries an `animation` shorthand
+    // under a two-id selector (`#id#id .gc-outline`), whose implied
+    // `animation-play-state: running` would otherwise outrank this rule.
+    `\n[data-gc-play="in-view"]:not([data-gc-playing]) * { animation-play-state: paused !important; }\n` +
     `@media (prefers-reduced-motion: reduce) {\n` +
     `  [data-gc-play] * { animation-duration: 0s !important; animation-delay: 0s !important; }\n}\n`
   );
