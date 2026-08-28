@@ -191,3 +191,62 @@ test('display width (DESIGN 1.1): no wider than the declared column, stamped as 
     assert.match(narrow.svg, /data-display="620"/);
   }
 });
+
+const pythonOrJava = readFileSync(
+  join(here, '..', '..', '..', 'fixtures', 'blog', 'python-or-java.mmd'),
+  'utf8',
+);
+
+test('display: { desktop, phone } (DESIGN 1.1/1.6) renders both, each stamped and within its own width', async () => {
+  const result = await renderToSvg(pythonOrJava, { cache: false, display: { desktop: 612, phone: 358 } });
+  const width = (svg: string) => Number(/viewBox="0 0 (\d+)/.exec(svg)![1]);
+  assert.ok(result.variants, 'expected a variants field for the object-form display');
+  const { desktop, phone } = result.variants!;
+  assert.ok(width(desktop.svg) <= 612, `desktop variant is ${width(desktop.svg)} wide`);
+  assert.match(desktop.svg, /data-display="612"/);
+  assert.ok(width(phone.svg) <= 358, `phone variant is ${width(phone.svg)} wide`);
+  assert.match(phone.svg, /data-display="358"/);
+  // DESIGN 1.6: the phone column is narrow enough that python-or-java's
+  // fan-branch row wraps into two, which the plain 612 desktop column never
+  // needs to — the two variants are not just scaled copies of each other.
+  assert.notEqual(width(desktop.svg), width(phone.svg));
+  // `svg`/`css` at the top level stay the desktop variant, for a caller that
+  // never asked for two widths and still reads `result.svg` directly.
+  assert.equal(result.svg, desktop.svg);
+  assert.equal(result.css, desktop.css);
+});
+
+test('display: { desktop, phone } is one cache entry, not two', async () => {
+  const store = new Map<string, RenderToSvgResult>();
+  const cache = {
+    get: (key: string) => store.get(key),
+    set: (key: string, value: RenderToSvgResult) => void store.set(key, value),
+  };
+  await renderToSvg(pythonOrJava, { cache, display: { desktop: 612, phone: 358 } });
+  assert.equal(store.size, 1, 'both variants belong to one request and one cache entry');
+  const hit = await renderToSvg(pythonOrJava, { cache, display: { desktop: 612, phone: 358 } });
+  assert.ok(hit.variants, 'a cache hit should still carry both variants');
+});
+
+test('renderToHtml, given { desktop, phone }, emits both svgs and a 640px media query', async () => {
+  const html = await renderToHtml(pythonOrJava, {
+    cache: false,
+    display: { desktop: 612, phone: 358 },
+  });
+  const idMatch = /^<div id="(gc-[0-9a-f]{12})"/.exec(html);
+  assert.ok(idMatch, 'expected the usual scoped wrapper id');
+  const id = idMatch![1];
+  assert.match(html, /<svg[^>]*\bdata-gc-variant="desktop"/);
+  assert.match(html, /<svg[^>]*\bdata-gc-variant="phone"/);
+  assert.match(html, /@media \(max-width:640px\)/);
+  // The rule that shows the phone svg and hides the desktop one lives inside
+  // that media query, scoped under this render's own wrapper id.
+  const mqStart = html.indexOf('@media (max-width:640px)');
+  const mq = html.slice(mqStart, mqStart + 200);
+  assert.ok(mq.includes(`#${id} [data-gc-variant="desktop"]{display:none}`));
+  assert.ok(mq.includes(`#${id} [data-gc-variant="phone"]{display:block}`));
+  // And outside it, the resting (desktop-first) state is the reverse.
+  const outsideMq = html.slice(0, html.indexOf('@media'));
+  assert.ok(outsideMq.includes(`#${id} [data-gc-variant="desktop"]{display:block}`));
+  assert.ok(outsideMq.includes(`#${id} [data-gc-variant="phone"]{display:none}`));
+});

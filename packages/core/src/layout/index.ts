@@ -1,12 +1,13 @@
 import type { Graph, GraphNode } from '../graph.ts';
 import { clusterHeadroom, type Scene } from '../scene.ts';
 import { tipReach } from '../tips.ts';
-import { BOX_SIZES, GRID } from '../tokens.ts';
+import { BOX_SIZES, CLEARANCE, GRID } from '../tokens.ts';
 import { square } from './align.ts';
 import type { ElkNode } from './elk.ts';
 import { getElk } from './elk.ts';
 import { fold } from './fold.ts';
 import {
+  diamondLabelBudget,
   extentOf,
   fitShape,
   makeMeasurer,
@@ -17,6 +18,7 @@ import {
 } from './measure.ts';
 import { identifySatellites, placeSatellites } from './satellites.ts';
 import { expandFan, findFans, planFan, type FanPlan } from './stack.ts';
+import { wrapSiblings, type WrappedRow } from './wrap.ts';
 
 // Re-exported because `makeMeasurer` is a public entry point in its own
 // right: every non-ELK chart family (boards, plot, radial, chronicle,
@@ -160,6 +162,46 @@ export async function layout(
     item.label.width = Math.max(
       ...wrapped.map((l) => measurer.measure(l, scene.titleFont, scene.titleSize)),
     );
+  }
+
+  // DESIGN 1.1/1.6: a diamond solves its own geometry from its label (it is
+  // in `ownShape`, above, exactly so a long diamond label never drags the
+  // *shared* box wider) — but under a declared display that leaves it as the
+  // one shape none of 1.5's leaf stacking, 1.2's fold, or 1.6's sibling wrap
+  // can reach into, since all three pack whole nodes, not what is drawn
+  // inside one. A diamond whose own single-line label is still what keeps
+  // the canvas over the cap gets 2.2's ordinary "wrap rather than widen"
+  // instead — the same packing-before-scaling DESIGN 1.1 asks everywhere
+  // else. Never runs undeclared: every diamond in the default catalog
+  // already fits, so this only ever fires for a caller that named a display.
+  if (packToDisplay) {
+    const room = scene.canvas.width - scene.canvas.margin * 2;
+    for (const item of intrinsic) {
+      const { node } = item;
+      if (node.shape !== 'diamond') continue;
+      // `base` (the shared rect box) isn't settled until below, but a
+      // diamond's own `fitShape` case never reads it — it solves purely off
+      // its own label, which is the whole reason it is in `ownShape`.
+      const natural = fitShape(item, { width: 0, height: 0 }, scene, flow);
+      if (natural.width <= room) continue;
+      // Two lines, the same inter-line gap DESIGN 3.5's own row rhythm uses
+      // elsewhere — solved for first, since the label width a diamond can
+      // afford depends on how tall its label block already is.
+      const twoLineHeight = scene.titleSize * 1.16 * 2 + 4;
+      const budget = diamondLabelBudget(room, twoLineHeight, scene.padShape);
+      if (budget <= 0) continue;
+      const wrapped = wrapTitle(
+        node.title,
+        (s) => measurer.measure(s, scene.titleFont, scene.titleSize),
+        budget,
+      );
+      if (!wrapped) continue;
+      node.titleLines = wrapped;
+      item.label.width = Math.max(
+        ...wrapped.map((l) => measurer.measure(l, scene.titleFont, scene.titleSize)),
+      );
+      item.label.height = twoLineHeight;
+    }
   }
   measurer.done();
 
@@ -451,6 +493,47 @@ export async function layout(
         soleParent,
       });
 
+  // A top-level ELK item's id is a fan stand-in, a cluster, or a plain node —
+  // this is the one place that knows how to read any of the three back to
+  // the graph id its edges actually name. Shared by everything below that
+  // has to go the other way from `wrapSiblings`'s own ELK-only view.
+  const resolveRealId = (itemId: string): string =>
+    itemId.startsWith('fan:')
+      ? (fanPlansById.get(itemId)?.parent.id ?? itemId)
+      : itemId.startsWith('cluster:')
+        ? itemId.slice('cluster:'.length)
+        : itemId;
+
+  // DESIGN 1.6: leaf stacking and fold have both had their turn — anything
+  // still wider than the display is siblings sharing a row that neither of
+  // them reshapes on its own (two already-stacked fans side by side, say).
+  // Wrapping only ever runs past this point, on whatever `winner`/`fold` left,
+  // so a chart that already fits (every chart in the gallery today) never
+  // reaches it — same guard `packToDisplay` already puts around 1.5 itself.
+  let wrapCorridors = new Map<string, number>();
+  let wrappedRows: WrappedRow[] = [];
+  if (packToDisplay && (result.width ?? 0) > room && result.children) {
+    // DESIGN 6.9: a wrap edge's own label needs 8 clear of every node on
+    // both sides — taller than the ordinary 32 between rows holds, so a row
+    // an edge like that arrives at gets a grown gap above it instead of a
+    // label with nowhere to fit.
+    const needsLabelGap = new Set(
+      result.children
+        .map((item) => item.id)
+        .filter((id) => {
+          const realId = resolveRealId(id);
+          return graph.edges.some((e) => !e.backward && e.to === realId && e.label);
+        }),
+    );
+    const labelGap = scene.edgeLabelSize * 2 + CLEARANCE.node * 2 + GRID * 3;
+    ({ corridors: wrapCorridors, rows: wrappedRows } = wrapSiblings(
+      result.children,
+      room,
+      needsLabelGap,
+      labelGap,
+    ));
+  }
+
   // ELK reports child coordinates relative to their parent; flatten to the root.
   const place = (list: ElkNode[] | undefined, dx: number, dy: number): void => {
     for (const item of list ?? []) {
@@ -501,6 +584,43 @@ export async function layout(
     for (const edge of graph.edges) {
       if (edge.from === plan.parent.id && leafIds.has(edge.to)) edge.bus = true;
     }
+  }
+
+  // DESIGN 1.6: every parent→sibling edge into a row `wrapSiblings` pushed
+  // down is drawn the same bus shape 1.5's own leaf trunk uses, corridor
+  // supplied instead of assumed (`edge.wrapTrunkX`, read by `draw.ts`) — the
+  // wrapped item's id is a fan stand-in, a cluster, or a plain node, so it is
+  // resolved back to the graph id its edges actually name before matching.
+  for (const [itemId, corridorX] of wrapCorridors) {
+    const realId = resolveRealId(itemId);
+    for (const edge of graph.edges) {
+      if (edge.to !== realId || edge.bus || edge.backward) continue;
+      edge.bus = true;
+      edge.wrapTrunkX = corridorX;
+    }
+  }
+
+  // DESIGN 7.3: ELK centred every parent over its children back when they
+  // still sat side by side — ordinary layered placement, nothing to do with
+  // wrapping. Once `wrapSiblings` reads as one column instead, a parent left
+  // at its old x sits off to the side of the very thing it points into. Only
+  // when a single parent owns every id the row wrapped (the common shape —
+  // one decision, wrapped branches) is it safe to move: a row mixing several
+  // parents has no one centre line that is right for all of them.
+  for (const row of wrappedRows) {
+    const realIds = new Set(row.ids.map(resolveRealId));
+    const parents = new Set<string>();
+    for (const edge of graph.edges) {
+      if (edge.backward || !realIds.has(edge.to)) continue;
+      parents.add(edge.from);
+    }
+    if (parents.size !== 1) continue;
+    const parent = byId.get([...parents][0]!);
+    if (!parent || parent.x === undefined || parent.width === undefined) continue;
+    // A parent already claimed by a cluster or satellite pass sits wherever
+    // that pass put it for its own reasons — not this row's to move.
+    if (claimed.has(parent.id) || satelliteIds.has(parent.id)) continue;
+    parent.x = row.centreX - parent.width / 2;
   }
 
   // Pin each excluded satellite on a row's centre line of its own, appended

@@ -106,12 +106,18 @@ export const canvasWidth: Check = {
   rule: '1.1',
   run(svg) {
     const w = Math.round(svg.viewBox.baseVal.width);
-    if (w < CANVAS.min || w > CANVAS.max) return [{ severity: 'fail', message: `1.1 canvas ${w}w` }];
+    const display = Number(svg.dataset.display) || 1000;
+    // DESIGN 1.1: the 480 floor is there so an undeclared-display chart never
+    // renders embarrassingly narrow — but a caller naming a phone column
+    // below that has already said what narrow means for them, and holding
+    // them to 480 anyway would force a scale-down past the very cap this
+    // option exists to respect (revised 2026-08-28 alongside 1.6).
+    const min = Math.min(CANVAS.min, display);
+    if (w < min || w > CANVAS.max) return [{ severity: 'fail', message: `1.1 canvas ${w}w` }];
     // DESIGN 1.5: leaf stacking (then DESIGN 1.2's fold) pack toward the
     // declared display width, but a chart whose shared box size alone needs
     // more than that can still come out wider — accepted, per 1.5's own
     // words, as a WARN rather than a silent rescale or a FAIL.
-    const display = Number(svg.dataset.display) || 1000;
     return w > display
       ? [{ severity: 'warn', message: `1.1 wider than the declared display width (${w} > ${display})` }]
       : [];
@@ -124,6 +130,14 @@ export const aspect: Check = {
   run(svg) {
     const w = Math.round(svg.viewBox.baseVal.width);
     const h = Math.round(svg.viewBox.baseVal.height);
+    // DESIGN 1.4's own remedy for a chart this tall is "go side by side
+    // instead" — read for a canvas with room to go either way. A caller who
+    // declared a narrower-than-default display has already fixed that
+    // choice: going wider is the one thing DESIGN 1.6's own packing is not
+    // allowed to do there, so the height it buys instead is the point, not
+    // a defect (revised 2026-08-28 alongside 1.6).
+    const display = Number(svg.dataset.display) || 0;
+    if (display && display < CANVAS.width) return [];
     return h > w * CANVAS.maxAspect
       ? [{ severity: 'fail', message: `1.4 taller than ${CANVAS.maxAspect}×w (${h})` }]
       : [];

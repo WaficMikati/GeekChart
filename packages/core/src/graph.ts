@@ -133,6 +133,21 @@ export interface GraphEdge {
    * shared-segment exemption is for.
    */
   bus?: boolean;
+  /**
+   * DESIGN 1.6: overrides the plain bus's `from.x + TRUNK_OFFSET` trunk
+   * column, for a parent's edge into a sibling that sibling wrapping pushed
+   * onto a later row — the plain formula assumes `from` is the fan's own
+   * parent, indented to leave that column clear (DESIGN 1.5); a wrap's
+   * `from` can be any shape, so the corridor is computed instead, from
+   * whatever the wrapped row actually needs cleared (`layout/wrap.ts`). Set
+   * only for a wrap bus, and is read that way by `draw.ts` — a plain leaf
+   * bus keeps its own `TRUNK_OFFSET` formula and its own left-side arrival.
+   * Stored as an offset from `to.x` (the sibling's own left edge — not its
+   * right, which for a node inside a stacked fan is not the same width
+   * `layout/wrap.ts` measured the corridor against), not an absolute
+   * coordinate — see `wrapSiblings`'s own doc comment for why.
+   */
+  wrapTrunkX?: number;
 }
 
 export interface GraphCluster {

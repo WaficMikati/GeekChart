@@ -29,9 +29,15 @@ and the check that enforces it cannot drift apart.
   defect this option exists to remove, just moved from the embedding page's
   CSS into the SVG's own transform. A chart packing cannot bring under the
   cap is drawn at whatever width packing did reach instead, wider than asked
-  (the gate's own WARN, never a FAIL — see 1.5). (Revised 2026-08-28 from a
-  flat 1000: a chart bound for a 612px blog column was still laid out for
-  1000, and arrived at scale 0.62 — an 8px name.)
+  (the gate's own WARN, never a FAIL — see 1.5). A server may render a chart
+  for more than one display width; each variant obeys the rules at its own
+  width. (Revised 2026-08-28 from a flat 1000: a chart bound for a 612px blog
+  column was still laid out for 1000, and arrived at scale 0.62 — an 8px
+  name.) The never-below-480 floor comes down with the cap on a narrower
+  display: it exists so an undeclared-display chart never renders
+  embarrassingly narrow, but holding a caller who named a 358px phone column
+  to it anyway would force the exact scale-down this option exists to
+  remove, only now for having asked. (Revised 2026-08-28 alongside 1.6.)
 - **1.2** The content box is 904 wide (1000 − 2×48). A left-to-right run that
   does not fit it **wraps into rows**; a run that fits but uses under half the
   width is the same fault and is re-laid out. Content covers at least 35% of
@@ -39,7 +45,12 @@ and the check that enforces it cannot drift apart.
   failed this rule.
 - **1.3** Outer margin 48. Content touches neither the edge nor the margin line.
 - **1.4** Height never exceeds 1.4× width. Tall stacks (Subgraphs is 470×1095
-  today) go side by side instead.
+  today) go side by side instead. Not under a declared display narrower than
+  the plain 1000 default: going side by side is only better than going tall
+  when the canvas has room to spare either way, and a caller who named a
+  narrow column has already spent that room — 1.6's own sibling wrap turns a
+  row too wide for it into a taller stack on purpose. (Revised 2026-08-28
+  alongside 1.6.)
 - **1.5** **Leaf stacking.** When the canvas would exceed the display width, a
   node whose children are all leaves (two or more of them) shows them as a
   vertical stack directly under it — one column, at the chart's own shared
@@ -61,6 +72,42 @@ and the check that enforces it cannot drift apart.
   as wide rather than shrunk — a gate WARN, not a FAIL. (Added 2026-08-28;
   revised the same day from a fan centred on the parent, which cost the
   parent's own half-width twice over and could not reach a 620px column.)
+- **1.6** **Sibling wrapping.** When leaf stacking (1.5) and the chain fold
+  (1.2) still leave the canvas wider than the display width, the siblings of
+  one row wrap like text: filled left to right, the row breaks into as many
+  rows as it takes, each new row 32 below the last, every row centred on the
+  row's own original centre line — the common shape is two branches off one
+  decision, and centring on the pre-wrap pair keeps both rows under their
+  shared parent rather than under whichever one wrapping happened to compute
+  first. Wrapping happens before scaling; a chart is scaled only when a
+  single box plus margins cannot fit. A parent's edge into a sibling on any
+  row but the first is drawn the way 1.5's own leaf trunk is: a hanging port
+  off the parent, straight down a corridor, one turn into the sibling — but
+  on the sibling's **right**, not its left, and 24 past the *widest* row's
+  own right edge, not the parent's: a stacked fan's own leaf column already
+  reaches right of its parent (1.5's indent), so a corridor there sits inside
+  room the drawing already claims, and measuring against the widest row
+  clears every row the trunk passes on its way down, not just the one it
+  parks beside. The edge's own label, if it carries one, is not run through
+  the ordinary placer — built for a short edge, it reads a run the length of
+  a whole row as space to roam and drifts the label away from either end, or
+  fed just the short branch, lands it hard against whatever is already
+  beside that arrival. It goes instead in the row's own gap, hand-centred
+  against the trunk: 6.9's 8-clear on both faces needs more room than the
+  ordinary 32 between rows holds, so that gap grows to fit it, the same
+  "make room rather than crowd it" 2.7 and 6.10 already do for a label
+  elsewhere. A parent whose every wrapped child now reads as one column is
+  re-centred onto it (7.3) — ELK placed it over the pair spread side by
+  side, which is off-centre once they no longer are; skipped whenever a row
+  mixes children of more than one parent, since no single centre line is
+  right for all of them then. A trunk's own reach is a routing necessity,
+  not content, so it is left out of both the drawing's own centring math and
+  the gate's 7.3 check — a corridor that has to clear a whole row nothing
+  else reaches into would otherwise read as content pulling the centre
+  toward whichever side needed it. (Added 2026-08-28: two of DESIGN 1.5's
+  own leaf-stacked fans, each already as narrow as 1.5 can make one, still
+  came to 232 + 32 + 232 side by side — wider than a 358px phone column even
+  though neither fan alone was.)
 
 ## 2. Grid and sizing
 
@@ -70,6 +117,16 @@ and the check that enforces it cannot drift apart.
   label: `160×48` (title only), `160×56` (title + caption), `200×48` (wide),
   `120×48` (compact). One chart uses at most two of these. Labels that don't
   fit are shortened or wrapped to a second line, never given a wider box.
+  A diamond solves its own size from its label rather than sharing this list
+  (2.4), which is exactly why leaf stacking, the chain fold and sibling
+  wrapping (1.5, 1.2, 1.6) cannot pack a long diamond label the way they pack
+  a row of nodes — none of the three reach inside a shape's own geometry. So
+  under a declared display, a diamond whose one-line label alone keeps the
+  canvas over the cap gets this same wrap-rather-than-widen instead of being
+  left to force the whole chart's scale down. (Added 2026-08-28 alongside
+  1.6: on a 358px phone column, python-or-java's own decision diamond — a
+  35-character question — was the next thing over the cap once its two
+  fanned branches no longer were.)
 - **2.3** Nodes in the same row share an exact `y` and height; nodes in the same
   column share an exact `x` and width. Gutters between siblings are equal
   (24 or 32).

@@ -111,3 +111,30 @@ test('python-or-java at display 620: Node and browser engines agree, DESIGN 1.5'
   }
   assert.ok(maxDelta < 2, `expected every box within 2 units, worst was ${maxDelta}`);
 });
+
+test('python-or-java at display 358: Node and browser engines agree, DESIGN 1.6', async () => {
+  // 358 is narrow enough that leaf stacking (1.5) alone still leaves both
+  // branches' fans side by side too wide (232 + 32 + 232) — DESIGN 1.6's own
+  // sibling wrap runs here, on top of 1.5, worth its own parity case the
+  // same way 1.5 alone got one above.
+  const source = readFileSync(join(fixturesBlog, 'python-or-java.mmd'), 'utf8');
+  const options = { display: 358 };
+
+  const browserReply = ok(
+    await cachedRender('renderAny', source, options, () => renderAny(session.page, source, options)),
+  );
+  const nodeResult = await cachedRender('renderNode', source, options, () => renderNode(source, options));
+
+  assert.equal(viewBoxOf(nodeResult.svg), viewBoxOf(browserReply.svg), 'viewBox should match exactly');
+  assert.match(nodeResult.svg, /data-display="358"/, 'Node engine should stamp the declared display');
+  assert.match(browserReply.svg, /data-display="358"/, 'browser engine should stamp the declared display');
+
+  const nodeNums = boxNumsOf(nodeResult.svg);
+  const browserNums = boxNumsOf(browserReply.svg);
+  assert.equal(nodeNums.length, browserNums.length, 'same number of boxes drawn');
+  let maxDeltaWrap = 0;
+  for (let i = 0; i < nodeNums.length; i++) {
+    maxDeltaWrap = Math.max(maxDeltaWrap, Math.abs((nodeNums[i] ?? 0) - (browserNums[i] ?? 0)));
+  }
+  assert.ok(maxDeltaWrap < 2, `expected every box within 2 units, worst was ${maxDeltaWrap}`);
+});

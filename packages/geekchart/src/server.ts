@@ -71,10 +71,21 @@ export interface RenderRequest {
    * The width in CSS px the chart will be shown at — a blog column, a card.
    * The canvas never exceeds it (DESIGN 1.1): when the natural layout is
    * wider, leaf fans stack under their parent (1.5) and long chains fold
-   * (1.2) before anything is scaled, so 13-unit names stay 13px on screen.
-   * Stamped on the svg as `data-display`. Default 1000 (boards 1200).
+   * (1.2) before anything is scaled — and, past that, siblings still too
+   * wide for the display wrap into more rows (1.6) — so 13-unit names stay
+   * 13px on screen. Stamped on the svg as `data-display`. Default 1000
+   * (boards 1200).
+   *
+   * A caller serving both a desktop and a phone layout of the same chart —
+   * this file's own doc example is one — passes `{ desktop, phone }`
+   * instead of a single number. Each width gets its own render, obeying
+   * DESIGN 1.1's rules independently (a server rendering more than one
+   * display width is exactly what that rule anticipates); `renderToSvg`
+   * returns both under `variants`, and `renderToHtml` emits both `<svg>`s
+   * with a media query that shows one and hides the other, switching at
+   * 640px. See `renderToHtml`'s own doc comment for the exact markup.
    */
-  display?: number;
+  display?: number | { desktop: number; phone: number };
 }
 
 /**
@@ -111,13 +122,28 @@ export interface RenderToSvgOptions extends RenderRequest {
   cache?: RenderCache | false;
 }
 
+/** One rendered width, out of a `{ desktop, phone }` request — see
+ *  `RenderToSvgResult.variants`. */
+export interface RenderVariant {
+  svg: string;
+  css: string;
+}
+
 export interface RenderToSvgResult {
+  /** The desktop variant's SVG when `display` was `{ desktop, phone }`;
+   *  otherwise the only render there is. Kept at the top level (rather than
+   *  only under `variants`) so a caller that never asked for two widths
+   *  reads exactly the shape it always has. */
   svg: string;
   css: string;
   cycle: number;
   summary: string;
   repairs: RenderRepairNote[];
   warnings: string[];
+  /** Present only when `display` was the `{ desktop, phone }` object form:
+   *  both variants, individually addressable. `svg`/`css` above always equal
+   *  `variants.desktop`. */
+  variants?: { desktop: RenderVariant; phone: RenderVariant };
 }
 
 export class GeekchartRenderError extends Error {
@@ -186,9 +212,17 @@ export class ByteBoundedLru<V> {
 export const DEFAULT_CACHE_MAX_BYTES = 32 * 1024 * 1024; // 32 MB
 
 /** The SVG and CSS strings dominate a result's size by a wide margin; the
- * rest (summary, repair notes, warnings) is a rounding error next to them. */
+ * rest (summary, repair notes, warnings) is a rounding error next to them.
+ * `variants.phone` is counted too — `svg`/`css` above already equal
+ * `variants.desktop`, so counting only the top level would silently miss
+ * the second render's bytes for a `{ desktop, phone }` request. */
 function sizeOfResult(value: RenderToSvgResult): number {
-  return Buffer.byteLength(value.svg) + Buffer.byteLength(value.css) + 256;
+  return (
+    Buffer.byteLength(value.svg) +
+    Buffer.byteLength(value.css) +
+    (value.variants ? Buffer.byteLength(value.variants.phone.svg) + Buffer.byteLength(value.variants.phone.css) : 0) +
+    256
+  );
 }
 
 /** Deterministic regardless of key order, so equivalent option objects hash
@@ -234,6 +268,12 @@ function stripCache(options: RenderToSvgOptions): RenderRequest {
   return { ...rest, play: play ?? 'in-view' };
 }
 
+/** `RenderRequest` with `display` narrowed to what `@geekchart/core` itself
+ *  accepts — one width. `renderVariants`, below, is the only thing that
+ *  ever sees the `{ desktop, phone }` object form; by the time a request
+ *  reaches `renderWithNode` it has always been split into one render each. */
+type SingleWidthRequest = Omit<RenderRequest, 'display'> & { display?: number };
+
 /**
  * `renderNode`'s render, in the shape `renderToSvg` returns. `ChartError` is
  * `@geekchart/core`'s, caught here rather than let escape as a type this
@@ -243,7 +283,10 @@ function stripCache(options: RenderToSvgOptions): RenderRequest {
  * `@geekchart/core/node` is reached with a dynamic `import()`, not a static
  * one — see the note at the top of this file for why.
  */
-async function renderWithNode(source: string, request: RenderRequest): Promise<RenderToSvgResult> {
+async function renderWithNode(
+  source: string,
+  request: SingleWidthRequest,
+): Promise<RenderToSvgResult> {
   const { renderNode } = await import('../../core/src/node/render.ts');
   try {
     const r = await renderNode(source, request);
@@ -269,6 +312,35 @@ async function renderWithNode(source: string, request: RenderRequest): Promise<R
   }
 }
 
+/**
+ * DESIGN 1.1: "a server may render a chart for more than one display width;
+ * each variant obeys the rules at its own width." A plain number (or no
+ * `display` at all) renders once, same as always; the `{ desktop, phone }`
+ * object form renders both, independently — each is its own call into
+ * `renderWithNode`, so a 358px phone column and a 1000px desktop column
+ * pack, wrap and scale on their own terms (DESIGN 1.5/1.6 for one do not
+ * have to also fit the other).
+ */
+async function renderVariants(source: string, request: RenderRequest): Promise<RenderToSvgResult> {
+  if (request.display && typeof request.display === 'object') {
+    const { desktop, phone } = request.display;
+    const [d, p] = await Promise.all([
+      renderWithNode(source, { ...request, display: desktop }),
+      renderWithNode(source, { ...request, display: phone }),
+    ]);
+    return {
+      svg: d.svg,
+      css: d.css,
+      cycle: d.cycle,
+      summary: d.summary,
+      repairs: d.repairs,
+      warnings: [...d.warnings, ...p.warnings],
+      variants: { desktop: { svg: d.svg, css: d.css }, phone: { svg: p.svg, css: p.css } },
+    };
+  }
+  return renderWithNode(source, request as SingleWidthRequest);
+}
+
 /** Render mermaid source to an animated SVG. Results are cached by
  * `sha256(version + source + options)`, so a page rendering the same chart on
  * every request pays for the render once. */
@@ -290,7 +362,7 @@ export async function renderToSvg(
   // same chart at once share one render.
   const inflight = inflightByKey.get(key || source);
   if (inflight) return inflight as Promise<RenderToSvgResult>;
-  const run = renderWithNode(source, request).then(async (result) => {
+  const run = renderVariants(source, request).then(async (result) => {
     if (cache) await cache.set(key, result);
     return result;
   });
@@ -302,11 +374,49 @@ export async function renderToSvg(
   }
 }
 
+/** Stamps `data-gc-variant` onto an already-rendered `<svg ...>`'s own open
+ *  tag — the attribute `renderToHtml`'s media query switches on, and the
+ *  hook `geekchart/observe`'s `playInView` needs nothing extra to respect:
+ *  an `IntersectionObserver` target that is `display:none` never reports
+ *  `isIntersecting`, so the hidden variant simply never starts its build —
+ *  no wasted animation running on a chart nobody can see, and no separate
+ *  logic here has to enforce it. */
+function stampVariant(svg: string, variant: 'desktop' | 'phone'): string {
+  return svg.replace(/^<svg /, `<svg data-gc-variant="${variant}" `);
+}
+
 /**
  * Render to a markup fragment ready to inline: a scoped `<style>` tag plus the
  * SVG, wrapped in one element so `scopeCss`'s `#id` selectors have something to
  * match. Two charts on the same page cannot collide, because each gets its own
  * id and its own renamed keyframes.
+ *
+ * A `{ desktop, phone }` `display` (DESIGN 1.1) emits both `<svg>`s instead
+ * of one, each stamped `data-gc-variant`, plus a media query — under 640px
+ * CSS px the phone one shows and the desktop one hides; at 640px and above,
+ * the reverse:
+ *
+ * ```html
+ * <div id="gc-…">
+ *   <style>
+ *     #gc-… [data-gc-variant="desktop"] { display: block; }
+ *     #gc-… [data-gc-variant="phone"]   { display: none; }
+ *     @media (max-width: 640px) {
+ *       #gc-… [data-gc-variant="desktop"] { display: none; }
+ *       #gc-… [data-gc-variant="phone"]   { display: block; }
+ *     }
+ *     …
+ *   </style>
+ *   <svg data-gc-variant="desktop" …>…</svg>
+ *   <svg data-gc-variant="phone" …>…</svg>
+ * </div>
+ * ```
+ *
+ * Each variant's CSS is scoped under its own `data-gc-variant` selector with
+ * its own renamed `@keyframes` (a distinct id per variant, not the shared
+ * wrapper id) — the two SVGs are different geometry from different renders,
+ * so a name collision between their keyframes would leave one variant
+ * playing the other's motion.
  */
 export async function renderToHtml(
   source: string,
@@ -315,8 +425,27 @@ export async function renderToHtml(
   const result = await renderToSvg(source, options);
   const { scopeCss } = await import('../../core/src/scope.ts');
   const id = `gc-${cacheKey(source, stripCache(options)).slice(0, 12)}`;
+  const label = result.summary.replace(/"/g, '&quot;');
+
+  if (result.variants) {
+    const { desktop, phone } = result.variants;
+    const desktopSel = `#${id} [data-gc-variant="desktop"]`;
+    const phoneSel = `#${id} [data-gc-variant="phone"]`;
+    const mediaQuery =
+      `${desktopSel}{display:block}${phoneSel}{display:none}` +
+      `@media (max-width:640px){${desktopSel}{display:none}${phoneSel}{display:block}}`;
+    return (
+      `<div id="${id}" role="img" aria-label="${label}">` +
+      `<style>${mediaQuery}` +
+      `${scopeCss(desktop.css, `${id}-d`, desktopSel)}` +
+      `${scopeCss(phone.css, `${id}-p`, phoneSel)}</style>` +
+      `${stampVariant(desktop.svg, 'desktop')}${stampVariant(phone.svg, 'phone')}` +
+      `</div>`
+    );
+  }
+
   return (
-    `<div id="${id}" role="img" aria-label="${result.summary.replace(/"/g, '&quot;')}">` +
+    `<div id="${id}" role="img" aria-label="${label}">` +
     `<style>${scopeCss(result.css, id)}</style>${result.svg}</div>`
   );
 }

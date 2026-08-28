@@ -33,6 +33,14 @@ Options
       --height <px>      frame height           (default: 800)
       --aspect <ratio>   auto | 16:9 | 1:1 | 4:5 | 9:16   (default: auto)
                          pads the diagram into a fixed posting frame
+      --display <px>     the width, in CSS px, this chart will actually be
+                         shown at (DESIGN 1.1) — the canvas never exceeds it;
+                         leaf fans stack, chains fold and, past that, whole
+                         rows wrap before anything scales down to fit
+      --display <desktop>,<phone>
+                         two widths, one render each — .html output only.
+                         Both <svg>s ship in one page with a 640px media
+                         query that shows one and hides the other
 
 Colour
       --palette <json>   {"path":"#0084FF","alt":"#FFB718"} — override any of the
@@ -103,6 +111,7 @@ export async function main(argv: string[]): Promise<void> {
         'measure-with': { type: 'string' },
         width: { type: 'string', default: '1400' },
         height: { type: 'string', default: '800' },
+        display: { type: 'string' },
         quiet: { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
       },
@@ -139,6 +148,23 @@ export async function main(argv: string[]): Promise<void> {
   const width = number('width', values.width!, 200, 4000);
   const height = number('height', values.height!, 150, 4000);
 
+  // DESIGN 1.1: a single width renders once, same as any other option; two
+  // (comma-separated) render one variant each — see the dual-render branch
+  // near the bottom of this function for where the object form is used.
+  const display: number | { desktop: number; phone: number } | undefined = (() => {
+    const raw = values.display;
+    if (!raw) return undefined;
+    if (!raw.includes(',')) return number('display', raw, 200, 2000);
+    const [d, p, ...rest] = raw.split(',');
+    if (rest.length || !d || !p) {
+      fail(`--display <desktop>,<phone> takes exactly two widths, got "${raw}"`);
+    }
+    return {
+      desktop: number('display', d, 200, 2000),
+      phone: number('display', p, 200, 2000),
+    };
+  })();
+
   const output = resolve(
     values.out ?? (input === '-' ? 'chart.html' : input.replace(/\.[^.]+$/, '') + '.html'),
   );
@@ -146,6 +172,11 @@ export async function main(argv: string[]): Promise<void> {
   const known = ['html', 'svg', 'tsx', 'jsx'];
   if (!known.includes(format)) {
     fail(`do not know how to write "${format}" files. Try one of: ${known.join(', ')}`);
+  }
+  if (display && typeof display === 'object' && format !== 'html') {
+    fail(
+      `--display <desktop>,<phone> only writes two variants into one page, and only .html holds a page — got .${format}. Render each width separately for .${format}, or write .html.`,
+    );
   }
 
   const log = (line: string) => {
@@ -227,46 +258,86 @@ export async function main(argv: string[]): Promise<void> {
     motion: !values['no-motion'] && format !== 'svg',
     width,
     height,
+    ...(typeof display === 'number' ? { display } : {}),
   };
 
   // `renderNode`'s thrown `ChartError` is mapped to the same `{ ok: false,
-  // error }` shape every reader below expects.
+  // error }` shape every reader below expects. Shared by the single render
+  // below and, for `--display <desktop>,<phone>`, by each of the two.
   const { renderNode } = await import('../../core/src/node/render.ts');
-  const reply = await (async () => {
-    try {
-      return { ok: true as const, ...(await renderNode(source, renderOptions)) };
-    } catch (err) {
-      const { ChartError } = await import('../../core/src/chart-error.ts');
-      return {
-        ok: false as const,
-        error:
-          err instanceof ChartError
-            ? err.detail
-            : { message: err instanceof Error ? err.message : String(err) },
-      };
+  type NodeReply = Awaited<ReturnType<typeof renderNode>>;
+  async function renderAndLog(opts: typeof renderOptions): Promise<NodeReply> {
+    const outcome = await (async () => {
+      try {
+        return { ok: true as const, ...(await renderNode(source, opts)) };
+      } catch (err) {
+        const { ChartError } = await import('../../core/src/chart-error.ts');
+        return {
+          ok: false as const,
+          error:
+            err instanceof ChartError
+              ? err.detail
+              : { message: err instanceof Error ? err.message : String(err) },
+        };
+      }
+    })();
+    if (!outcome.ok) {
+      const where = outcome.error.line ? ` on line ${outcome.error.line}` : '';
+      process.stderr.write(
+        `\ngeekchart: could not draw this chart${where}\n\n  ${outcome.error.message.replace(/\n/g, '\n  ')}\n`,
+      );
+      if (outcome.error.excerpt)
+        process.stderr.write(`\n  ${outcome.error.line}: ${outcome.error.excerpt}\n`);
+      process.stderr.write('\n');
+      process.exit(2);
     }
-  })();
-
-  if (!reply.ok) {
-    const where = reply.error.line ? ` on line ${reply.error.line}` : '';
-    process.stderr.write(
-      `\ngeekchart: could not draw this chart${where}\n\n  ${reply.error.message.replace(/\n/g, '\n  ')}\n`,
+    for (const note of outcome.repairs) log(`  fixed: ${note.message}`);
+    for (const warning of outcome.warnings) {
+      process.stderr.write(`\ngeekchart: ${warning}\n\n`);
+    }
+    const pipeline = outcome.path === 'flow' ? 'drawn' : 'mermaid';
+    log(
+      `  ${outcome.diagram} · ${outcome.nodes} nodes · ${outcome.edges} edges · ` +
+        `${outcome.cycle > 0 ? `${outcome.cycle.toFixed(1)}s loop` : 'static'} · ${pipeline}`,
     );
-    if (reply.error.excerpt)
-      process.stderr.write(`\n  ${reply.error.line}: ${reply.error.excerpt}\n`);
-    process.stderr.write('\n');
-    process.exit(2);
+    return outcome;
   }
 
-  for (const note of reply.repairs) log(`  fixed: ${note.message}`);
-  for (const warning of reply.warnings) {
-    process.stderr.write(`\ngeekchart: ${warning}\n\n`);
+  // DESIGN 1.1: two widths render independently and land in one page — see
+  // the usage text above for the exact markup. Only `.html` reaches here
+  // (checked above, next to where `display` is parsed); every other format
+  // takes the ordinary single-render path below.
+  if (display && typeof display === 'object') {
+    const [desktop, phone] = await Promise.all([
+      renderAndLog({ ...renderOptions, display: display.desktop }),
+      renderAndLog({ ...renderOptions, display: display.phone }),
+    ]);
+    const stampVariant = (svg: string, variant: 'desktop' | 'phone') =>
+      svg.replace(/^<svg /, `<svg data-gc-variant="${variant}" `);
+    const page = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chart</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 40px 24px; }
+[data-gc-variant="desktop"] { display: block; }
+[data-gc-variant="phone"] { display: none; }
+@media (max-width: 640px) {
+  [data-gc-variant="desktop"] { display: none; }
+  [data-gc-variant="phone"] { display: block; }
+}
+${desktop.css}
+${phone.css}
+</style></head>
+<body>${stampVariant(desktop.svg, 'desktop')}${stampVariant(phone.svg, 'phone')}</body></html>`;
+    writeFileSync(output, page);
+    process.stdout.write(output + '\n');
+    return;
   }
-  const pipeline = reply.path === 'flow' ? 'drawn' : 'mermaid';
-  log(
-    `  ${reply.diagram} · ${reply.nodes} nodes · ${reply.edges} edges · ` +
-      `${reply.cycle > 0 ? `${reply.cycle.toFixed(1)}s loop` : 'static'} · ${pipeline}`,
-  );
+
+  const reply = await renderAndLog(renderOptions);
 
   if (isReact) {
     const bakeInput = {

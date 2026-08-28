@@ -100,6 +100,38 @@ export interface Metrics {
   rows: { width: number; count: number; groups: number };
 }
 
+// The rhombus edge is `bx + ay = ab`, so the label's corner (w/2, h/2) sits at
+// perpendicular distance (ab - bw/2 - ah/2) / hypot(a, b). Setting that to the
+// pad and fixing the aspect a = r*b leaves one equation in b. `r` matches the
+// reference proportion. Kept as its own function, not inlined in `fitShape`'s
+// diamond case, because DESIGN 1.1/1.6's packing needs the same formula run
+// backwards (`diamondLabelBudget`, below) to ask "how wide can the label be
+// and still fit" rather than "how wide is the shape for this label".
+const DIAMOND_R = 1.85;
+function diamondSize(
+  labelWidth: number,
+  labelHeight: number,
+  pad: number,
+): { width: number; height: number } {
+  const b = (pad * Math.hypot(DIAMOND_R, 1) + labelWidth / 2 + (DIAMOND_R * labelHeight) / 2) / DIAMOND_R;
+  return { width: 2 * DIAMOND_R * b, height: 2 * b };
+}
+
+/**
+ * DESIGN 1.1/1.6: the label width a diamond could carry and still land at
+ * `targetWidth` outer, at a given label height — the inverse of
+ * `diamondSize`. Used only under a declared display, when a diamond's own
+ * one-line label is what keeps the canvas over the cap after every other
+ * packing move (leaf stacking, fold, sibling wrap) has had its turn: the row-
+ * and chain-level packing those do cannot reach into one shape's own
+ * geometry, so a diamond gets DESIGN 2.2's ordinary "wrap rather than widen"
+ * instead of being left to force a scale-down of the whole chart.
+ */
+export function diamondLabelBudget(targetWidth: number, labelHeight: number, pad: number): number {
+  const b = targetWidth / (2 * DIAMOND_R);
+  return 2 * (DIAMOND_R * b - pad * Math.hypot(DIAMOND_R, 1) - (DIAMOND_R * labelHeight) / 2);
+}
+
 /**
  * Fit a shape around its own label.
  *
@@ -116,14 +148,8 @@ export function fitShape(
   const { label, rows } = m;
   const pad = scene.padShape;
   switch (m.node.shape) {
-    case 'diamond': {
-      // The rhombus edge is `bx + ay = ab`, so the label's corner (w/2, h/2) sits
-      // at perpendicular distance (ab - bw/2 - ah/2) / hypot(a, b). Setting that
-      // to the pad and fixing the aspect a = r*b leaves one equation in b.
-      const r = 1.85; // matches the reference proportion
-      const b = (pad * Math.hypot(r, 1) + label.width / 2 + (r * label.height) / 2) / r;
-      return { width: 2 * r * b, height: 2 * b };
-    }
+    case 'diamond':
+      return diamondSize(label.width, label.height, pad);
     case 'circle': {
       // The corner of the label box is the furthest point from the centre.
       const d = 2 * (Math.hypot(label.width, label.height) / 2 + pad);

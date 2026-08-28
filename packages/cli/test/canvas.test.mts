@@ -558,6 +558,73 @@ describe('display', () => {
     assert.equal(m.width, 968, `python-or-java's undeclared-display width moved to ${m.width}`);
     assert.equal(await session.page.evaluate(() => document.querySelector('svg')!.dataset.display), '1000');
   });
+
+  test('sibling wrapping fits python-or-java under a 358px phone column, DESIGN 1.6', async () => {
+    // 358 is narrow enough that leaf stacking (1.5) alone is not enough: even
+    // with both of Python's and Java's fans stacked into a column each, the
+    // two columns side by side (232 + 32 + 232) still need 496 — DESIGN 1.6's
+    // own case. The row wraps into two, one column above the other.
+    //
+    // `motion: false` — AGENTS.md: the gate reads the *still* frame. Every
+    // edge label's own reveal keyframe starts at `opacity:0`; without a
+    // "chart entered the viewport" trigger this page never fires, an
+    // animated build never finishes, and `visible()` (DESIGN 7.3's own
+    // check calls it) reads that opacity honestly and excludes the label —
+    // not a defect in the label's placement, a mismatch between measuring a
+    // live animation and the finished chart it draws toward.
+    await mount(pythonOrJava(), { display: 358, motion: false });
+    const m = await measure();
+    assert.ok(m.width <= 358, `canvas ${m.width} exceeds the declared display width of 358`);
+    const scale = Math.min(1, 358 / m.width);
+    assert.equal(scale, 1, `expected no shrink at all once packing fits; canvas is ${m.width}`);
+
+    // DESIGN 3.1: nothing smaller than 13, measured at min(760, 358) = 358 —
+    // exactly what scale 1 already gives every text run here.
+    const names = m.texts.filter((t) => t.cls.includes('gc-title'));
+    assert.ok(names.length >= 5, `expected node names, found ${names.length}`);
+    assert.ok(
+      names.every((t) => t.size === TYPE.name),
+      `a node name drew at ${names.map((t) => t.size).join(',')} instead of the full ${TYPE.name} (DESIGN §3)`,
+    );
+
+    // PY's and JAVA's stacked fans now read as two rows, one above the
+    // other, not two columns side by side.
+    const pyBox = await session.page.evaluate(() => {
+      const n = document.querySelector('[data-id="PY"] .gc-outline') as SVGGraphicsElement;
+      const b = n.getBBox();
+      return { x: b.x, y: b.y };
+    });
+    const javaBox = await session.page.evaluate(() => {
+      const n = document.querySelector('[data-id="JAVA"] .gc-outline') as SVGGraphicsElement;
+      const b = n.getBBox();
+      return { x: b.x, y: b.y };
+    });
+    assert.ok(
+      javaBox.y > pyBox.y + 100,
+      `expected Java's row below Python's, got PY.y=${pyBox.y} JAVA.y=${javaBox.y}`,
+    );
+
+    // A full gate sweep — every rule, not just the ones this feature touches
+    // — because a chart that fits at the cost of a crossed edge or a clipped
+    // label is not fixed, it has just moved the defect somewhere the width
+    // check does not look.
+    await session.page.addScriptTag({ path: measureBundle });
+    const { fails, warns } = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      return (
+        window as unknown as {
+          geekchartMeasure: {
+            measureChart: (
+              svg: SVGSVGElement,
+              opts: { chartId: string },
+            ) => { fails: string[]; warns: string[] };
+          };
+        }
+      ).geekchartMeasure.measureChart(svg, { chartId: 'python-or-java-358' });
+    });
+    assert.deepEqual(fails, [], `gate FAILs at display 358: ${fails.join('; ')}`);
+    assert.deepEqual(warns, [], `gate WARNs at display 358: ${warns.join('; ')}`);
+  });
 });
 
 describe('type', () => {

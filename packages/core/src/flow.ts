@@ -609,8 +609,30 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   // scene's own canvas width, not a separate parameter, because every pass
   // that has to pack to the cap — `fold`'s room, the panel refit, DESIGN
   // 1.5's leaf stacking, `fitCanvas` itself — already reads it from there.
+  // The 480 floor (`canvas.min`) comes down with it: that floor exists so an
+  // undeclared-display chart never renders embarrassingly narrow, but a
+  // caller naming a 358px phone column has already said what narrow means —
+  // a floor above the display they asked for would force `fitCanvas` right
+  // back past the cap this option exists to respect, scaling the packed
+  // layout down again, the exact defect DESIGN 1.6 packs instead of hiding.
+  // DESIGN 1.4's own aspect ceiling comes off too: it exists so a chart with
+  // *room to spare either way* goes wider rather than taller (1.4's own
+  // words, "go side by side instead") — but a caller who named a narrow
+  // display has already fixed that choice for them, and 1.6's own packing
+  // moving a wide row into a column is exactly what makes a phone-width
+  // chart taller. `fitCanvas` capping the height there would not make the
+  // chart shorter, only clip it — the drawing still needs the room, it would
+  // just stop being shown. (Revised 2026-08-28 alongside 1.6.)
   const scene = options.display
-    ? { ...baseScene, canvas: { ...baseScene.canvas, width: options.display } }
+    ? {
+        ...baseScene,
+        canvas: {
+          ...baseScene.canvas,
+          width: options.display,
+          min: Math.min(baseScene.canvas.min, options.display),
+          maxAspect: options.display < baseScene.canvas.width ? Infinity : baseScene.canvas.maxAspect,
+        },
+      }
     : baseScene;
   const measureWith = measurerFor(options);
 

@@ -468,7 +468,10 @@ export const arrivalSide: Check = {
       // DESIGN 1.5: a leaf stack's bus always arrives on the leaf's side
       // facing the parent, whatever the chart's flow axis — the sanctioned
       // exception 1.5 itself carves out, the same way a loop-back (6.7) is.
-      if (e.classList.contains('gc-bus')) continue;
+      // DESIGN 1.6's own wrap bus earns no such exception (`gc-wrap`, set
+      // alongside `gc-bus` only for it): it arrives the ordinary way a
+      // forward edge does, so it stays subject to this check like any other.
+      if (e.classList.contains('gc-bus') && !e.classList.contains('gc-wrap')) continue;
       const { ra, rb, back, arrives, to } = g;
       const below = rb.top >= ra.bottom - 1;
       const above = rb.bottom <= ra.top + 1;
@@ -546,7 +549,13 @@ export const wrongSide: Check = {
     const ids = nodeById(ctx);
     let n = 0;
     for (const e of edgeEls(ctx)) {
-      if (e.classList.contains('gc-back') || e.classList.contains('gc-bus')) continue;
+      // DESIGN 1.6's own wrap bus (`gc-wrap`) is not exempt here either —
+      // see the matching note on `arrivalSide`, above.
+      if (
+        e.classList.contains('gc-back') ||
+        (e.classList.contains('gc-bus') && !e.classList.contains('gc-wrap'))
+      )
+        continue;
       const { from: fromId, to: toId } = edgeFromTo(e);
       const A = fromId && ids.get(fromId);
       const B = toId && ids.get(toId);

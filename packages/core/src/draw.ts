@@ -15,7 +15,7 @@ import {
 import { planRoutes, type Extent, type OrthoRoute } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
 import { TRUNK_OFFSET } from './layout/stack.ts';
-import { GRID } from './tokens.ts';
+import { GRID, GUTTER } from './tokens.ts';
 import { RULES } from './rules.ts';
 
 /**
@@ -362,22 +362,92 @@ function attemptDraw(
   // bus from one point" (they all leave the parent at the same point) —
   // without inventing a second kind of drawn thing that needs its own
   // styling and animation wiring.
+  //
+  // DESIGN 1.6 reuses the trunk for a parent's edge into a sibling that
+  // sibling wrapping pushed onto a later row — the row in between is
+  // exactly the kind of thing an ordinary routed edge never expects to find
+  // in its lane — but arrives the ordinary way a forward edge does in a
+  // vertical flow (DESIGN 6.2: the side facing its source, top for a target
+  // below it), not the fan bus's own left-side exception: down the corridor
+  // (`edge.wrapTrunkX`, clear of every row the trunk passes), left along the
+  // row gap above the sibling to its own centre x, then down into its top
+  // face — two bends, landing on the ordinary midpoint 6.2 already asks for,
+  // so this earns no exception the gate has to know about.
   for (const edge of routed) {
     if (!edge.bus) continue;
     const from = boxOf(edge.from);
     const to = boxOf(edge.to);
     if (!from || !to) continue;
-    const trunkX = from.x + TRUNK_OFFSET;
-    const rowY = to.y + to.height / 2;
-    const route: OrthoRoute = {
-      points: [
-        { x: trunkX, y: from.y + from.height },
-        { x: trunkX, y: rowY },
-        { x: to.x, y: rowY },
-      ],
-      startSide: 'bottom',
-      endSide: 'left',
-    };
+    const wrapped = edge.wrapTrunkX !== undefined;
+    // `to.x` (its left edge), not `to.width` past it: where `to` is a node
+    // inside a stacked fan, `to.width` is its own plain width, not the wider
+    // stand-in `layout/wrap.ts` measured the corridor against — `x` is the
+    // one coordinate the two always agree on (DESIGN 1.5's own `expandFan`
+    // sits the parent at the stand-in's origin, unmoved).
+    const trunkX = wrapped ? to.x + edge.wrapTrunkX! : from.x + TRUNK_OFFSET;
+    const route: OrthoRoute = wrapped
+      ? (() => {
+          const arriveX = to.x + to.width / 2;
+          // DESIGN 6.1's own "a Z edge's middle run is centred in the free
+          // channel between the nearest walls" applies here the same as any
+          // other edge shaped like this one — found the same way the gate's
+          // own channel-centre check finds it (packages/cli/src/measure/
+          // edges.ts): the nearest already-placed node whose x-range crosses
+          // this run and whose bottom sits above `to`'s own top. Read back
+          // from final positions rather than trusted from whatever
+          // `layout/wrap.ts` computed the gap to be, because `square()`'s own
+          // grid snapping (DESIGN 2.1) can move either row by a couple of
+          // units after that — the two would drift apart by exactly the kind
+          // of gap this check exists to catch.
+          const runX1 = Math.min(trunkX, arriveX);
+          const runX2 = Math.max(trunkX, arriveX);
+          const above = placed.filter(
+            (n) =>
+              n.id !== edge.to &&
+              n.x! < runX2 &&
+              n.x! + n.width! > runX1 &&
+              n.y! + n.height! <= to.y + 0.5,
+          );
+          const aboveBottom = above.length
+            ? Math.max(...above.map((n) => n.y! + n.height!))
+            : to.y - GUTTER.panel;
+          // The true middle of the channel — but `roundedPath`'s own corner
+          // rounding (DESIGN 6.1's own check reads it back, see the note
+          // above) caps each corner's radius at half its *shorter* adjacent
+          // run, and the run into `to`'s own top face is shortened again for
+          // the arrowhead (`scene.edgeGap` plus the head's own reach) before
+          // that cap is measured. A run too short for that cap gives this
+          // corner a smaller radius than the corridor's own corner, and the
+          // gate's check — which reads the *rounded* path back, not the
+          // straight one this file reasons in — sees that asymmetry as an
+          // off-centre channel even though the straight run it approximates
+          // is not. Below the point where both corners round the full 12
+          // regardless, the true centre is pulled up just enough to clear
+          // that floor instead.
+          const arrowStub = scene.edgeGap + scene.edgeStroke * scene.arrowLength;
+          const trueCentre = (aboveBottom + to.y) / 2;
+          const clearsRoundingFloor = to.y - 24 - arrowStub;
+          const gapY = Math.min(trueCentre, clearsRoundingFloor);
+          return {
+            points: [
+              { x: trunkX, y: from.y + from.height },
+              { x: trunkX, y: gapY },
+              { x: arriveX, y: gapY },
+              { x: arriveX, y: to.y },
+            ],
+            startSide: 'bottom',
+            endSide: 'top',
+          };
+        })()
+      : {
+          points: [
+            { x: trunkX, y: from.y + from.height },
+            { x: trunkX, y: to.y + to.height / 2 },
+            { x: to.x, y: to.y + to.height / 2 },
+          ],
+          startSide: 'bottom',
+          endSide: 'left',
+        };
     routes.set(edge.id, route);
   }
 
@@ -548,7 +618,7 @@ function attemptDraw(
     endLabels.push(...cardinality(edge, tail.at, tail.dir, tip.at, tip.dir, scene));
 
     parts.push(
-      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus ? ' gc-bus' : ''}" data-id="${esc(edge.id)}" ` +
+      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus ? ' gc-bus' : ''}${edge.wrapTrunkX !== undefined ? ' gc-wrap' : ''}" data-id="${esc(edge.id)}" ` +
         `data-from="${esc(edge.from)}" data-to="${esc(edge.to)}" pathLength="1" d="${d}"/>`,
     );
     arrows.push(marks);
@@ -575,19 +645,73 @@ function attemptDraw(
     if (edge.label) {
       const fromBox = boxOf(edge.from);
       const toBox = boxOf(edge.to);
+      const wrapped = edge.wrapTrunkX !== undefined;
+      // DESIGN 1.6: a wrap bus's own label — unlike a plain leaf bus (DESIGN
+      // 1.5), which never carries one — is handed to the same placer every
+      // other edge's label is, `placeLabels` below, not placed by hand. But
+      // the *segment* it is scored against is narrowed to the sibling's own
+      // side of the row gap's run, not the edge's full four-point route or
+      // even the run's own full reach to the corridor:
+      //  - the placer's own scoring picks the longest segment first
+      //    (`better()`, below), and this route's vertical corridor is always
+      //    longer than the horizontal gap run — long enough on its own to
+      //    win regardless of fit, which for a wide label seated "beside" a
+      //    vertical line means offset by half the label's own *width*, not
+      //    its height, landing it far out past the corridor;
+      //  - the run's own far end is the corridor, a routing detail this
+      //    label was never about — centring on the run's *own* midpoint (its
+      //    only alternative, once the vertical corridor is excluded) pulls
+      //    the label a corridor's width off toward it, when the sibling side
+      //    costs nothing (`to` is this edge's own target, exempt from
+      //    DESIGN 6.1's clearance floor) and the corridor side costs a full
+      //    16 units of it.
+      // One `GUTTER.panel` step past the sibling's own arrival x, toward the
+      // corridor, is as far as the label is scored — real points on the
+      // genuine drawn path either way (DESIGN 6.11's "within 8 of some point
+      // of its own path" holds exactly the same), just the width actually
+      // worth centring a label this wide against.
+      const ownPoints =
+        wrapped && line.length >= 4
+          ? (() => {
+              const gapY = line[1]!.y;
+              const corridorX = line[1]!.x;
+              const arriveX = line[2]!.x;
+              const arriveTop = line[3]!.y;
+              const towardCorridor = Math.sign(corridorX - arriveX) || 1;
+              // Reaches from the sibling's own arrival point toward the
+              // corridor, at least as far as the short final descent into
+              // `to`'s own top face is long — long enough that this run, not
+              // that one, stays the *longer* of the two the placer sees
+              // (scoring picks the longest segment first, `better()` below),
+              // while the descent still has to be included at all: DESIGN
+              // 6.5's own gate check reads the whole drawn path, and a
+              // candidate this file accepts must not swallow a run just
+              // because this window never learned it was there.
+              const reach = Math.max(GUTTER.panel * 2, Math.abs(arriveTop - gapY) + 8);
+              return [
+                { x: arriveX + towardCorridor * reach, y: gapY },
+                { x: arriveX, y: gapY },
+                { x: arriveX, y: arriveTop },
+              ];
+            })()
+          : line;
       pendingLabels.push({
         id: edge.id,
         from: edge.from,
         to: edge.to,
         text: edge.label,
-        points: line,
+        points: ownPoints,
         // 6 of knockout either side of the words, per DESIGN 6.5.
         width: (edge.labelWidth ?? edge.label.length * scene.edgeLabelSize * 0.62) + 12,
         height: scene.edgeLabelSize * 2,
         corridorY:
-          !edge.backward && fromBox && toBox && toBox.y > fromBox.y ? toBox.y : undefined,
+          !wrapped && !edge.backward && fromBox && toBox && toBox.y > fromBox.y
+            ? toBox.y
+            : undefined,
         corridorX:
-          !edge.backward && fromBox && toBox && toBox.x > fromBox.x ? toBox.x : undefined,
+          !wrapped && !edge.backward && fromBox && toBox && toBox.x > fromBox.x
+            ? toBox.x
+            : undefined,
       });
     }
   }
@@ -767,13 +891,16 @@ function cardinality(
  */
 function centredLabel(node: Placed, cx: number, cy: number): string {
   if (!node.title) return '';
-  // A wrapped title (DESIGN 2.2: wrap rather than widen) sits on the same two
-  // baselines a title+caption pair would, but both lines keep the title's
-  // own face — it is one label broken in two, not a name and a caption.
+  // A wrapped title (DESIGN 2.2: wrap rather than widen) is one label broken
+  // in two, not a name and a caption, so it does not share the name+caption
+  // pair's own 16-unit baseline gap: both lines keep the title's own full
+  // size, and two 13-unit lines that close together overlap (a caption is
+  // smaller than a name, which is the only reason 16 works there). 20 is
+  // measured: at 13/600 Archivo, one line's own drawn height is ~17.3.
   if (node.titleLines) {
     return (
-      `<text class="gc-title" x="${cx}" y="${round(cy - 4)}">${esc(node.titleLines[0])}</text>` +
-      `<text class="gc-title" x="${cx}" y="${round(cy + 12)}">${esc(node.titleLines[1])}</text>`
+      `<text class="gc-title" x="${cx}" y="${round(cy - 6)}">${esc(node.titleLines[0])}</text>` +
+      `<text class="gc-title" x="${cx}" y="${round(cy + 14)}">${esc(node.titleLines[1])}</text>`
     );
   }
   const titleY = node.caption ? cy - 4 : cy + 4;
