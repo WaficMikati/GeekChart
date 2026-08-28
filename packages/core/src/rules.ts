@@ -95,6 +95,9 @@ export const RULES: Record<string, Rule> = {
     title: 'An edge label keeps this much clear of every node it does not belong to',
     threshold: 8,
   },
+  '6.10': {
+    title: 'Every edge label in the source is drawn exactly once, never dropped for 6.9',
+  },
   '7.3': {
     title: 'Content is centred within this many units of the canvas centre',
     threshold: 8,

@@ -197,6 +197,13 @@ most **three** of these (name, caption, label); the title block adds its two:
   beside a short run can still, technically, avoid its own edge's two nodes
   while landing on someone else's.)
 
+- **6.10** Every edge label in the source is drawn exactly once. When no
+  position clears 6.9, the layout makes room — the edge's corridor grows by
+  the label's height + 8 — rather than the label disappearing. (Added
+  2026-08-28: enforcing 6.9 without this let a label with nowhere clear to
+  sit be dropped instead, which is worse than a crowded one — a missing
+  label reads as the edge having none, not as a placement failure.)
+
 ## 7. Composition
 
 - **7.1** Every chart has a title (3: 22/600) and usually a kicker line in mono

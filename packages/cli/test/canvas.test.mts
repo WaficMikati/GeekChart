@@ -500,6 +500,16 @@ describe('display', () => {
       [],
       `6.9 should be clean: ${labelClear.map((f) => f.message).join('; ')}`,
     );
+
+    // DESIGN 6.10: both of this chart's labels are drawn — "no, enterprise
+    // or Android" used to be dropped outright once 6.9's veto left its own
+    // edge with nowhere clear to put it, rather than the layout making room.
+    const labelDrawn = await gateFindings('6.10-label-drawn');
+    assert.deepEqual(
+      labelDrawn,
+      [],
+      `6.10 should be clean: ${labelDrawn.map((f) => f.message).join('; ')}`,
+    );
   });
 
   test('leaf stacking fits cleanly under a taller display cap', async () => {

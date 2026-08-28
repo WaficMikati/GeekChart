@@ -736,6 +736,33 @@ export const labelClear: Check = {
   },
 };
 
+/**
+ * DESIGN 6.10: a label the source asked for is never just dropped because
+ * DESIGN 6.9 left the placer nowhere clear to put it. `data-label-count`,
+ * stamped on the root at draw time (draw.ts, where `graph.edges` is still in
+ * hand), is how many `.gc-edge-label` groups this chart owes — reading it
+ * off the SVG itself, rather than the mermaid source, is what makes this
+ * check work the same whether it runs against the gallery or a single
+ * standalone-page render in a test, neither of which always has the source
+ * text sitting in the DOM next to the chart.
+ */
+export const labelDrawn: Check = {
+  id: '6.10-label-drawn',
+  rule: '6.10',
+  run(svg) {
+    const expected = Number(svg.dataset.labelCount) || 0;
+    const drawn = svg.querySelectorAll('.gc-edge-label').length;
+    return drawn !== expected
+      ? [
+          {
+            severity: 'fail',
+            message: `6.10 ${drawn} of ${expected} edge labels drawn`,
+          },
+        ]
+      : [];
+  },
+};
+
 // degrees/edgeMeta are re-exported only for grid.ts's 2.3 checks that need
 // per-node in/out degree without recomputing it.
 export { degrees, edgeMeta };
@@ -758,4 +785,5 @@ export const EDGE_CHECKS: Check[] = [
   hairpin,
   longLoop,
   labelClear,
+  labelDrawn,
 ];

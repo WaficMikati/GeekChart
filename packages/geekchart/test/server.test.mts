@@ -150,7 +150,7 @@ test('defaults to play: "in-view" — paused until geekchart/observe runs', asyn
   assert.doesNotMatch(result.css, /\binfinite\b/, 'nothing may still be looping by default');
   assert.match(
     result.css,
-    /\[data-gc-play="in-view"\]:not\(\[data-gc-playing\]\) \* \{ animation-play-state: paused; \}/,
+    /\[data-gc-play="in-view"\]:not\(\[data-gc-playing\]\) \* \{ animation-play-state: paused !important; \}/,
   );
 });
 

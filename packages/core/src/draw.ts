@@ -557,8 +557,14 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
   // marker, so there is nothing left in `defs` for an edge to point at — and no
   // remaining way for a head to be a different size or angle from its line.
   const viewBox = `${-pad} ${-pad} ${round(size.width + pad * 2)} ${round(size.height + pad * 2)}`;
+  // DESIGN 6.10: how many `.gc-edge-label` groups the gate should find —
+  // stamped at draw time, when `graph.edges` is still in hand, rather than
+  // asked of the mermaid source later. Every edge with a label owes this
+  // chart exactly one drawn label; the placer (DESIGN 6.9's own veto) is
+  // never allowed to just drop one instead.
+  const labelCount = graph.edges.filter((e) => e.label).length;
   const svg =
-    `<svg class="gc-chart" data-gc="${uid}" data-flow="${graph.direction}" viewBox="${viewBox}" role="img" xmlns="${SVG}">` +
+    `<svg class="gc-chart" data-gc="${uid}" data-flow="${graph.direction}" data-label-count="${labelCount}" viewBox="${viewBox}" role="img" xmlns="${SVG}">` +
     `${parts.join('')}${endLabels.join('')}${sparks.join('')}${arrows.join('')}</svg>`;
 
   // The union of everything actually drawn, in the same coordinates the
@@ -889,70 +895,106 @@ function placeLabels(
       }),
       { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity },
     );
-    const maxNudge = capOffLineReach
+    const cappedNudge = capOffLineReach
       ? Math.max(edgeBox.x1 - edgeBox.x0, edgeBox.y1 - edgeBox.y0) + 20
       : Infinity;
 
-    let best: { box: Box; clash: number; drift: number } | null = null;
-    search: for (const spot of anchors(request.points)) {
-      const { at, dir, len } = spot;
-      const perp = { x: -dir.y, y: dir.x };
-      // If sitting on this segment would swallow it, skip the on-line (nudge
-      // 0) spots entirely and start from just clear of the line instead —
-      // half the plate's cross-line size (height for a horizontal segment,
-      // width for a vertical one) plus an 8 gap. Extra steps beyond that
-      // are only for dodging other labels/edges, same as the on-line case.
-      const horiz = Math.abs(dir.y) < 0.02;
-      const crossSize = horiz ? request.height : request.width;
-      // The gate's own "is this label still basically on the line" check
-      // (gate.mjs) treats anything within one full plate-width (for a
-      // vertical line) or plate-height (for a horizontal one) of the line as
-      // still "on" it — a wider margin than bare non-overlap needs, to catch
-      // near-miss placements as well as exact ones. Clearing that margin
-      // takes a full cross-axis step, not half of one.
-      const minOffset = crossSize + 8;
-      const spotNudges = (
-        onLineFits(dir, len, request.width, request.height)
+    // One search, run once per allowed reach. DESIGN 6.10: a veto never
+    // stands with nothing behind it — the first pass keeps `capOffLineReach`
+    // charts (DESIGN 1.5) from reading a bus's own edge as its label's
+    // corridor; if that pass finds nothing (every candidate on the edge is
+    // within 8 of a box, DESIGN 6.9), a second, uncapped pass grows the
+    // search past it rather than dropping the label. Growing "by the
+    // label's own height + 8" is exactly what the off-line `minOffset`
+    // below already steps by — this just stops refusing to take enough of
+    // those steps.
+    // DESIGN 6.10's fallback pass reaches further off-line than a normal
+    // placement ever needs to — extra steps a chart that already finds a
+    // spot on the base list has no reason to be offered, and offering them
+    // anyway once moved `state.mmd`'s own label practically for free (a
+    // farther, still clash-free spot beat a nearer one on drift alone), which
+    // is a dimension change DESIGN 1.1 promises never to make outside this
+    // feature. `extraSteps` stays empty for the base attempt and is only
+    // ever filled in for the fallback, below.
+    const search = (
+      limit: number,
+      extraSteps: number[],
+    ): { box: Box; clash: number; drift: number } | null => {
+      let best: { box: Box; clash: number; drift: number } | null = null;
+      outer: for (const spot of anchors(request.points)) {
+        const { at, dir, len } = spot;
+        const perp = { x: -dir.y, y: dir.x };
+        // If sitting on this segment would swallow it, skip the on-line (nudge
+        // 0) spots entirely and start from just clear of the line instead —
+        // half the plate's cross-line size (height for a horizontal segment,
+        // width for a vertical one) plus an 8 gap. Extra steps beyond that
+        // are only for dodging other labels/edges, same as the on-line case.
+        const horiz = Math.abs(dir.y) < 0.02;
+        const crossSize = horiz ? request.height : request.width;
+        // The gate's own "is this label still basically on the line" check
+        // (gate.mjs) treats anything within one full plate-width (for a
+        // vertical line) or plate-height (for a horizontal one) of the line as
+        // still "on" it — a wider margin than bare non-overlap needs, to catch
+        // near-miss placements as well as exact ones. Clearing that margin
+        // takes a full cross-axis step, not half of one.
+        const minOffset = crossSize + 8;
+        const offLineSteps = onLineFits(dir, len, request.width, request.height)
           ? nudges
-          : [0, 14, 26, 40, 58, 78].flatMap((step) => [minOffset + step, -(minOffset + step)])
-      ).filter((n) => Math.abs(n) <= maxNudge);
-      for (const nudge of spotNudges) {
-        const cx = at.x + perp.x * nudge;
-        const cy = at.y + perp.y * nudge;
-        const box: Box = {
-          x: cx - request.width / 2,
-          y: cy - request.height / 2,
-          width: request.width,
-          height: request.height,
-        };
-        // Tested with a little air around it, so two labels end up clearly
-        // apart rather than exactly touching.
-        const padded: Box = {
-          x: box.x - 3,
-          y: box.y - 3,
-          width: box.width + 6,
-          height: box.height + 6,
-        };
-        // DESIGN 6.9: a node box plus 8 is forbidden outright, not merely
-        // discouraged — a candidate that close is skipped before it is ever
-        // scored, so the search keeps sliding (more `t` values, above) or
-        // keeps stepping (more nudges) until it finds one that is not,
-        // rather than settling for "close enough" the way a discounted cost
-        // used to let it.
-        const nodeGuard: Box = { x: box.x - 8, y: box.y - 8, width: box.width + 16, height: box.height + 16 };
-        if (nodes.some((b) => overlap(nodeGuard, b) > 0)) continue;
-        // A label brushing another label — or another edge's own line — is
-        // not survivable; both are full weight, same as always.
-        const clash =
-          taken.reduce((sum, b) => sum + overlap(padded, b), 0) +
-          otherSegments.reduce((sum, b) => sum + overlap(padded, b), 0);
-        const drift = Math.abs(nudge) * 0.6 + spot.drift;
-        if (!best || clash < best.clash || (clash === best.clash && drift < best.drift)) {
-          best = { box, clash, drift };
+          : [0, 14, 26, 40, 58, 78, ...extraSteps].flatMap((step) => [
+              minOffset + step,
+              -(minOffset + step),
+            ]);
+        const spotNudges = offLineSteps.filter((n) => Math.abs(n) <= limit);
+        for (const nudge of spotNudges) {
+          const cx = at.x + perp.x * nudge;
+          const cy = at.y + perp.y * nudge;
+          const box: Box = {
+            x: cx - request.width / 2,
+            y: cy - request.height / 2,
+            width: request.width,
+            height: request.height,
+          };
+          // Tested with a little air around it, so two labels end up clearly
+          // apart rather than exactly touching.
+          const padded: Box = {
+            x: box.x - 3,
+            y: box.y - 3,
+            width: box.width + 6,
+            height: box.height + 6,
+          };
+          // DESIGN 6.9: a node box plus 8 is forbidden outright, not merely
+          // discouraged — a candidate that close is skipped before it is ever
+          // scored, so the search keeps sliding (more `t` values, above) or
+          // keeps stepping (more nudges) until it finds one that is not,
+          // rather than settling for "close enough" the way a discounted cost
+          // used to let it.
+          const nodeGuard: Box = { x: box.x - 8, y: box.y - 8, width: box.width + 16, height: box.height + 16 };
+          if (nodes.some((b) => overlap(nodeGuard, b) > 0)) continue;
+          // A label brushing another label — or another edge's own line — is
+          // not survivable; both are full weight, same as always.
+          const clash =
+            taken.reduce((sum, b) => sum + overlap(padded, b), 0) +
+            otherSegments.reduce((sum, b) => sum + overlap(padded, b), 0);
+          const drift = Math.abs(nudge) * 0.6 + spot.drift;
+          if (!best || clash < best.clash || (clash === best.clash && drift < best.drift)) {
+            best = { box, clash, drift };
+          }
+          if (clash === 0) break outer;
         }
-        if (clash === 0) break search;
       }
-    }
+      return best;
+    };
+
+    // DESIGN 6.10: a veto never stands with nothing behind it. The base
+    // pass is exactly what every chart already relied on (original step
+    // list, `capOffLineReach`'s own cap for DESIGN 1.5 charts) — reached
+    // first so the other 36 fixtures, which always find a spot there, are
+    // never touched by what follows. Only when that comes back empty does
+    // a second, uncapped pass reach further off-line (extra steps, past
+    // where a normal placement ever needs to go) to make room instead of
+    // dropping the label.
+    const best =
+      search(cappedNudge, []) ?? search(Infinity, [98, 118, 138, 158, 178, 198]);
     if (!best) continue;
     taken.push(best.box);
     const cx = best.box.x + best.box.width / 2;
