@@ -510,6 +510,17 @@ describe('display', () => {
       [],
       `6.10 should be clean: ${labelDrawn.map((f) => f.message).join('; ')}`,
     );
+
+    // DESIGN 6.11: "no, enterprise or Android" sits on Q1→JAVA's own path —
+    // it used to land ~200 units away, beside the START→Q1 edge instead,
+    // once the old uncapped fallback let it wander to wherever had room
+    // rather than making room on its own edge (DESIGN 6.10's own point).
+    const labelOnEdge = await gateFindings('6.11-label-on-edge');
+    assert.deepEqual(
+      labelOnEdge,
+      [],
+      `6.11 should be clean: ${labelOnEdge.map((f) => f.message).join('; ')}`,
+    );
   });
 
   test('leaf stacking fits cleanly under a taller display cap', async () => {

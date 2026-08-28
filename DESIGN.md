@@ -204,6 +204,16 @@ most **three** of these (name, caption, label); the title block adds its two:
   sit be dropped instead, which is worse than a crowded one — a missing
   label reads as the edge having none, not as a placement failure.)
 
+- **6.11** A label sits on its own edge: its box comes within **8** of some
+  point of its own path — one gap, the same 8 a label beside its line has
+  always kept clear of the line itself (6.5) — and stays at least **16**
+  from every other edge's segments. (Added 2026-08-28: 6.10's own growing
+  corridor only means something if the label that needed the room lands
+  back on the edge it belongs to — the first attempt at 6.10 let it drift
+  onto whatever nearby edge had space instead. Revised the same day from 4:
+  a label legitimately sitting *beside* its line, not on it, is still on
+  its own edge.)
+
 ## 7. Composition
 
 - **7.1** Every chart has a title (3: 22/600) and usually a kicker line in mono

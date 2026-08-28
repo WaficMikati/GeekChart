@@ -20,7 +20,14 @@ import {
   visible,
   type Check,
   type Ctx,
+  type Finding,
 } from './helpers.ts';
+
+/** Path points, in screen space — the same transform-aware read `labels.ts`
+ *  uses for its own cross-edge checks. */
+function transformPts(pts: [number, number][], ctm: DOMMatrix): [number, number][] {
+  return pts.map(([x, y]) => [x * ctm.a + ctm.e, y * ctm.d + ctm.f]);
+}
 
 /** offMid (6.2) and jogs (6.1) both walk one edge's own points once. */
 function edgeLineStats(ctx: Ctx): { offMid: number; jogs: number } {
@@ -763,6 +770,139 @@ export const labelDrawn: Check = {
   },
 };
 
+/** Shortest distance from (px,py) to the segment (x1,y1)-(x2,y2). */
+function distPointSeg(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 ? ((px - x1) * dx + (py - y1) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+/** Shortest distance from a point to a rect's own boundary/interior (0 when
+ *  the point is inside it). */
+function distRectPoint(r: DOMRect, x: number, y: number): number {
+  const dx = Math.max(r.left - x, 0, x - r.right);
+  const dy = Math.max(r.top - y, 0, y - r.bottom);
+  return Math.hypot(dx, dy);
+}
+
+/**
+ * Shortest distance between a box and a straight segment. DESIGN 6.1 makes
+ * every edge segment axis-aligned, so a bounding-box overlap test is an exact
+ * intersection test (distance 0) — not an approximation the way it would be
+ * for a diagonal. Short of that, the true minimum between an axis-aligned
+ * rectangle and an axis-aligned segment is always at one of the segment's own
+ * ends or one of the box's own corners, so checking just those four points
+ * against the other shape is exact, not a heuristic.
+ */
+function distBoxSeg(b: Box, x1: number, y1: number, x2: number, y2: number): number {
+  const sx1 = Math.min(x1, x2);
+  const sx2 = Math.max(x1, x2);
+  const sy1 = Math.min(y1, y2);
+  const sy2 = Math.max(y1, y2);
+  if (sx1 < b.right && sx2 > b.left && sy1 < b.bottom && sy2 > b.top) return 0;
+  let d = Math.min(
+    distRectPoint(b as unknown as DOMRect, x1, y1),
+    distRectPoint(b as unknown as DOMRect, x2, y2),
+  );
+  for (const [cx, cy] of [
+    [b.left, b.top],
+    [b.right, b.top],
+    [b.right, b.bottom],
+    [b.left, b.bottom],
+  ] as const) {
+    d = Math.min(d, distPointSeg(cx, cy, x1, y1, x2, y2));
+  }
+  return d;
+}
+
+interface Box {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * DESIGN 6.11: a label sits on its own edge — its plate comes within 4 of
+ * some point on the path it labels — and stays at least 16 from every other
+ * edge's own segments, the same clearance DESIGN 6.1/6.8 ask of a node. Added
+ * alongside DESIGN 6.10: growing a label's own corridor only means something
+ * if the label actually lands back on the edge that corridor belongs to,
+ * rather than merely somewhere with room.
+ */
+export const labelOnEdge: Check = {
+  id: '6.11-label-on-edge',
+  rule: '6.11',
+  run(svg, ctx) {
+    const edgeEls = [...svg.querySelectorAll<SVGGeometryElement>('.gc-edge[data-id]')];
+    const pathsOf = new Map<string, [number, number][]>();
+    for (const e of edgeEls) {
+      const ctm = e.getScreenCTM();
+      if (!ctm) continue;
+      pathsOf.set(e.getAttribute('data-id')!, transformPts(pathPoints(e.getAttribute('d')), ctm));
+    }
+    let farFromOwn = 0;
+    let nearOther = 0;
+    const ids: string[] = [];
+    for (const g of svg.querySelectorAll('.gc-edge-label')) {
+      const plate = g.querySelector('.gc-plate');
+      if (!plate || !visible(plate, svg)) continue;
+      const b = rect(plate);
+      if (!b.width) continue;
+      const own = g.getAttribute('data-id');
+      const ownPts = own ? pathsOf.get(own) : undefined;
+      if (ownPts) {
+        let nearest = Infinity;
+        for (let i = 1; i < ownPts.length; i++) {
+          const [x1, y1] = ownPts[i - 1]!;
+          const [x2, y2] = ownPts[i]!;
+          nearest = Math.min(nearest, distBoxSeg(b, x1, y1, x2, y2) / ctx.unit);
+        }
+        if (nearest > RULES['6.11']!.threshold!) {
+          farFromOwn++;
+          ids.push(`${own}:${nearest.toFixed(0)}`);
+        }
+      }
+      for (const [id, pts] of pathsOf) {
+        if (id === own) continue;
+        for (let i = 1; i < pts.length; i++) {
+          const [x1, y1] = pts[i - 1]!;
+          const [x2, y2] = pts[i]!;
+          if (distBoxSeg(b, x1, y1, x2, y2) / ctx.unit < RULES['6.11-other']!.threshold!) {
+            nearOther++;
+            ids.push(`${own}~${id}`);
+            break;
+          }
+        }
+      }
+    }
+    const findings: Finding[] = [];
+    if (farFromOwn) {
+      findings.push({
+        severity: 'fail',
+        message: `6.11 ${farFromOwn} labels farther than ${RULES['6.11']!.threshold!} from their own edge (${ids.slice(0, 3).join(' ')})`,
+      });
+    }
+    if (nearOther) {
+      findings.push({
+        severity: 'fail',
+        message: `6.11 ${nearOther} labels closer than ${RULES['6.11-other']!.threshold!} to another edge (${ids.slice(0, 3).join(' ')})`,
+      });
+    }
+    return findings;
+  },
+};
+
 // degrees/edgeMeta are re-exported only for grid.ts's 2.3 checks that need
 // per-node in/out degree without recomputing it.
 export { degrees, edgeMeta };
@@ -786,4 +926,5 @@ export const EDGE_CHECKS: Check[] = [
   longLoop,
   labelClear,
   labelDrawn,
+  labelOnEdge,
 ];

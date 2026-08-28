@@ -15,6 +15,7 @@ import {
 import { planRoutes, type Extent, type OrthoRoute } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
 import { TRUNK_OFFSET } from './layout/stack.ts';
+import { GRID } from './tokens.ts';
 
 /**
  * Draw the diagram.
@@ -221,7 +222,30 @@ function fingerprint(graph: Graph): string {
   return hash.toString(36);
 }
 
-export function draw(graph: Graph, scene: Scene, size: { width: number; height: number }): Drawing {
+/**
+ * DESIGN 6.10's own signal: a label's own capped search found nothing that
+ * clears DESIGN 6.9, thrown from deep inside `attemptDraw` rather than
+ * threaded back up through every call in between. `draw()` below is what
+ * catches it, grows the one corridor at fault, and tries the whole drawing
+ * again — every position computed so far belonged to a layout that is about
+ * to change, so none of it is worth keeping.
+ */
+class NeedsCorridorGrowth {
+  afterY: number;
+  growBy: number;
+  constructor(afterY: number, growBy: number) {
+    this.afterY = afterY;
+    this.growBy = growBy;
+  }
+}
+
+/**
+ * Lay the drawing out once. Everything below reads final node positions off
+ * `graph` and computes routes, arrows and labels from them — `draw()`, below,
+ * is what re-enters this after growing a corridor DESIGN 6.9 left a label no
+ * room in.
+ */
+function attemptDraw(graph: Graph, scene: Scene, size: { width: number; height: number }): Drawing {
   const uid = fingerprint(graph);
   const placed = graph.nodes.filter(isPlaced);
   const byId = new Map(placed.map((n) => [n.id, n]));
@@ -525,6 +549,8 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     }
 
     if (edge.label) {
+      const fromBox = boxOf(edge.from);
+      const toBox = boxOf(edge.to);
       pendingLabels.push({
         id: edge.id,
         text: edge.label,
@@ -532,6 +558,8 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
         // 6 of knockout either side of the words, per DESIGN 6.5.
         width: (edge.labelWidth ?? edge.label.length * scene.edgeLabelSize * 0.62) + 12,
         height: scene.edgeLabelSize * 2,
+        corridorY:
+          !edge.backward && fromBox && toBox && toBox.y > fromBox.y ? toBox.y : undefined,
       });
     }
   }
@@ -591,6 +619,36 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     inPanelNodes: drawnNodes.filter((id) => inPanel.has(id)),
     extent,
   };
+}
+
+/**
+ * Draw the diagram, growing a corridor and trying again whenever a label's
+ * own edge left DESIGN 6.9 nowhere to put it.
+ *
+ * `attemptDraw` reads node and cluster positions straight off `graph` — it
+ * never returns adjusted ones — so growing a corridor means mutating those
+ * positions directly (shifting everything from the crossing point down)
+ * and re-running the whole thing on the changed graph, rather than passing
+ * an adjustment back through every function this file has. `size` grows by
+ * the same amount, in the same pass, so the canvas the caller frames this
+ * against (DESIGN 1.1) is never a row shorter than what actually got drawn.
+ * Capped at a few attempts: one corridor growing once is the case DESIGN
+ * 6.10 exists for; a chart that still cannot seat every label after several
+ * is drawn as the last attempt left it rather than looped forever.
+ */
+export function draw(graph: Graph, scene: Scene, size: { width: number; height: number }): Drawing {
+  let extra = 0;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return attemptDraw(graph, scene, { width: size.width, height: size.height + extra });
+    } catch (grow) {
+      if (!(grow instanceof NeedsCorridorGrowth)) throw grow;
+      for (const n of graph.nodes) if (n.y !== undefined && n.y >= grow.afterY) n.y += grow.growBy;
+      for (const c of graph.clusters) if (c.y !== undefined && c.y >= grow.afterY) c.y += grow.growBy;
+      extra += grow.growBy;
+    }
+  }
+  return attemptDraw(graph, scene, { width: size.width, height: size.height + extra });
 }
 
 /** Emit a tip's two halves, each on the class that paints it. */
@@ -707,6 +765,13 @@ interface LabelRequest {
   points: Point[];
   width: number;
   height: number;
+  // DESIGN 6.10: the y everything from the label's own target node down
+  // would shift by, if this edge's own corridor turns out too tight for
+  // DESIGN 6.9 to leave anywhere to place it. Undefined for a backward edge
+  // or one whose target sits above its source — growing "down" is not the
+  // fix there, and DESIGN 6.10's own scope is the forward, ranks-stack-down
+  // case DESIGN 1.5's own charts hit.
+  corridorY?: number;
 }
 
 interface Box {
@@ -921,24 +986,31 @@ function placeLabels(
       extraSteps: number[],
     ): { box: Box; clash: number; drift: number } | null => {
       let best: { box: Box; clash: number; drift: number } | null = null;
-      outer: for (const spot of anchors(request.points)) {
+      const spots = anchors(request.points);
+      // A short elbow — the corner stub between two longer runs, not a real
+      // place anyone would look for a label — is not a candidate for the
+      // off-line push at all once a longer run on the same edge exists: an
+      // 8-from-the-line offset that reads as "beside this run" on a long
+      // segment reads as "beside some other run entirely" on one this
+      // short, since the box ends up wider than the stub itself (DESIGN
+      // 6.11 asks for the label's own edge, not just any point on it).
+      const hasLongRun = spots.some((s) => s.len >= 40);
+      outer: for (const spot of spots) {
         const { at, dir, len } = spot;
         const perp = { x: -dir.y, y: dir.x };
         // If sitting on this segment would swallow it, skip the on-line (nudge
-        // 0) spots entirely and start from just clear of the line instead —
-        // half the plate's cross-line size (height for a horizontal segment,
-        // width for a vertical one) plus an 8 gap. Extra steps beyond that
-        // are only for dodging other labels/edges, same as the on-line case.
+        // 0) spots entirely and start from just clear of the line instead:
+        // its centre offset by half the plate's own cross-line size (height
+        // for a horizontal segment, width for a vertical one) plus 8, which
+        // is what puts the plate's own *near* edge — not its centre — 8 from
+        // the line (DESIGN 6.11). Extra steps beyond that are only for
+        // dodging other labels/edges, same as the on-line case.
         const horiz = Math.abs(dir.y) < 0.02;
         const crossSize = horiz ? request.height : request.width;
-        // The gate's own "is this label still basically on the line" check
-        // (gate.mjs) treats anything within one full plate-width (for a
-        // vertical line) or plate-height (for a horizontal one) of the line as
-        // still "on" it — a wider margin than bare non-overlap needs, to catch
-        // near-miss placements as well as exact ones. Clearing that margin
-        // takes a full cross-axis step, not half of one.
-        const minOffset = crossSize + 8;
-        const offLineSteps = onLineFits(dir, len, request.width, request.height)
+        const minOffset = crossSize / 2 + 8;
+        const fitsOnLine = onLineFits(dir, len, request.width, request.height);
+        if (!fitsOnLine && len < 40 && hasLongRun) continue;
+        const offLineSteps = fitsOnLine
           ? nudges
           : [0, 14, 26, 40, 58, 78, ...extraSteps].flatMap((step) => [
               minOffset + step,
@@ -985,17 +1057,23 @@ function placeLabels(
       return best;
     };
 
-    // DESIGN 6.10: a veto never stands with nothing behind it. The base
-    // pass is exactly what every chart already relied on (original step
-    // list, `capOffLineReach`'s own cap for DESIGN 1.5 charts) — reached
-    // first so the other 36 fixtures, which always find a spot there, are
-    // never touched by what follows. Only when that comes back empty does
-    // a second, uncapped pass reach further off-line (extra steps, past
-    // where a normal placement ever needs to go) to make room instead of
-    // dropping the label.
-    const best =
-      search(cappedNudge, []) ?? search(Infinity, [98, 118, 138, 158, 178, 198]);
-    if (!best) continue;
+    // DESIGN 6.10: a veto never stands with nothing behind it. This is
+    // exactly the search every chart already relied on (original step
+    // list, `capOffLineReach`'s own cap for DESIGN 1.5 charts) — nothing
+    // about it changes for the other 36 fixtures, which always find a spot
+    // here. A label whose own edge has nowhere clear is not, any more,
+    // walked further and further off that edge until something happens to
+    // be empty (DESIGN 6.11: wherever it lands has to still be *its*
+    // edge) — it throws, and `draw()` grows the corridor this edge crosses
+    // and draws the whole chart again.
+    const best = search(cappedNudge, []);
+    if (!best) {
+      if (request.corridorY === undefined) continue;
+      throw new NeedsCorridorGrowth(
+        request.corridorY,
+        Math.ceil((request.height + 8) / GRID) * GRID,
+      );
+    }
     taken.push(best.box);
     const cx = best.box.x + best.box.width / 2;
     const cy = best.box.y + best.box.height / 2;

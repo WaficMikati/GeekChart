@@ -98,6 +98,14 @@ export const RULES: Record<string, Rule> = {
   '6.10': {
     title: 'Every edge label in the source is drawn exactly once, never dropped for 6.9',
   },
+  '6.11': {
+    title: "A label sits on its own edge: within this of its own path",
+    threshold: 8,
+  },
+  '6.11-other': {
+    title: "A label keeps at least this far from every other edge's segments",
+    threshold: 16,
+  },
   '7.3': {
     title: 'Content is centred within this many units of the canvas centre',
     threshold: 8,

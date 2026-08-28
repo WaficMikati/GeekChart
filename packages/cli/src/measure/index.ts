@@ -46,6 +46,7 @@ import {
   longLoop,
   labelClear,
   labelDrawn,
+  labelOnEdge,
 } from './edges.ts';
 import { labelOverlaps, labelSwallow, textShapeCollision, labelOnOtherEdge } from './labels.ts';
 import { laneRide, laneOverrun, hashLabel } from './charts.ts';
@@ -104,6 +105,7 @@ export const ALL_CHECKS: Check[] = [
   labelOnOtherEdge,
   labelClear,
   labelDrawn,
+  labelOnEdge,
   holdsFinished,
 ];
 
