@@ -7,7 +7,7 @@ import { analyze } from './analyze.ts';
 import { decorate } from './decorate.ts';
 import { normalize } from './normalize.ts';
 import { styles } from './styles.ts';
-import { bake, defaultAnimation, playModeCss } from './animate.ts';
+import { bake, clampSpeed, defaultAnimation, playModeCss, scaleSpeedCss } from './animate.ts';
 import { ensureFonts } from './fonts.ts';
 import { standaloneHtml } from './export.ts';
 import { CANVAS, fitCanvas, frameTransform } from './scene.ts';
@@ -274,7 +274,29 @@ export async function renderChart(input: string, opts: RenderInput = {}): Promis
     // string-serialized result — done directly on the live DOM here instead,
     // since this renderer still has one.
     if (play !== 'loop') svg.setAttribute('data-gc-play', play);
-    const css = themeCss(id, options.theme, options.style) + animation.css + playModeCss(play);
+
+    // DESIGN 8.6: rescaled here, on the live DOM, rather than as a text
+    // post-pass over the serialized markup — `bake()` above wrote each
+    // element's own stagger as a `--gc-t` inline custom property
+    // (`target.style.setProperty`), which the CSSOM can read and rewrite
+    // directly, exactly, with no risk of a regex missing or double-counting
+    // a match in already-serialized text.
+    const speed = clampSpeed(options.speed);
+    if (speed !== 1) {
+      const factor = 1 / speed;
+      for (const el of svg.querySelectorAll<SVGElement>('[style]')) {
+        const raw = el.style.getPropertyValue('--gc-t');
+        if (!raw) continue;
+        const scaled = Math.round(parseFloat(raw) * factor * 1000) / 1000;
+        el.style.setProperty('--gc-t', `${scaled}s`);
+      }
+      svg.setAttribute('data-gc-speed', String(speed));
+    }
+
+    const css =
+      themeCss(id, options.theme, options.style) +
+      scaleSpeedCss(animation.css, speed) +
+      playModeCss(play);
 
     const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
     style.textContent = toAttributeSelectors(css);
@@ -291,7 +313,7 @@ export async function renderChart(input: string, opts: RenderInput = {}): Promis
       }),
       analysis,
       repairs: notes,
-      runtime: animation.runtime,
+      runtime: animation.runtime / speed,
     };
   } finally {
     if (owned) host.remove();

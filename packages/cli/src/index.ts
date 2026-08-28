@@ -29,6 +29,10 @@ Options
   -o, --out <file>       output path            (default: alongside the input)
       --scene <name>     geeks | manim          (default: geeks)
       --no-motion        draw the finished frame with no animation
+      --speed <n>        stretch or hurry the whole build by one multiplier —
+                         0.5 plays at half speed, 2 at double, 1 is the
+                         designed timing (default). Clamped to 0.25-4; order,
+                         easing and lag ratios never change
       --width <px>       frame width            (default: 1400)
       --height <px>      frame height           (default: 800)
       --aspect <ratio>   auto | 16:9 | 1:1 | 4:5 | 9:16   (default: auto)
@@ -94,6 +98,7 @@ export async function main(argv: string[]): Promise<void> {
         // node's parseArgs has no negation support, so the flag the help
         // advertises has to be declared under its literal name.
         'no-motion': { type: 'boolean', default: false },
+        speed: { type: 'string' },
         aspect: { type: 'string', default: 'auto' },
         palette: { type: 'string' },
         'color-bg': { type: 'string' },
@@ -147,6 +152,17 @@ export async function main(argv: string[]): Promise<void> {
 
   const width = number('width', values.width!, 200, 4000);
   const height = number('height', values.height!, 150, 4000);
+
+  // DESIGN 8.6: a bad value ("abc") is a usage error, but an out-of-range one
+  // (5, -1) is not — it clamps, the same as it would for any other caller of
+  // `@geekchart/core`'s `applySpeed`, so a CLI invocation and a library call
+  // with the same number always draw the same chart.
+  const speed = ((): number | undefined => {
+    if (values.speed === undefined) return undefined;
+    const n = Number(values.speed);
+    if (!Number.isFinite(n)) fail(`--speed must be a number, got "${values.speed}"`);
+    return n;
+  })();
 
   // DESIGN 1.1: a single width renders once, same as any other option; two
   // (comma-separated) render one variant each — see the dual-render branch
@@ -259,6 +275,7 @@ export async function main(argv: string[]): Promise<void> {
     width,
     height,
     ...(typeof display === 'number' ? { display } : {}),
+    ...(speed !== undefined ? { speed } : {}),
   };
 
   // `renderNode`'s thrown `ChartError` is mapped to the same `{ ok: false,

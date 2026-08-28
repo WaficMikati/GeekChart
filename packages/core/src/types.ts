@@ -48,6 +48,13 @@ export interface RenderOptions {
   /** Convenience for `animation.play` — set directly on the request rather
    *  than nested, folded into `animation` before the bake. */
   play?: PlayMode;
+  /**
+   * DESIGN 8.6: stretch or hurry the whole build by one multiplier — `0.5`
+   * plays at half speed, `2` at double, `1` (the default) is the designed
+   * timing. Clamped to 0.25–4. Order, easing and lag ratios never change;
+   * see `animate.ts`'s `applySpeed`.
+   */
+  speed?: number;
 }
 
 export interface RepairNote {

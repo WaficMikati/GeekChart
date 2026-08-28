@@ -3,6 +3,7 @@ import { toUnifiedGraph, type UnifiedType } from './unified.ts';
 import { layout, type Measurer } from './layout.ts';
 import { draw, type Drawing } from './draw.ts';
 import { animate } from './motion.ts';
+import { applySpeed } from './animate.ts';
 import {
   fitCanvas,
   frameTransform,
@@ -277,6 +278,14 @@ export interface FlowOptions {
    * anything is scaled down to match. Unset behaves exactly as before.
    */
   display?: number;
+  /**
+   * DESIGN 8.6: stretch or hurry the whole build by one multiplier — `0.5`
+   * plays at half speed, `2` at double, `1` (the default) is the designed
+   * timing. Clamped to 0.25–4. Order, easing and lag ratios never change;
+   * see `animate.ts`'s `applySpeed`, applied once here, after each family's
+   * own CSS and cycle are final and before the standalone page embeds them.
+   */
+  speed?: number;
 }
 
 /**
@@ -439,15 +448,18 @@ export async function renderSequence(
   const measureWith = measurerFor(options);
   const drawn = await drawSequence(source, scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
-  const css = sceneCss(scene) + sequenceCss(scene) + motion;
-  const svg = drawn.drawing.svg;
+  const rawCss = sceneCss(scene) + sequenceCss(scene) + motion;
+  const sped = applySpeed(
+    { svg: drawn.drawing.svg, css: rawCss, cycle: options.motion === false ? 0 : drawn.cycle },
+    options.speed,
+  );
   return {
-    svg,
-    css,
-    html: page(svg, css, scene, options),
+    svg: sped.svg,
+    css: sped.css,
+    html: page(sped.svg, sped.css, scene, options),
     participants: drawn.drawing.participants.length,
     messages: drawn.drawing.messages,
-    cycle: options.motion === false ? 0 : drawn.cycle,
+    cycle: sped.cycle,
     summary:
       `Sequence diagram between ${drawn.drawing.labels.join(', ')}. ` +
       `${drawn.drawing.messages} message${drawn.drawing.messages === 1 ? '' : 's'}.`,
@@ -469,14 +481,18 @@ export async function renderChronicle(
   const measureWith = measurerFor(options);
   const drawn = drawChronicle(await toChronicle(source, kind), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
-  const css = sceneCss(scene) + chronicleCss(scene) + motion;
+  const rawCss = sceneCss(scene) + chronicleCss(scene) + motion;
+  const sped = applySpeed(
+    { svg: drawn.svg, css: rawCss, cycle: options.motion === false ? 0 : drawn.cycle },
+    options.speed,
+  );
   return {
-    svg: drawn.svg,
-    css,
-    html: page(drawn.svg, css, scene, options),
+    svg: sped.svg,
+    css: sped.css,
+    html: page(sped.svg, sped.css, scene, options),
     lanes: drawn.lanes,
     items: drawn.items,
-    cycle: options.motion === false ? 0 : drawn.cycle,
+    cycle: sped.cycle,
     summary: drawn.summary,
     warnings: checkMeasurementFont(measureWith),
   };
@@ -493,14 +509,18 @@ export async function renderBoard(
   const measureWith = measurerFor(options);
   const drawn = drawBoard(await toBoard(source, kind), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
-  const css = sceneCss(scene) + boardCss(scene) + motion;
+  const rawCss = sceneCss(scene) + boardCss(scene) + motion;
+  const sped = applySpeed(
+    { svg: drawn.svg, css: rawCss, cycle: options.motion === false ? 0 : drawn.cycle },
+    options.speed,
+  );
   return {
-    svg: drawn.svg,
-    css,
-    html: page(drawn.svg, css, scene, options),
+    svg: sped.svg,
+    css: sped.css,
+    html: page(sped.svg, sped.css, scene, options),
     lanes: drawn.groups,
     items: drawn.items,
-    cycle: options.motion === false ? 0 : drawn.cycle,
+    cycle: sped.cycle,
     summary: drawn.summary,
     warnings: checkMeasurementFont(measureWith),
   };
@@ -517,14 +537,18 @@ export async function renderPlot(
   const measureWith = measurerFor(options);
   const drawn = drawPlot(await toPlot(source, kind), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
-  const css = sceneCss(scene) + plotCss(scene) + motion;
+  const rawCss = sceneCss(scene) + plotCss(scene) + motion;
+  const sped = applySpeed(
+    { svg: drawn.svg, css: rawCss, cycle: options.motion === false ? 0 : drawn.cycle },
+    options.speed,
+  );
   return {
-    svg: drawn.svg,
-    css,
-    html: page(drawn.svg, css, scene, options),
+    svg: sped.svg,
+    css: sped.css,
+    html: page(sped.svg, sped.css, scene, options),
     lanes: drawn.series,
     items: drawn.points,
-    cycle: options.motion === false ? 0 : drawn.cycle,
+    cycle: sped.cycle,
     summary: drawn.summary,
     warnings: checkMeasurementFont(measureWith),
   };
@@ -541,14 +565,18 @@ export async function renderRadial(
   const measureWith = measurerFor(options);
   const drawn = drawRadial(await toRadial(source, kind), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
-  const css = sceneCss(scene) + radialCss(scene) + motion;
+  const rawCss = sceneCss(scene) + radialCss(scene) + motion;
+  const sped = applySpeed(
+    { svg: drawn.svg, css: rawCss, cycle: options.motion === false ? 0 : drawn.cycle },
+    options.speed,
+  );
   return {
-    svg: drawn.svg,
-    css,
-    html: page(drawn.svg, css, scene, options),
+    svg: sped.svg,
+    css: sped.css,
+    html: page(sped.svg, sped.css, scene, options),
     lanes: drawn.groups,
     items: drawn.items,
-    cycle: options.motion === false ? 0 : drawn.cycle,
+    cycle: sped.cycle,
     summary: drawn.summary,
     warnings: checkMeasurementFont(measureWith),
   };
@@ -564,14 +592,18 @@ export async function renderCommits(
   const measureWith = measurerFor(options);
   const drawn = drawCommits(await toCommits(source), scene, measureWith);
   const motion = options.motion === false ? '' : drawn.css;
-  const css = sceneCss(scene) + commitsCss(scene) + motion;
+  const rawCss = sceneCss(scene) + commitsCss(scene) + motion;
+  const sped = applySpeed(
+    { svg: drawn.svg, css: rawCss, cycle: options.motion === false ? 0 : drawn.cycle },
+    options.speed,
+  );
   return {
-    svg: drawn.svg,
-    css,
-    html: page(drawn.svg, css, scene, options),
+    svg: sped.svg,
+    css: sped.css,
+    html: page(sped.svg, sped.css, scene, options),
     lanes: drawn.groups,
     items: drawn.items,
-    cycle: options.motion === false ? 0 : drawn.cycle,
+    cycle: sped.cycle,
     summary: drawn.summary,
     warnings: checkMeasurementFont(measureWith),
   };
@@ -668,18 +700,22 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
     svg: fitToCanvas(drawing.svg, fitAgainst, drawing.extent, scene.canvas.width),
   };
   const timeline = options.motion === false ? null : animate(drawing, graph, scene);
-  const css = staticCss + (timeline?.css ?? '');
+  const rawCss = staticCss + (timeline?.css ?? '');
+  const sped = applySpeed(
+    { svg: framed.svg, css: rawCss, cycle: timeline?.cycle ?? 0 },
+    options.speed,
+  );
 
-  const html = page(framed.svg, css, scene, options);
+  const html = page(sped.svg, sped.css, scene, options);
   const warnings = checkMeasurementFont(measureWith);
 
   return {
-    svg: framed.svg,
-    css,
+    svg: sped.svg,
+    css: sped.css,
     html,
     graph,
     drawing: framed,
-    cycle: timeline?.cycle ?? 0,
+    cycle: sped.cycle,
     warnings,
   };
 }

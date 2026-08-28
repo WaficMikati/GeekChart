@@ -320,6 +320,109 @@ export function playModeCss(play: PlayMode): string {
   );
 }
 
+/** DESIGN 8.6: the supported multiplier range. `0.5` plays at half speed
+ *  (everything takes twice as long); `2` plays at double. */
+export const SPEED_MIN = 0.25;
+export const SPEED_MAX = 4;
+
+/** Unset, not a number, or `1` all mean "the designed timing, unchanged". */
+export function clampSpeed(speed: number | undefined): number {
+  if (speed === undefined || !Number.isFinite(speed)) return 1;
+  return Math.min(SPEED_MAX, Math.max(SPEED_MIN, speed));
+}
+
+/** A bare CSS time value: `1.24s`, `.45s`, `0s`, `140ms`. */
+const TIME_TOKEN = /(-?\d*\.?\d+)(ms|s)\b/g;
+
+/** Multiply every time value in a CSS value/property-value string by `factor`,
+ *  rounded to the millisecond — the gate's own tolerance for this rule. */
+function scaleTimeTokens(value: string, factor: number): string {
+  return value.replace(TIME_TOKEN, (_match, num: string, unit: string) => {
+    const scaled = Math.round(parseFloat(num) * factor * 1000) / 1000;
+    return `${scaled}${unit}`;
+  });
+}
+
+/**
+ * `animation`, `animation-duration` or `animation-delay` — the three
+ * declarations this renderer ever writes a bare time value into.
+ * `animation-name`, `-timing-function`, `-fill-mode`, `-iteration-count` and
+ * `-play-state` never carry one, and requiring the optional `-duration`/
+ * `-delay` suffix to be exactly that (not followed by more letters) is what
+ * keeps this from also matching them: `animation-name:` fails immediately
+ * because `\s*:` cannot follow `-name`.
+ */
+const ANIMATION_DECL = /\b(animation(?:-duration|-delay)?)(\s*:\s*)([^;{}]+?)(\s*)(;|(?=\}))/g;
+
+/** The CSS half of `applySpeed`, exposed on its own for `render.ts`'s legacy
+ *  path below: that renderer still has a live DOM at the point its timing is
+ *  known, and rescales its `--gc-t` inline custom properties directly on the
+ *  elements (cheaper and exact, unlike text-matching a serialized string) —
+ *  it only needs this function for the stylesheet half of the same rule. */
+export function scaleSpeedCss(css: string, speed: number | undefined): string {
+  const clamped = clampSpeed(speed);
+  if (clamped === 1) return css;
+  const factor = 1 / clamped;
+  return css.replace(
+    ANIMATION_DECL,
+    (_match, prop: string, colon: string, value: string, trail: string, term: string) =>
+      `${prop}${colon}${scaleTimeTokens(value, factor)}${trail}${term}`,
+  );
+}
+
+/**
+ * The one native family that still writes a per-element stagger as a literal
+ * time on the element itself, rather than as a keyframe percentage: the
+ * legacy `bake()` path above sets `--gc-t` as an inline custom property on
+ * each element before the SVG is serialized (see `bake()`'s `target.style.
+ * setProperty('--gc-t', ...)`). Every family that shares `motion.ts`'s shape
+ * (that file and the five that copy it) has no such thing in its markup, so
+ * this is a no-op for them.
+ */
+const INLINE_GC_T = /(--gc-t\s*:\s*)(-?\d*\.?\d+)(ms|s)\b/g;
+
+/**
+ * DESIGN 8.6: stretch or hurry a finished chart's whole choreography by one
+ * multiplier, uniformly — order, easing and lag ratios all stay put.
+ *
+ * Every family this renderer draws expresses its whole timeline as one
+ * `animation-duration`/`animation-delay`/`animation:` shorthand per rule,
+ * with every individual moment inside it written as a keyframe *percentage*
+ * of that one duration (`Track.frames` in `motion.ts`, shared by the five
+ * files that copy its shape). Multiplying only the bare time literals in
+ * those three declarations — never a keyframe's `%` stop — stretches every
+ * moment in the same proportion the design chose, because the percentages
+ * that encode lag ratios and stagger order never change at all. The one
+ * exception (the legacy `bake()` path's inline `--gc-t`) is handled
+ * separately, on the SVG markup, for the same reason.
+ *
+ * Same shape as `applyPlayMode` above: a post-pass over the finished
+ * `{ svg, css }`, safe to run after or before it, since play mode only stamps
+ * an attribute and rewrites a trailing `infinite`, and never touches a time
+ * value.
+ */
+export function applySpeed(
+  result: { svg: string; css: string; cycle: number },
+  speed: number | undefined,
+): { svg: string; css: string; cycle: number } {
+  const clamped = clampSpeed(speed);
+  if (clamped === 1) return result;
+  const factor = 1 / clamped;
+
+  const css = scaleSpeedCss(result.css, clamped);
+
+  const timed = result.svg.replace(
+    INLINE_GC_T,
+    (_match, prefix: string, num: string, unit: string) =>
+      `${prefix}${Math.round(parseFloat(num) * factor * 1000) / 1000}${unit}`,
+  );
+  const svg = timed.replace(/^(<svg\b[^>]*?)(\s*\/?>)/, (whole, head: string, close: string) =>
+    /\sdata-gc-speed=/.test(head) ? whole : `${head} data-gc-speed="${clamped}"${close}`,
+  );
+
+  return { svg, css, cycle: result.cycle / clamped };
+}
+
 export function applyPlayMode(
   result: { svg: string; css: string },
   play: PlayMode,

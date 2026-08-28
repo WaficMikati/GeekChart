@@ -40,6 +40,9 @@ export interface AnyRequest {
   height?: number;
   /** DESIGN 1.1/1.5: the width, in CSS px, this chart will actually be shown at. */
   display?: number;
+  /** DESIGN 8.6: one multiplier on every duration and delay — 0.5 half
+   *  speed, 2 double, 1 the default. Clamped to 0.25-4. */
+  speed?: number;
   aspect?: 'auto' | '16:9' | '1:1' | '4:5' | '9:16';
   fonts?: 'inherit' | { display?: string; label?: string; mono?: string; measureWith?: string };
   palette?: {

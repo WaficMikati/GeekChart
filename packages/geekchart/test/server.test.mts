@@ -252,3 +252,48 @@ test('renderToHtml, given { desktop, phone }, emits both svgs and a 640px media 
   assert.ok(outsideMq.includes(`#${id} [data-gc-variant="desktop"]{display:block}`));
   assert.ok(outsideMq.includes(`#${id} [data-gc-variant="phone"]{display:none}`));
 });
+
+// DESIGN 8.6: one multiplier stretches or hurries the whole build.
+test('speed defaults to 1, with no data-gc-speed attribute', async () => {
+  const result = await renderToSvg(flow, { cache: false, scene: 'geeks' });
+  assert.doesNotMatch(result.svg, /data-gc-speed/);
+});
+
+test('speed 0.5 and 1 are different cache entries', async () => {
+  const store = new Map<string, RenderToSvgResult>();
+  const cache = {
+    get: (key: string) => store.get(key),
+    set: (key: string, value: RenderToSvgResult) => void store.set(key, value),
+  };
+  await renderToSvg(flow, { cache, scene: 'geeks' });
+  await renderToSvg(flow, { cache, scene: 'geeks', speed: 0.5 });
+  assert.equal(store.size, 2);
+});
+
+test('an explicit speed: 1 hits the same cache entry as leaving it unset', async () => {
+  const store = new Map<string, RenderToSvgResult>();
+  const cache = {
+    get: (key: string) => store.get(key),
+    set: (key: string, value: RenderToSvgResult) => void store.set(key, value),
+  };
+  const implicit = await renderToSvg(flow, { cache, scene: 'geeks' });
+  const explicit = await renderToSvg(flow, { cache, scene: 'geeks', speed: 1 });
+  assert.equal(store.size, 1, 'the default and its explicit spelling share one cache key');
+  assert.equal(explicit, implicit);
+});
+
+test('an out-of-range speed clamps, and clamped requests share a cache entry', async () => {
+  const store = new Map<string, RenderToSvgResult>();
+  const cache = {
+    get: (key: string) => store.get(key),
+    set: (key: string, value: RenderToSvgResult) => void store.set(key, value),
+  };
+  const tooFast = await renderToSvg(flow, { cache, scene: 'geeks', speed: 100 });
+  const atCeiling = await renderToSvg(flow, { cache, scene: 'geeks', speed: 4 });
+  assert.equal(store.size, 1, 'both requests clamp to the same effective speed');
+  assert.equal(tooFast, atCeiling);
+  assert.match(tooFast.svg, /data-gc-speed="4"/);
+
+  const tooSlow = await renderToSvg(flow, { cache: false, scene: 'geeks', speed: 0 });
+  assert.match(tooSlow.svg, /data-gc-speed="0\.25"/);
+});

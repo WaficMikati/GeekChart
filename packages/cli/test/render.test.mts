@@ -234,6 +234,68 @@ describe('DESIGN 8.4: a chart plays once instead of looping', () => {
   });
 });
 
+describe('DESIGN 8.6: speed stretches or hurries the whole build uniformly', () => {
+  // Every `animation`, `animation-duration` and `animation-delay` bare time
+  // value in the stylesheet, in document order — the same three declarations
+  // `applySpeed` rewrites, so the same source rendered at two speeds should
+  // produce the same count, in the same order, each scaled by the same ratio.
+  const TIME = /(-?\d*\.?\d+)(ms|s)\b/g;
+  function timeValues(css: string): number[] {
+    const out: number[] = [];
+    for (const decl of css.matchAll(/\b(?:animation(?:-duration|-delay)?)\s*:\s*([^;{}]+)/g)) {
+      for (const t of decl[1]!.matchAll(TIME)) {
+        out.push(parseFloat(t[1]!) * (t[2] === 'ms' ? 0.001 : 1));
+      }
+    }
+    return out;
+  }
+
+  test('speed: 1 (the default) carries no data-gc-speed attribute', async () => {
+    const reply = await renderAnyCached(source('flow.mmd'), { scene: 'geeks' });
+    assert.equal(reply.ok, true);
+    if (!reply.ok) return;
+    assert.ok(!reply.svg.includes('data-gc-speed'), 'no attribute at the designed speed');
+  });
+
+  test('speed: 0.5 doubles every duration and delay, doubles the cycle, and is stamped', async () => {
+    const base = await renderAnyCached(source('flow.mmd'), { scene: 'geeks' });
+    const half = await renderAnyCached(source('flow.mmd'), { scene: 'geeks', speed: 0.5 });
+    assert.equal(base.ok, true);
+    assert.equal(half.ok, true);
+    if (!base.ok || !half.ok) return;
+
+    assert.ok(half.svg.includes('data-gc-speed="0.5"'), 'half speed is stamped on the svg');
+
+    const before = timeValues(base.css);
+    const after = timeValues(half.css);
+    assert.ok(before.length > 0, 'found timed declarations to compare');
+    assert.equal(after.length, before.length, 'same declarations, same order, in both stylesheets');
+    before.forEach((value, i) => {
+      assert.ok(
+        Math.abs(after[i]! - value * 2) <= 0.002,
+        `declaration ${i}: ${value}s at speed 1, ${after[i]}s at speed 0.5 (expected ~${value * 2}s)`,
+      );
+    });
+
+    assert.ok(
+      Math.abs(half.cycle - base.cycle * 2) <= 0.002,
+      `cycle ${base.cycle}s at speed 1, ${half.cycle}s at speed 0.5 (expected ~${base.cycle * 2}s)`,
+    );
+  });
+
+  test('an out-of-range speed clamps to 0.25-4', async () => {
+    const tooFast = await renderAnyCached(source('flow.mmd'), { scene: 'geeks', speed: 100 });
+    assert.equal(tooFast.ok, true);
+    if (!tooFast.ok) return;
+    assert.ok(tooFast.svg.includes('data-gc-speed="4"'), 'clamped to the ceiling');
+
+    const tooSlow = await renderAnyCached(source('flow.mmd'), { scene: 'geeks', speed: 0 });
+    assert.equal(tooSlow.ok, true);
+    if (!tooSlow.ok) return;
+    assert.ok(tooSlow.svg.includes('data-gc-speed="0.25"'), 'clamped to the floor');
+  });
+});
+
 describe('styling survives serialisation', () => {
   test('edge labels sit on the page background, not the ink', async () => {
     // Regression: these rendered as solid black boxes.

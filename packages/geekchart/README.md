@@ -195,6 +195,29 @@ geekchart post.mmd -o chart.svg --color-bg "#FFFFFF" --color-ink "#17202A" \
   --color-path "#0075E0" --color-accent "#0096D6"
 ```
 
+## Speed
+
+Every chart's build has one designed pace — a wave of nodes every 0.45s, a
+2.2s settle at the end, Manim's own easing throughout. `speed` stretches or
+hurries that pace by a single multiplier, without changing the order anything
+happens in, the easing, or how much elements overlap: `0.5` plays at half
+speed (everything takes twice as long), `2` at double, `1` is the default.
+Out-of-range values are clamped to 0.25–4 rather than rejected. The rendered
+svg carries `data-gc-speed="0.5"` whenever it isn't 1, so CSS or a screenshot
+tool can tell at a glance that a chart was sped up or slowed down.
+
+```ts
+renderToSvg(source, { speed: 0.5 });
+```
+
+```tsx
+<Geekchart source={source} speed={2} />
+```
+
+```
+geekchart post.mmd -o chart.svg --speed 0.5
+```
+
 ## How it's built
 
 Mermaid only parses; ELK only places nodes. Every coordinate, every line, and

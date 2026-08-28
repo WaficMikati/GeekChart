@@ -53,4 +53,51 @@ export const holdsFinished: Check = {
   },
 };
 
-export const MOTION_CHECKS: Check[] = [holdsFinished];
+/**
+ * DESIGN 8.6: a chart stamped `data-gc-speed` asked for one multiplier on
+ * every duration and delay in its stylesheet. The gate sees one rendered
+ * chart at a time, with no unsped twin of the same source to divide back
+ * against, so it can only check what a single render actually proves: the
+ * multiplier is a real number inside the designed 0.25-4 range, and the
+ * chart it is stamped on has timed motion at all — a `data-gc-speed` on a
+ * chart with no `animation-duration`/`-delay`/`animation:` anywhere would be
+ * a renderer bug (nothing for the multiplier to apply to), not a value a
+ * caller could get wrong. The exact-factor claim — every value equals the
+ * design timing times the multiplier, ±1 ms — needs a paired `speed: 1`
+ * render of the same source to divide back against; that comparison lives
+ * in `packages/cli/test/render.test.mts`, not here. Runs only when
+ * `data-gc-speed` is present — the gallery and gate render every fixture at
+ * the default speed (1), which carries no attribute at all, so this is a
+ * no-op for `pnpm gate`'s ordinary sweep.
+ */
+export const speedInRange: Check = {
+  id: '8.6-speed',
+  rule: '8.6',
+  run(svg) {
+    const raw = svg.getAttribute('data-gc-speed');
+    if (raw === null) return [];
+
+    const findings: Finding[] = [];
+    const value = Number(raw);
+    const EPS = 1e-9;
+    if (!Number.isFinite(value) || value < 0.25 - EPS || value > 4 + EPS) {
+      findings.push({
+        severity: 'fail',
+        message: `8.6 data-gc-speed="${raw}" is outside the supported 0.25-4 range.`,
+      });
+    }
+
+    const css = [...svg.querySelectorAll('style')].map((s) => s.textContent ?? '').join('\n');
+    const hasTiming = /\banimation(?:-duration|-delay)?\s*:/.test(css);
+    if (!hasTiming) {
+      findings.push({
+        severity: 'fail',
+        message: `8.6 data-gc-speed="${raw}" is stamped on a chart with no animation-duration/-delay anywhere in its stylesheet.`,
+      });
+    }
+
+    return findings;
+  },
+};
+
+export const MOTION_CHECKS: Check[] = [holdsFinished, speedInRange];

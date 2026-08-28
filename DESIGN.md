@@ -298,6 +298,12 @@ most **three** of these (name, caption, label); the title block adds its two:
   once on scroll-into-view.)
 - **8.5** Activation bars, plates and sparks sit **below** arrowheads in stacking
   order; a head is never covered.
+- **8.6** Speed. A chart may be slowed or hurried by one multiplier, 0.25–4,
+  default 1, applied to every duration and delay alike; nothing else about
+  the motion changes. The svg carries `data-gc-speed` when it is not 1. Gate:
+  `8.6-speed` — every animation-duration and animation-delay in the
+  stylesheet equals the design value × the multiplier (±1 ms), and the
+  multiplier is inside the range. (Added 2026-08-28.)
 
 ## 9. Don'ts (the amateur tells)
 

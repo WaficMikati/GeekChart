@@ -51,7 +51,17 @@ export { withFonts, inheritsFonts, INHERIT, SYSTEM_STACK, fontStacks } from './s
 export type { RenderInput } from './render.ts';
 export { repair, DIAGRAM_KEYWORDS } from './repair.ts';
 export { analyze, diagramType, directionOf } from './analyze.ts';
-export { bake, defaultAnimation, applyPlayMode, playModeCss } from './animate.ts';
+export {
+  bake,
+  defaultAnimation,
+  applyPlayMode,
+  playModeCss,
+  applySpeed,
+  clampSpeed,
+  scaleSpeedCss,
+  SPEED_MIN,
+  SPEED_MAX,
+} from './animate.ts';
 export { standaloneHtml, svgDocument } from './export.ts';
 export { ensureFonts } from './fonts.ts';
 export type { ExportOptions } from './export.ts';

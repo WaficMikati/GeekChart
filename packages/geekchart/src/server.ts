@@ -86,6 +86,14 @@ export interface RenderRequest {
    * 640px. See `renderToHtml`'s own doc comment for the exact markup.
    */
   display?: number | { desktop: number; phone: number };
+  /**
+   * DESIGN 8.6: stretch or hurry the whole build by one multiplier — `0.5`
+   * plays at half speed, `2` at double, `1` (the default) is the designed
+   * timing. Clamped to 0.25–4; nothing else about the motion changes (order,
+   * easing and lag ratios all stay put). The svg carries `data-gc-speed`
+   * whenever this is not 1.
+   */
+  speed?: number;
 }
 
 /**
@@ -259,13 +267,30 @@ const defaultCache = new ByteBoundedLru<RenderToSvgResult>(DEFAULT_CACHE_MAX_BYT
 const inflightByKey = new Map<string, Promise<unknown>>();
 
 /**
- * Drop the `cache` field and normalize `play`'s default, so two calls that
- * differ only in "did not say `play`" vs. "said `play: 'in-view'`" hash to
- * the same cache key.
+ * DESIGN 8.6's clamp, duplicated rather than imported: a static import of
+ * even one value from `@geekchart/core` here would pull mermaid and elkjs
+ * into this package's `dist/server.js` a second time (see this file's own
+ * top-of-file note on why `@geekchart/core` is only ever reached with a
+ * dynamic `import()`), and `stripCache` below has to run synchronously,
+ * before any render — and any dynamic import — has started. Kept in sync
+ * with `animate.ts`'s `clampSpeed`.
+ */
+function clampSpeed(speed: number | undefined): number {
+  if (speed === undefined || !Number.isFinite(speed)) return 1;
+  return Math.min(4, Math.max(0.25, speed));
+}
+
+/**
+ * Drop the `cache` field and normalize `play`'s default and `speed`'s clamp,
+ * so two calls that differ only in "did not say `play`"/`speed` vs. saying
+ * the value that means the same thing (`'in-view'`, `1`, or an out-of-range
+ * number that clamps to what another call already named) hash to the same
+ * cache key — and so an out-of-range `speed` is never cached under its own,
+ * never-reused key.
  */
 function stripCache(options: RenderToSvgOptions): RenderRequest {
-  const { cache: _cache, play, ...rest } = options;
-  return { ...rest, play: play ?? 'in-view' };
+  const { cache: _cache, play, speed, ...rest } = options;
+  return { ...rest, play: play ?? 'in-view', speed: clampSpeed(speed) };
 }
 
 /** `RenderRequest` with `display` narrowed to what `@geekchart/core` itself

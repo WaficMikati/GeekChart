@@ -38,6 +38,12 @@ export interface GeekchartProps {
    * component calls on itself.
    */
   play?: 'loop' | 'once' | 'in-view';
+  /**
+   * DESIGN 8.6: stretch or hurry the whole build by one multiplier — `0.5`
+   * plays at half speed, `2` at double, `1` (the default) is the designed
+   * timing. Clamped to 0.25–4; order, easing and lag ratios never change.
+   */
+  speed?: number;
   /** Pad the diagram into a fixed frame instead of its own bounds. */
   aspect?: Aspect;
   /**
@@ -85,6 +91,7 @@ export function Geekchart({
   scene = 'manim',
   motion = true,
   play = 'in-view',
+  speed,
   aspect,
   fonts = 'inherit',
   className,
@@ -113,7 +120,7 @@ export function Geekchart({
         // engine into the entry bundle of every page that imports anything from
         // this package.
         const { render, scopeCss, applyPlayMode } = await import('@geekchart/core');
-        const result = await render(source, { scene, motion, aspect, fonts });
+        const result = await render(source, { scene, motion, speed, aspect, fonts });
         if (cancelled || mine !== token.current) return;
         // DESIGN 8.4: `render()` always draws a looping build (see
         // `@geekchart/core`'s `animate.ts` for why that can't default to
@@ -135,7 +142,7 @@ export function Geekchart({
     };
     // `onError` is deliberately not a dependency: an inline callback would
     // otherwise re-run the whole render on every parent render.
-  }, [source, scene, motion, play, aspect, fonts, id]);
+  }, [source, scene, motion, play, speed, aspect, fonts, id]);
 
   // DESIGN 8.4: `play: 'in-view'` ships paused (see `applyPlayMode` above) —
   // this is the one call that ever unpauses it. Runs again whenever a new
