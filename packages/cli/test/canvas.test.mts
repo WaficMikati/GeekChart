@@ -623,7 +623,14 @@ describe('display', () => {
       ).geekchartMeasure.measureChart(svg, { chartId: 'python-or-java-358' });
     });
     assert.deepEqual(fails, [], `gate FAILs at display 358: ${fails.join('; ')}`);
-    assert.deepEqual(warns, [], `gate WARNs at display 358: ${warns.join('; ')}`);
+    // DESIGN 1.7: this chart is 912 tall for a 358 column — about 1.3 phone
+    // screens — and that is the one thing the gate may say about it.
+    assert.deepEqual(
+      warns.filter((w) => !w.startsWith('1.7')),
+      [],
+      `gate WARNs at display 358 other than 1.7: ${warns.join('; ')}`,
+    );
+    assert.ok(warns.some((w) => w.startsWith('1.7')), 'the phone-height warning (DESIGN 1.7) is reported');
   });
 });
 
