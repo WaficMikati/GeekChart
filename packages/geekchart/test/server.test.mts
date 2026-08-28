@@ -236,8 +236,10 @@ test('renderToHtml, given { desktop, phone }, emits both svgs and a 640px media 
   const idMatch = /^<div id="(gc-[0-9a-f]{12})"/.exec(html);
   assert.ok(idMatch, 'expected the usual scoped wrapper id');
   const id = idMatch![1];
-  assert.match(html, /<svg[^>]*\bdata-gc-variant="desktop"/);
-  assert.match(html, /<svg[^>]*\bdata-gc-variant="phone"/);
+  // The marker sits on a wrapper above the svg, so the variant-scoped pause
+  // rule (a descendant selector) can reach the svg it targets.
+  assert.match(html, /<div data-gc-variant="desktop"><svg /);
+  assert.match(html, /<div data-gc-variant="phone"><svg /);
   assert.match(html, /@media \(max-width:640px\)/);
   // The rule that shows the phone svg and hides the desktop one lives inside
   // that media query, scoped under this render's own wrapper id.

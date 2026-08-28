@@ -374,15 +374,19 @@ export async function renderToSvg(
   }
 }
 
-/** Stamps `data-gc-variant` onto an already-rendered `<svg ...>`'s own open
- *  tag — the attribute `renderToHtml`'s media query switches on, and the
- *  hook `geekchart/observe`'s `playInView` needs nothing extra to respect:
- *  an `IntersectionObserver` target that is `display:none` never reports
- *  `isIntersecting`, so the hidden variant simply never starts its build —
- *  no wasted animation running on a chart nobody can see, and no separate
- *  logic here has to enforce it. */
-function stampVariant(svg: string, variant: 'desktop' | 'phone'): string {
-  return svg.replace(/^<svg /, `<svg data-gc-variant="${variant}" `);
+/**
+ * Wraps a rendered `<svg>` in its variant's own element. The variant marker
+ * has to sit *above* the svg, not on it: every rule of the variant's
+ * stylesheet is scoped as a descendant of `[data-gc-variant]`, and that
+ * includes DESIGN 8.4's "stay paused until scrolled to" rule, whose subject
+ * is the svg itself (`[data-gc-play="in-view"]`). Stamped on the svg, that
+ * rule asked for an svg *inside* the svg and never matched — both variants
+ * played on page load, and the reader reached a finished chart.
+ * `geekchart/observe` still finds the svg by `data-gc-play`; a hidden
+ * wrapper never intersects, so the hidden variant never starts.
+ */
+function wrapVariant(svg: string, variant: 'desktop' | 'phone'): string {
+  return `<div data-gc-variant="${variant}">${svg}</div>`;
 }
 
 /**
@@ -392,7 +396,7 @@ function stampVariant(svg: string, variant: 'desktop' | 'phone'): string {
  * id and its own renamed keyframes.
  *
  * A `{ desktop, phone }` `display` (DESIGN 1.1) emits both `<svg>`s instead
- * of one, each stamped `data-gc-variant`, plus a media query — under 640px
+ * of one, each in a `data-gc-variant` wrapper, plus a media query — under 640px
  * CSS px the phone one shows and the desktop one hides; at 640px and above,
  * the reverse:
  *
@@ -407,8 +411,8 @@ function stampVariant(svg: string, variant: 'desktop' | 'phone'): string {
  *     }
  *     …
  *   </style>
- *   <svg data-gc-variant="desktop" …>…</svg>
- *   <svg data-gc-variant="phone" …>…</svg>
+ *   <div data-gc-variant="desktop"><svg …>…</svg></div>
+ *   <div data-gc-variant="phone"><svg …>…</svg></div>
  * </div>
  * ```
  *
@@ -439,7 +443,7 @@ export async function renderToHtml(
       `<style>${mediaQuery}` +
       `${scopeCss(desktop.css, `${id}-d`, desktopSel)}` +
       `${scopeCss(phone.css, `${id}-p`, phoneSel)}</style>` +
-      `${stampVariant(desktop.svg, 'desktop')}${stampVariant(phone.svg, 'phone')}` +
+      `${wrapVariant(desktop.svg, 'desktop')}${wrapVariant(phone.svg, 'phone')}` +
       `</div>`
     );
   }

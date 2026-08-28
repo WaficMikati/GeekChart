@@ -185,6 +185,42 @@ describe('DESIGN 8.4: a chart plays once instead of looping', () => {
     assert.equal(playing.running, playing.total, 'everything runs once data-gc-playing is set');
   });
 
+  test('two display variants both ship paused until scrolled to (DESIGN 8.4, 1.1)', async () => {
+    // The variant marker used to be stamped on the svg itself, and each
+    // variant's stylesheet is scoped as a descendant of that marker — so the
+    // pause rule, whose subject is the svg, matched nothing and both charts
+    // played on page load. Measured in a page, not grepped.
+    const { renderToHtml } = await import('../../geekchart/src/server.ts');
+    const html = await renderToHtml(source('flow.mmd'), { cache: false, display: { desktop: 612, phone: 358 } });
+    const session = await getSession();
+    await session.page.setContent(`<div style="width:900px">${html}</div>`);
+    // A hidden variant (display: none) has no animations at all; the visible
+    // one must have them and have every one paused. Checked at a desktop
+    // width, then at a phone width so the phone variant is the visible one.
+    const shown = () =>
+      session.page.evaluate(() =>
+        [...document.querySelectorAll('[data-gc-variant] svg')]
+          .filter((svg) => getComputedStyle(svg.parentElement!).display !== 'none')
+          .map((svg) => {
+            const all = svg.getAnimations({ subtree: true });
+            return { variant: svg.parentElement!.getAttribute('data-gc-variant'), total: all.length, running: all.filter((a) => a.playState === 'running').length };
+          }),
+      );
+    const original = session.page.viewportSize();
+    try {
+      for (const [width, expect] of [[1200, 'desktop'], [390, 'phone']] as const) {
+        await session.page.setViewportSize({ width, height: 900 });
+        const visible = await shown();
+        assert.equal(visible.length, 1, `one variant is visible at ${width}px`);
+        assert.equal(visible[0]!.variant, expect);
+        assert.ok(visible[0]!.total > 0, `${expect} variant has animations`);
+        assert.equal(visible[0]!.running, 0, `${expect} variant: ${visible[0]!.running} of ${visible[0]!.total} animations run before the chart is in view`);
+      }
+    } finally {
+      if (original) await session.page.setViewportSize(original);
+    }
+  });
+
   test('play: "once" plays immediately, holding the finished frame with no observer needed', async () => {
     const reply = await renderCached(source('flow.mmd'), { ...flowPreset, play: 'once' });
     assert.equal(reply.ok, true);
