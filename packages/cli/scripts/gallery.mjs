@@ -331,7 +331,7 @@ const chartCss = entries.map((e) => e.css).join('\n');
 // reads correctly opened straight off disk as well as published. A full
 // doctype/head/body wrapper is not written: the publisher supplies its own.
 const page = `<meta charset="utf-8">
-<title>Geekchart Review Gallery</title>
+<title>Geekchart Gallery</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
