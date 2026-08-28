@@ -67,6 +67,19 @@ export interface GeekchartProps {
   fallback?: JSX.Element | null;
   /** Called instead of throwing when the source cannot be drawn. */
   onError?: (error: Error) => void;
+  /**
+   * The width in CSS px the chart will be shown at (DESIGN 1.1): the layout
+   * packs to fit it, and at 480 or less the render reports DESIGN 1.7's
+   * "about N screens tall" warning. Default: the renderer's 1000 ceiling.
+   */
+  display?: number;
+  /**
+   * Called once each render finishes, with what the renderer reported:
+   * the accessible summary, the animation's length in seconds, and any
+   * warnings (DESIGN 1.7's phone height, a measurement-font mismatch).
+   * An editor shows these to the writer; a page ignores them.
+   */
+  onRender?: (info: { summary: string; cycle: number; warnings: string[] }) => void;
 }
 
 interface Drawn {
@@ -98,6 +111,8 @@ export function Geekchart({
   label,
   fallback = null,
   onError,
+  display,
+  onRender,
 }: GeekchartProps): JSX.Element {
   // `useId` is stable across server and client, but its value contains colons,
   // which are not valid in a CSS identifier.
@@ -120,7 +135,7 @@ export function Geekchart({
         // engine into the entry bundle of every page that imports anything from
         // this package.
         const { render, scopeCss, applyPlayMode } = await import('@geekchart/core');
-        const result = await render(source, { scene, motion, speed, aspect, fonts });
+        const result = await render(source, { scene, motion, speed, aspect, fonts, display });
         if (cancelled || mine !== token.current) return;
         // DESIGN 8.4: `render()` always draws a looping build (see
         // `@geekchart/core`'s `animate.ts` for why that can't default to
@@ -130,6 +145,7 @@ export function Geekchart({
           markup: `<style>${scopeCss(played.css, id)}</style>${played.svg}`,
           summary: result.summary,
         });
+        onRender?.({ summary: result.summary, cycle: result.cycle, warnings: result.warnings ?? [] });
       } catch (err) {
         if (cancelled || mine !== token.current) return;
         const error = err instanceof Error ? err : new Error(String(err));
@@ -140,9 +156,9 @@ export function Geekchart({
     return () => {
       cancelled = true;
     };
-    // `onError` is deliberately not a dependency: an inline callback would
-    // otherwise re-run the whole render on every parent render.
-  }, [source, scene, motion, play, speed, aspect, fonts, id]);
+    // `onError`/`onRender` are deliberately not dependencies: an inline
+    // callback would otherwise re-run the whole render on every parent render.
+  }, [source, scene, motion, play, speed, aspect, fonts, display, id]);
 
   // DESIGN 8.4: `play: 'in-view'` ships paused (see `applyPlayMode` above) —
   // this is the one call that ever unpauses it. Runs again whenever a new
