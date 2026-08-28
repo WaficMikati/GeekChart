@@ -26,18 +26,38 @@ export function playInView(root: ParentNode = document, threshold = 0.4): () => 
     return () => {};
   }
 
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        entry.target.setAttribute('data-gc-playing', '');
-        // Once each: DESIGN 8.4's build-out plays a single pass, not once per
-        // scroll in and out of view.
-        observer.unobserve(entry.target);
-      }
-    },
-    { threshold },
-  );
-  targets.forEach((el) => observer.observe(el));
-  return () => observer.disconnect();
+  // `threshold` is the share of the chart that must be on screen. A chart
+  // taller than the screen (a phone layout, DESIGN 1.6) would otherwise wait
+  // until the reader had scrolled 40% of the way into it — past a blank,
+  // paused top — so for those the share is scaled to 30% of the viewport's
+  // own height instead, whichever is smaller. One observer per distinct
+  // share; each target is watched once and released when it plays.
+  const viewport = typeof window !== 'undefined' ? window.innerHeight : 0;
+  const observers = new Map<number, IntersectionObserver>();
+  const observerFor = (share: number): IntersectionObserver => {
+    let o = observers.get(share);
+    if (!o) {
+      o = new IntersectionObserver(
+        (entries, self) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            entry.target.setAttribute('data-gc-playing', '');
+            // Once each: DESIGN 8.4's build-out plays a single pass, not once
+            // per scroll in and out of view.
+            self.unobserve(entry.target);
+          }
+        },
+        { threshold: share },
+      );
+      observers.set(share, o);
+    }
+    return o;
+  };
+  targets.forEach((el) => {
+    const height = el.getBoundingClientRect().height;
+    const share =
+      viewport > 0 && height > 0 ? Math.min(threshold, (0.3 * viewport) / height) : threshold;
+    observerFor(Math.round(share * 100) / 100).observe(el);
+  });
+  return () => observers.forEach((o) => o.disconnect());
 }
