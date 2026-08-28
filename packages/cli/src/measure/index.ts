@@ -14,6 +14,7 @@ import {
   unbalancedRows,
   orphanColumns,
   evenWhitespace,
+  phoneHeight,
   native,
 } from './canvas.ts';
 import {
@@ -101,6 +102,7 @@ export const ALL_CHECKS: Check[] = [
   orphanColumns,
   unbalancedRows,
   evenWhitespace,
+  phoneHeight,
   parallelClearance,
   sharedRow,
   sharedSegment,

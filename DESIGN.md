@@ -90,6 +90,15 @@ and the check that enforces it cannot drift apart.
   (gate `6.2-departs-source`); the first version of this bus started at the
   corridor's x on the parent's bottom y, a line beginning in space.
 
+- **1.7** **Phone height.** Full-size type on a phone column means height is
+  boxes × rows, and nothing in the layout can shorten it. A chart laid out for
+  a display of 480 or less that comes out taller than **twice its width** —
+  about two phone screens — is reported as a WARN (`1.7-phone-height`) and
+  the render's `warnings` carry the same sentence, so an editor can show the
+  writer "this is N screens tall on a phone" while there is still time to
+  split it. Guidance: more than about six boxes becomes a scroll; prefer two
+  short charts over one long one. (Added 2026-08-28.)
+
 ## 2. Grid and sizing
 
 - **2.1** Everything sits on an **8-unit grid**: positions, widths, heights,

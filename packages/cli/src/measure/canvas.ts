@@ -316,6 +316,25 @@ export const evenWhitespace: Check = {
   },
 };
 
+/** DESIGN 1.7: on a phone-width display, taller than twice the width is a
+ * WARN — nothing in the layout can shorten it; only the writer can. */
+export const phoneHeight: Check = {
+  id: '1.7-phone-height',
+  rule: '1.7',
+  run(svg) {
+    const display = Number(svg.getAttribute('data-display') ?? 0);
+    if (!display || display > 480) return [];
+    const vb = svg.viewBox.baseVal;
+    if (vb.height <= vb.width * 2) return [];
+    return [
+      {
+        severity: 'warn',
+        message: `1.7 about ${(vb.height / (vb.width * 2)).toFixed(1)} screens tall on a ${display}px phone`,
+      },
+    ];
+  },
+};
+
 export const clipped: Check = {
   id: '7.5-clipped',
   rule: '7.5',

@@ -297,3 +297,14 @@ test('an out-of-range speed clamps, and clamped requests share a cache entry', a
   const tooSlow = await renderToSvg(flow, { cache: false, scene: 'geeks', speed: 0 });
   assert.match(tooSlow.svg, /data-gc-speed="0\.25"/);
 });
+
+test('DESIGN 1.7: a phone layout taller than two screens carries a warning', async () => {
+  const src = readFileSync(join(here, '..', '..', '..', 'fixtures', 'blog', 'python-or-java.mmd'), 'utf8');
+  const tall = await renderToSvg(src, { cache: false, display: 358 });
+  assert.ok(tall.warnings.some((w) => w.startsWith('1.7')), `expected a 1.7 warning, got ${JSON.stringify(tall.warnings)}`);
+  const short = readFileSync(join(here, '..', '..', '..', 'fixtures', 'blog', 'python-or-java-short.mmd'), 'utf8');
+  const fine = await renderToSvg(short, { cache: false, display: 358 });
+  assert.ok(!fine.warnings.some((w) => w.startsWith('1.7')), 'a one-screen chart has no 1.7 warning');
+  const desktop = await renderToSvg(src, { cache: false, display: 612 });
+  assert.ok(!desktop.warnings.some((w) => w.startsWith('1.7')), 'only phone widths warn');
+});

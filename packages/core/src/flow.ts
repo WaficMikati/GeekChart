@@ -395,6 +395,25 @@ function checkMeasurementFont(stack: string | Measurer | undefined): string[] {
   ];
 }
 
+/**
+ * DESIGN 1.7: a chart laid out for a phone (display ≤ 480) that is taller
+ * than twice its width is about two screens of scrolling; say so, in the
+ * words an editor can show the writer. Read from the finished frame's
+ * viewBox so it counts what the reader gets, label room included.
+ */
+export function phoneHeightWarning(svg: string, display: number | undefined): string[] {
+  if (!display || display > 480) return [];
+  const m = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
+  if (!m) return [];
+  const width = Number(m[1]);
+  const height = Number(m[2]);
+  if (height <= width * 2) return [];
+  const screens = (height / (width * 2)).toFixed(1);
+  return [
+    `1.7 on a ${display}px phone this chart is about ${screens} screens tall — keep phone charts to two screens (fewer boxes, or two short charts)`,
+  ];
+}
+
 /** The standalone page both drawn renderers emit: same frame, same caps. */
 function page(svg: string, css: string, scene: Scene, options: FlowOptions): string {
   // A chart that inherits its fonts has nothing to inherit from in a page of its
@@ -707,7 +726,10 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   );
 
   const html = page(sped.svg, sped.css, scene, options);
-  const warnings = checkMeasurementFont(measureWith);
+  const warnings = [
+    ...checkMeasurementFont(measureWith),
+    ...phoneHeightWarning(framed.svg, options.display),
+  ];
 
   return {
     svg: sped.svg,
