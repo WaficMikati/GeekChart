@@ -4,7 +4,7 @@
  * another edge than their own.
  */
 import { RULES } from '@geekchart/core';
-import { pathPoints, rect, texts, visible, type Check } from './helpers.ts';
+import { pathPoints, rect, texts, visible, type Check, pathPointsHV } from './helpers.ts';
 
 function transformPts(pts: [number, number][], ctm: DOMMatrix): [number, number][] {
   return pts.map(([x, y]) => [x * ctm.a + ctm.e, y * ctm.d + ctm.f]);
@@ -122,27 +122,32 @@ export const labelSwallow: Check = {
       const e = own && svg.querySelector<SVGGeometryElement>(`.gc-edge[data-id="${own}"]`);
       if (!e) continue;
       const ctm = e.getScreenCTM()!;
-      const pts = transformPts(pathPoints(e.getAttribute('d')), ctm);
-      const cx = (b.left + b.right) / 2;
-      const cy = (b.top + b.bottom) / 2;
+      // Command-aware: a rounded corner (Q) contributes only its end point,
+      // so the run either side of it is measured whole and the corner never
+      // reads as a 12-unit "segment" of its own. Runs shorter than 16 are
+      // corner stubs, not somewhere a label can be.
+      const pts = pathPointsHV(e.getAttribute('d'), ctm);
       for (let i = 1; i < pts.length; i++) {
         const [x1, y1] = pts[i - 1]!;
         const [x2, y2] = pts[i]!;
         const horiz = Math.abs(y1 - y2) < 1;
         const vert = Math.abs(x1 - x2) < 1;
+        const len = horiz ? Math.abs(x2 - x1) : vert ? Math.abs(y2 - y1) : 0;
+        if (len < 16) continue;
+        // "On" the run means the line passes through the label's box.
         const onH =
-          horiz && Math.abs(cy - y1) < b.height && cx > Math.min(x1, x2) && cx < Math.max(x1, x2);
+          horiz && y1 > b.top && y1 < b.bottom && b.right > Math.min(x1, x2) && b.left < Math.max(x1, x2);
         const onV =
-          vert && Math.abs(cx - x1) < b.width && cy > Math.min(y1, y2) && cy < Math.max(y1, y2);
-        if (onH && b.width > RULES['6.5']!.threshold! * Math.abs(x2 - x1)) {
+          vert && x1 > b.left && x1 < b.right && b.bottom > Math.min(y1, y2) && b.top < Math.max(y1, y2);
+        if (onH && b.width > RULES['6.5']!.threshold! * len) {
           swallowed++;
           swallowIds.push(own!);
           break;
         }
         if (
           onV &&
-          (b.height > RULES['6.5-vertical']!.threshold! * Math.abs(y2 - y1) ||
-            Math.abs(y2 - y1) < RULES['6.5-min-run']!.threshold!)
+          (b.height > RULES['6.5-vertical']!.threshold! * len ||
+            len < RULES['6.5-min-run']!.threshold!)
         ) {
           swallowed++;
           swallowIds.push(own!);

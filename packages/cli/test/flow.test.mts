@@ -322,29 +322,34 @@ describe('routing', () => {
           if (!e) continue;
           const ctm = (e as SVGGraphicsElement).getScreenCTM();
           if (!ctm) continue;
-          const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)?.map(Number) ?? [];
+          // Command-aware walk: a rounded corner (Q) contributes only its end
+          // point, so a run is measured whole; runs under 16 are corner stubs.
           const pts: { x: number; y: number }[] = [];
-          for (let i = 0; i + 1 < nums.length; i += 2) {
-            pts.push({ x: nums[i]! * ctm.a + ctm.e, y: nums[i + 1]! * ctm.d + ctm.f });
+          let px = 0;
+          let py = 0;
+          for (const seg of (e.getAttribute('d') || '').matchAll(/([MLHVQCZ])([^MLHVQCZ]*)/gi)) {
+            const cmd = seg[1]!.toUpperCase();
+            const ns = (seg[2]!.match(/-?\d+(\.\d+)?/g) || []).map(Number);
+            if (cmd === 'H') px = ns[0]!;
+            else if (cmd === 'V') py = ns[0]!;
+            else if (ns.length >= 2) {
+              px = ns[ns.length - 2]!;
+              py = ns[ns.length - 1]!;
+            } else continue;
+            pts.push({ x: px * ctm.a + ctm.e, y: py * ctm.d + ctm.f });
           }
-          const cx = (b.left + b.right) / 2,
-            cy = (b.top + b.bottom) / 2;
           for (let i = 1; i < pts.length; i++) {
             const p1 = pts[i - 1]!,
               p2 = pts[i]!;
             const horiz = Math.abs(p1.y - p2.y) < 1,
               vert = Math.abs(p1.x - p2.x) < 1;
+            const len = horiz ? Math.abs(p2.x - p1.x) : vert ? Math.abs(p2.y - p1.y) : 0;
+            if (len < 16) continue;
+            // "On" the run: the line passes through the plate's box.
             const onH =
-              horiz &&
-              Math.abs(cy - p1.y) < b.height &&
-              cx > Math.min(p1.x, p2.x) &&
-              cx < Math.max(p1.x, p2.x);
+              horiz && p1.y > b.top && p1.y < b.bottom && b.right > Math.min(p1.x, p2.x) && b.left < Math.max(p1.x, p2.x);
             const onV =
-              vert &&
-              Math.abs(cx - p1.x) < b.width &&
-              cy > Math.min(p1.y, p2.y) &&
-              cy < Math.max(p1.y, p2.y);
-            const len = horiz ? Math.abs(p2.x - p1.x) : Math.abs(p2.y - p1.y);
+              vert && p1.x > b.left && p1.x < b.right && b.bottom > Math.min(p1.y, p2.y) && b.top < Math.max(p1.y, p2.y);
             if (onH && b.width > 0.6 * len)
               out.push(`${own}: plate width ${b.width.toFixed(1)} over 60% of ${len.toFixed(1)}`);
             if (onV && (b.height > 0.4 * len || len < 64))

@@ -420,7 +420,11 @@ export const clearance: Check = {
         const x2 = Math.max(pts[i - 1]![0], pts[i]![0]);
         const y1 = Math.min(pts[i - 1]![1], pts[i]![1]);
         const y2 = Math.max(pts[i - 1]![1], pts[i]![1]);
-        if (x2 - x1 < 8 && y2 - y1 < 8) continue;
+        // A rounded corner (12 units, Q's end point after the L before it)
+        // is not a run: its 12×12 box read as "within 16" of a node it
+        // passed 24 from, diagonally. The straight runs either side of it
+        // are what can hug a node.
+        if (x2 - x1 < 13 * ctx.unit && y2 - y1 < 13 * ctx.unit) continue;
         for (const [id, nb] of nodeRects) {
           if (id === fromId || id === toId) continue;
           const clear = RULES['6.8']!.threshold! * ctx.unit - 1;
@@ -868,7 +872,8 @@ export const labelOnEdge: Check = {
           const [x2, y2] = ownPts[i]!;
           nearest = Math.min(nearest, distBoxSeg(b, x1, y1, x2, y2) / ctx.unit);
         }
-        if (nearest > RULES['6.11']!.threshold!) {
+        // Half a unit of slack: a label beside its line sits exactly 8 away.
+        if (nearest > RULES['6.11']!.threshold! + 0.5) {
           farFromOwn++;
           ids.push(`${own}:${nearest.toFixed(0)}`);
         }

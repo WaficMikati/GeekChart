@@ -82,6 +82,20 @@ and the check that enforces it cannot drift apart.
   inner padding on all sides and their children obey 2.3 inside them.
   Inputs above a panel and outputs below it line up **column for column**.
 
+- **2.7** Room for a label is the smallest that works. When no spot on a
+  label's own edge clears 6.5/6.9/6.11, the corridor that edge runs through
+  grows by **one grid step (8) at a time**, re-routes and tries again — along
+  an axis the edge actually runs on (a column gap for a horizontal run, a row
+  gap for a vertical one), the one adding less area first, and never past the
+  declared display width (1.1). An edge still unseated after 12 steps on an
+  axis stops asking; its label takes the best spot and the gate reports it.
+  Growth moves whole row bands (a node is past the corridor when its centre
+  is). Row gaps differ for other reasons too (panels, folds, satellites), so
+  this is pinned by test rather than gate: packages/cli/test/canvas.test.mts
+  holds the article chart at display 620 to its minimal height. (Added
+  2026-08-28: a formula-sized growth gave that chart 80 units for a label
+  that needed 32.)
+
 ## 3. Type
 
 Two families only: **Archivo** for names, **JetBrains Mono** for everything

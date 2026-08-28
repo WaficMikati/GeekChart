@@ -316,7 +316,10 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
   const buckets = new Map<string, Member[]>();
   const key = (node: string, side: Side) => `${node}:${side}`;
   for (const item of pending) {
-    if (item.loop) continue;
+    // A loop-back shares the face with the forward edges there and fans with
+    // them (DESIGN 6.4): left out, it left the face centre 8 from a forward
+    // port and ran parallel to it — 4geeks-journey's Mentor pairing.
+    if (item.edge.from === item.edge.to) continue;
     if (!item.channel) {
       const k = key(item.edge.from, item.startSide);
       buckets.set(k, [...(buckets.get(k) ?? []), { item, end: false }]);
@@ -353,7 +356,9 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     // One edge to a whole row of siblings reads as a bus, and a bus wants a
     // single trunk. It only becomes a fan when the ends would otherwise be
     // indistinguishable, which is when the far ends are on the same side.
-    const step = 8;
+    // DESIGN 6.4: neighbouring ports sit 16 apart, so the runs leaving them
+    // are never closer than that.
+    const step = 16;
     const width = step * (order.length - 1);
     const middle = faceMiddle(box, side);
     let first = middle - width / 2;
@@ -884,8 +889,10 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     // Already spread by the first pass, or simply not colliding — leave it;
     // only a genuine coincidence on the same pixel needs fixing here.
     const alongOf = (m: Member2) => (m.end ? m.r.eAlong : m.r.sAlong);
+    // DESIGN 6.4: 16 apart, the same gap two parallel runs must keep — a
+    // loop-back at the face centre 8 from a forward port ran alongside it.
     const spread = Math.max(...members.map(alongOf)) - Math.min(...members.map(alongOf));
-    if (spread >= 8) continue;
+    if (spread >= 16) continue;
     // All fixed (or only one member, which spread's Infinity-free math above
     // would already have skipped) — nothing here is free to move.
     const movable = members.filter((m) => !m.fixed);
@@ -901,7 +908,7 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       const other = boxOf(m.end ? m.r.item.edge.from : m.r.item.edge.to);
       return other ? faceMiddle(other, side) : 0;
     };
-    const step = 8;
+    const step = 16;
     const middle = faceMiddle(box, side);
 
     // Every member on this face — fixed or not — sorted once by where its far
@@ -916,6 +923,20 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     const order = [...members].sort((p, q) => far(p) - far(q));
     const at = new Map<Member2, number>();
     for (const m of order) at.set(m, m.fixed ? alongOf(m) : middle);
+    // Nothing fixed on this face: fan the group evenly about the middle, the
+    // way the first pass does, instead of sweeping every member off one
+    // side of it (two free members both at the middle became middle and
+    // middle + 16, off a 48 box's face, and clamped back to 8 apart).
+    if (movable.length === members.length) {
+      const width = step * (order.length - 1);
+      const first = Math.max(lo, Math.min(middle - width / 2, hi - width));
+      order.forEach((m, i) => {
+        const v = Math.min(hi, first + step * i);
+        if (m.end) m.r.eAlong = v;
+        else m.r.sAlong = v;
+      });
+      continue;
+    }
 
     // Two sweeps — left to right, then right to left — each pushing a
     // movable member `step` clear of its neighbour. A fixed member never
@@ -939,7 +960,21 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
 
     for (const m of order) {
       if (m.fixed) continue;
-      const v = Math.max(lo, Math.min(hi, at.get(m)!));
+      let v = at.get(m)!;
+      // Pushed off the face (a 48 box has 16 usable units, so a member
+      // shoved past a fixed neighbour has nowhere to go that way): take the
+      // nearest slot on the *other* side of every neighbour that is still on
+      // the face and 16 clear of all of them, rather than clamping onto the
+      // neighbour it was meant to clear.
+      if (v < lo || v > hi) {
+        const others = order.filter((o) => o !== m).map((o) => at.get(o)!);
+        const slots = others
+          .flatMap((o) => [o - step, o + step])
+          .filter((c) => c >= lo && c <= hi && others.every((o) => Math.abs(o - c) >= step - 0.01))
+          .sort((p, q) => Math.abs(p - middle) - Math.abs(q - middle));
+        v = slots[0] ?? Math.max(lo, Math.min(hi, v));
+        at.set(m, v);
+      }
       if (m.end) m.r.eAlong = v;
       else m.r.sAlong = v;
     }

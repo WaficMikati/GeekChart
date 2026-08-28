@@ -479,6 +479,13 @@ describe('display', () => {
           e.branchLength >= 6,
           `${e.id}: branch is only ${e.branchLength} long, want at least 6`,
         );
+        // DESIGN 2.7: the corridor holding "no, enterprise or Android" grew by
+        // the smallest amount that seats it — 32 units, not a formula's 80.
+        // 664 = the 632 this chart needs with no label room at all + 32.
+        assert.ok(
+          m.height <= 664,
+          `canvas is ${m.height} tall; 2.7 allows at most 664 for this chart`,
+        );
         const stub = CLEARANCE.stub;
         assert.ok(
           Math.abs(e.branchEndX - (e.toBox!.x - stub)) < 0.5,

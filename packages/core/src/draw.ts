@@ -240,12 +240,23 @@ class NeedsCorridorGrowth {
   axis: 'x' | 'y';
   after: number;
   growBy: number;
-  constructor(axis: 'x' | 'y', after: number, growBy: number) {
+  edge: string;
+  constructor(axis: 'x' | 'y', after: number, growBy: number, edge: string) {
     this.axis = axis;
     this.after = after;
     this.growBy = growBy;
+    this.edge = edge;
   }
 }
+
+/**
+ * DESIGN 2.7: growth is one grid step at a time, and an edge whose label
+ * still cannot be seated after 12 steps (96 units) on one axis is not helped
+ * by that axis — its runs are stubs, not corridors — so growth stops there
+ * and the label takes the best spot it can, gate-reported or not.
+ */
+export type GrowthAllowed = (edge: string, axis: 'x' | 'y') => boolean;
+const MAX_GROWTH_STEPS_PER_EDGE = 12;
 
 /**
  * Lay the drawing out once. Everything below reads final node positions off
@@ -257,7 +268,7 @@ function attemptDraw(
   graph: Graph,
   scene: Scene,
   size: { width: number; height: number },
-  allowGrowth: boolean,
+  allowGrowth: GrowthAllowed,
 ): Drawing {
   const uid = fingerprint(graph);
   const placed = graph.nodes.filter(isPlaced);
@@ -653,28 +664,42 @@ function attemptDraw(
 export function draw(graph: Graph, scene: Scene, size: { width: number; height: number }): Drawing {
   let extraW = 0;
   let extraH = 0;
-  // At most 3 corridor growths (DESIGN 6.9/6.10/6.11's placer spec): each of
-  // these attempts may throw and grow one corridor, then re-lay-out from
+  // Corridor growths are one grid step each (DESIGN 2.7), so a chart gets up
+  // to 24 of them — 192 units in all — before the last, growth-free pass.
+  // Each attempt may throw and grow one corridor, then re-lay-out from
   // scratch. The final call below disallows growth — placeLabels must not
   // throw there, it has to seat every label somewhere, gate-reported
   // violation or not, rather than this function running forever.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const steps = new Map<string, number>();
+  const allowed: GrowthAllowed = (edge, axis) =>
+    (steps.get(`${edge}|${axis}`) ?? 0) < MAX_GROWTH_STEPS_PER_EDGE;
+  for (let attempt = 0; attempt < 24; attempt++) {
     try {
       return attemptDraw(
         graph,
         scene,
         { width: size.width + extraW, height: size.height + extraH },
-        true,
+        allowed,
       );
     } catch (grow) {
       if (!(grow instanceof NeedsCorridorGrowth)) throw grow;
+      const key = `${grow.edge}|${grow.axis}`;
+      steps.set(key, (steps.get(key) ?? 0) + 1);
+      // A corridor is the gap between two row (or column) bands, so the
+      // shift moves whole bands: a node belongs past the corridor when its
+      // *centre* is past the threshold. Testing its top edge instead once
+      // split a row — a diamond (taller, top edge higher) stayed while the
+      // box beside it moved, and the straight run between them became a
+      // Z whose stubs no label could sit on.
+      const past = (lo: number | undefined, len: number | undefined): boolean =>
+        lo !== undefined && lo + (len ?? 0) / 2 >= grow.after;
       if (grow.axis === 'y') {
-        for (const n of graph.nodes) if (n.y !== undefined && n.y >= grow.after) n.y += grow.growBy;
-        for (const c of graph.clusters) if (c.y !== undefined && c.y >= grow.after) c.y += grow.growBy;
+        for (const n of graph.nodes) if (past(n.y, n.height)) n.y! += grow.growBy;
+        for (const c of graph.clusters) if (past(c.y, c.height)) c.y! += grow.growBy;
         extraH += grow.growBy;
       } else {
-        for (const n of graph.nodes) if (n.x !== undefined && n.x >= grow.after) n.x += grow.growBy;
-        for (const c of graph.clusters) if (c.x !== undefined && c.x >= grow.after) c.x += grow.growBy;
+        for (const n of graph.nodes) if (past(n.x, n.width)) n.x! += grow.growBy;
+        for (const c of graph.clusters) if (past(c.x, c.width)) c.x! += grow.growBy;
         extraW += grow.growBy;
       }
     }
@@ -683,7 +708,7 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     graph,
     scene,
     { width: size.width + extraW, height: size.height + extraH },
-    false,
+    () => false,
   );
 }
 
@@ -1018,7 +1043,7 @@ function placeLabels(
   scene: Scene,
   edgeSegments: EdgeSegments[],
   size: { width: number; height: number },
-  allowGrowth: boolean,
+  allowGrowth: GrowthAllowed,
 ): { markup: string[]; boxes: Box[] } {
   const taken: Box[] = [];
   const out: string[] = [];
@@ -1051,47 +1076,33 @@ function placeLabels(
     // short stub elsewhere on the same edge. Rather than special-case that,
     // this replicates the gate's own extraction and test, so a candidate
     // this file accepts is one the gate accepts too.
-    const ownSwallowSegs = (() => {
-      const d = roundedPath(request.points, CORNER_RADIUS);
-      const nums = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
-      const pts: Point[] = [];
-      for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
-      const segs: { x1: number; y1: number; x2: number; y2: number }[] = [];
-      for (let i = 1; i < pts.length; i++) {
-        segs.push({ x1: pts[i - 1]!.x, y1: pts[i - 1]!.y, x2: pts[i]!.x, y2: pts[i]!.y });
-      }
-      return segs;
-    })();
+    // DESIGN 6.5, the same test the gate runs (`labelSwallow` in
+    // packages/cli/src/measure/labels.ts): a label is "on" a run when the
+    // line passes through its box; runs under 16 are corner stubs and do not
+    // count. Straight segments only — a rounded corner is not a run.
     const swallowsOwnEdge = (box: Box): boolean => {
-      const cx = box.x + box.width / 2;
-      const cy = box.y + box.height / 2;
-      // A half-pixel of slack on the segment's own y/x range: an ON
-      // placement's cy sits exactly on the shared corner y between the run
-      // it is meant to be on and the tiny corner stub next to it (the corner
-      // and the run share that coordinate exactly), so the true membership
-      // test lands right on the boundary — where the gate's own arithmetic
-      // (real getBoundingClientRect measurements, not this file's rounded
-      // numbers) can land a hair either side. Treating "right at the edge"
-      // as "in range" here is the conservative reading, not a looser one.
-      const EPS = 0.6;
-      for (const { x1, y1, x2, y2 } of ownSwallowSegs) {
+      for (const { x1, y1, x2, y2 } of ownPairs) {
         const horiz = Math.abs(y1 - y2) < 1;
         const vert = Math.abs(x1 - x2) < 1;
+        const len = horiz ? Math.abs(x2 - x1) : vert ? Math.abs(y2 - y1) : 0;
+        if (len < 16) continue;
         const onH =
           horiz &&
-          Math.abs(cy - y1) < box.height &&
-          cx > Math.min(x1, x2) - EPS &&
-          cx < Math.max(x1, x2) + EPS;
+          y1 > box.y &&
+          y1 < box.y + box.height &&
+          box.x + box.width > Math.min(x1, x2) &&
+          box.x < Math.max(x1, x2);
         const onV =
           vert &&
-          Math.abs(cx - x1) < box.width &&
-          cy > Math.min(y1, y2) - EPS &&
-          cy < Math.max(y1, y2) + EPS;
-        if (onH && box.width > RULES['6.5']!.threshold! * Math.abs(x2 - x1)) return true;
+          x1 > box.x &&
+          x1 < box.x + box.width &&
+          box.y + box.height > Math.min(y1, y2) &&
+          box.y < Math.max(y1, y2);
+        if (onH && box.width > RULES['6.5']!.threshold! * len) return true;
         if (
           onV &&
-          (box.height > RULES['6.5-vertical']!.threshold! * Math.abs(y2 - y1) ||
-            Math.abs(y2 - y1) < RULES['6.5-min-run']!.threshold!)
+          (box.height > RULES['6.5-vertical']!.threshold! * len ||
+            len < RULES['6.5-min-run']!.threshold!)
         ) {
           return true;
         }
@@ -1135,7 +1146,11 @@ function placeLabels(
       for (const p of otherPairs) {
         if (distBoxSeg(box, p.x1, p.y1, p.x2, p.y2) < OTHER_EDGE_CLEAR) return true;
       }
-      if (distToOwnPath(box) > OWN_EDGE_CLEAR - 1) return true; // 1 unit of safety margin against float/rendering rounding, not a rule change
+      // Half a unit of slack, the other way: a BESIDE candidate sits exactly 8
+      // from its line by construction, and float error must not turn 8 into
+      // 8.0000001 and reject every one of them (it did — every beside spot
+      // failed and labels grew corridors they never needed).
+      if (distToOwnPath(box) > OWN_EDGE_CLEAR + 0.5) return true;
       if (swallowsOwnEdge(box)) return true;
       for (const t of taken) {
         if (tooClose(box, t, LABEL_CLEAR)) return true;
@@ -1260,46 +1275,10 @@ function placeLabels(
     // vertical one its longest *vertical* run, which are not always the same
     // segment (`state.mmd`'s `Running`→`Graduated` has a 168-long horizontal
     // middle run and two ~12-long vertical stubs either side of it).
-    const longestOf = (horiz: boolean): OwnSegment | null =>
-      segs.reduce<OwnSegment | null>(
-        (best, s) => (s.horiz === horiz && (!best || s.visLen > best.visLen) ? s : best),
-        null,
-      );
-
-    // How much a corridor growth widens by: enough that the segment it
-    // lengthens actually clears DESIGN 6.5/6.8's own coverage ceiling in one
-    // step, not just "the label's own size plus a margin" — a segment has to
-    // reach *width÷0.6* (horizontal) or *height÷0.4*, and at least 64, to
-    // stop reading as swallowed, which is a bigger jump than the label's own
-    // footprint. Sized off the segment that growth would actually lengthen
-    // rather than assumed short, so one growth is normally enough — leaving
-    // the 3-growth cap for the rest of the chart's own labels instead of one
-    // edge spending it all in small steps.
-    const growBy = (horiz: boolean): number => {
-      const current = longestOf(horiz)?.visLen ?? 0;
-      const dim = horiz ? request.width : request.height;
-      // The gate's own swallow check (replicated in `swallowsOwnEdge` above)
-      // treats a candidate as "on" a short vertical/horizontal run whenever
-      // the candidate's centre is within the plate's own width/height of
-      // that run's coordinate — including the short corner stubs either end
-      // of the run a label actually wants sits between. A candidate that
-      // close to *both* stub ends at once is unavoidable unless the run
-      // itself is at least twice the plate's own size, which is a bigger
-      // floor than the 60%/40% coverage ceiling alone asks for.
-      const needed = horiz
-        ? Math.max(dim / RULES['6.5']!.threshold!, 2 * dim, dim + 32)
-        : Math.max(RULES['6.5-min-run']!.threshold!, dim / RULES['6.5-vertical']!.threshold!, 2 * dim, dim + 32);
-      const deficit = Math.max(0, needed - current);
-      // A Z-shaped edge's vertical growth splits roughly evenly between the
-      // stub leaving its source and the stub arriving at its target — the
-      // channel-centred middle run (DESIGN 6.1) redistributes the whole
-      // corridor gap between them — so reaching a given stub's own target
-      // length costs about twice the plain deficit, not the deficit itself.
-      // A horizontal growth has no such split: the one long middle run is
-      // the segment that actually needs the room.
-      const split = !horiz && segs.filter((s) => !s.horiz).length > 1 ? 2 : 1;
-      return Math.max(GRID, Math.ceil((deficit * split) / GRID) * GRID);
-    };
+    // DESIGN 2.7: a corridor grows by one grid step at a time, re-routes and
+    // tries again, so the room a label ends up with is the smallest that
+    // works — never a formula's guess at it.
+    const growBy = (): number => GRID;
 
     // DESIGN 1.1: a chart at a declared `display` has already been packed to
     // fit it (1.5's leaf stacking, 1.2's fold) — a label-driven corridor
@@ -1335,25 +1314,33 @@ function placeLabels(
     // Can this axis actually grow right now? X additionally has to stay
     // inside the display cap and not actually strand a row-mate past 200
     // (7.4); Y never has to ask either question.
+    // Growth only helps along an axis the edge actually runs on: widening a
+    // column gap lengthens a horizontal run, a row gap a vertical one. A
+    // straight horizontal edge asked for row growth twelve times before
+    // (4geeks-journey's "yes"), moving rows apart for a label that only a
+    // longer run could seat.
+    const runsH = segs.some((g) => g.horiz);
+    const runsV = segs.some((g) => !g.horiz);
     const canGrow = (axis: 'x' | 'y'): boolean =>
       axis === 'x'
-        ? request.corridorX !== undefined &&
-          size.width + growBy(true) <= maxContentWidth &&
-          !wouldStrandRowMate(request.corridorX, request.to, growBy(true))
-        : request.corridorY !== undefined;
+        ? runsH &&
+          request.corridorX !== undefined &&
+          size.width + growBy() <= maxContentWidth &&
+          !wouldStrandRowMate(request.corridorX, request.to, growBy())
+        : runsV && request.corridorY !== undefined;
     // Whichever axis actually costs less canvas: an X growth of `g` adds
     // `g × current height` of area, a Y growth of `g` adds `g × current
     // width` — comparing those, not just the raw growth amounts, is what
     // "least canvas area" means once the two axes start from different
     // sizes.
     const addedArea = (axis: 'x' | 'y'): number =>
-      axis === 'x' ? growBy(true) * size.height : growBy(false) * size.width;
+      axis === 'x' ? growBy() * size.height : growBy() * size.width;
     // DESIGN 6.10: a veto never stands with nothing behind it. Cheapest,
     // 7.4-safe axis first; if only one of the two can grow at all, that one;
     // if only X can and it would break 7.4, take it anyway rather than drop
     // the label — a 7.4 fail is still better than 6.9/6.11 not holding.
-    const xOk = allowGrowth && canGrow('x');
-    const yOk = allowGrowth && canGrow('y');
+    const xOk = allowGrowth(request.id, 'x') && canGrow('x');
+    const yOk = allowGrowth(request.id, 'y') && canGrow('y');
     const growAxis: 'x' | 'y' | undefined = xOk
       ? yOk
         ? addedArea('x') <= addedArea('y')
@@ -1362,7 +1349,7 @@ function placeLabels(
         : 'x'
       : yOk
         ? 'y'
-        : allowGrowth && request.corridorX !== undefined && size.width + growBy(true) <= maxContentWidth
+        : allowGrowth(request.id, 'x') && request.corridorX !== undefined && size.width + growBy() <= maxContentWidth
           ? 'x'
           : undefined;
 
@@ -1370,9 +1357,9 @@ function placeLabels(
     if (foundValid) {
       winner = foundValid.box;
     } else if (growAxis === 'x') {
-      throw new NeedsCorridorGrowth('x', request.corridorX!, growBy(true));
+      throw new NeedsCorridorGrowth('x', request.corridorX!, growBy(), request.id);
     } else if (growAxis === 'y') {
-      throw new NeedsCorridorGrowth('y', request.corridorY!, growBy(false));
+      throw new NeedsCorridorGrowth('y', request.corridorY!, growBy(), request.id);
     } else if (foundFallback) {
       winner = foundFallback.box;
     } else {
