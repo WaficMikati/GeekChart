@@ -753,22 +753,27 @@ function animate(
   const last = scaffold + 0.2 + Math.max(beats.length - 1, 0) * step + m.build;
   const cycle = last + m.hold;
 
-  const fade = (selector: string, from: number, over = m.build * 0.8) => {
+  // `to` is the element's own resting opacity — its plain, unanimated CSS
+  // value below — not always full strength. Fading up to 1 regardless of
+  // that value would leave a quiet element (grid, axis) stuck at full
+  // opacity forever once DESIGN 8.4's `'once'` holds this last keyframe,
+  // instead of settling back to the hairline it is meant to be.
+  const fade = (selector: string, from: number, to = 1, over = m.build * 0.8) => {
     const t = track(selector);
     t.at(0, { opacity: '0' });
     t.at(from, { opacity: '0' });
-    t.at(from + over, { opacity: '1' });
-    t.at(cycle, { opacity: '1' });
+    t.at(from + over, { opacity: String(to) });
+    t.at(cycle, { opacity: String(to) });
   };
 
-  if (hasTitle) fade('.gc-chron-title', lead, m.build * 0.7);
+  if (hasTitle) fade('.gc-chron-title', lead, 1, m.build * 0.7);
   // The axis, its gridlines and its tick labels were drawn straight into the
   // scaffold and never animated, so they were on screen from the first frame —
   // before the title, before anything they were meant to be measuring. They are
   // the frame the chart is read against, so they arrive first, but they do
   // arrive.
-  fade('.gc-chron-grid', lead + 0.08);
-  fade('.gc-chron-axis', lead + 0.08);
+  fade('.gc-chron-grid', lead + 0.08, 0.28); // matches .gc-chron-grid's own opacity below
+  fade('.gc-chron-axis', lead + 0.08, 0.6); // matches .gc-chron-axis's own opacity below
   fade('.gc-chron-tick', lead + 0.14);
   if (hasLegend) fade('.gc-chron-legend', scaffold);
   for (let i = 0; i < bandCount; i++) {
@@ -849,12 +854,21 @@ function animate(
       dot.at(start + WAVE_LAG, { r: '6', opacity: '1' });
       dot.at(cycle, { r: '6', opacity: '1' });
       const text = track(
-        `.gc-chron-item[data-id="${beat.id}"] text, .gc-chron-item[data-id="${beat.id}"] rect`,
+        `.gc-chron-item[data-id="${beat.id}"] .gc-chron-period, .gc-chron-item[data-id="${beat.id}"] rect`,
       );
       text.at(0, { opacity: '0', transform: 'translateY(6px)' });
       text.at(start + 0.05, { opacity: '0', transform: 'translateY(6px)' });
       text.at(start + 0.05 + m.build, { opacity: '1', transform: 'translateY(0)' });
       text.at(cycle, { opacity: '1', transform: 'translateY(0)' });
+      // `.gc-chron-event`'s own resting opacity is .88, not 1 (see the rule
+      // below) — grouped into the track above it was fading to full strength
+      // and DESIGN 8.4's `'once'` held it there, brighter than its resting
+      // look. Same build timing, its own resting opacity.
+      const event = track(`.gc-chron-item[data-id="${beat.id}"] .gc-chron-event`);
+      event.at(0, { opacity: '0', transform: 'translateY(6px)' });
+      event.at(start + 0.05, { opacity: '0', transform: 'translateY(6px)' });
+      event.at(start + 0.05 + m.build, { opacity: '.88', transform: 'translateY(0)' });
+      event.at(cycle, { opacity: '.88', transform: 'translateY(0)' });
     } else {
       const item = track(`.gc-chron-item[data-id="${beat.id}"]`);
       item.at(0, { opacity: '0', transform: 'translateY(6px)' });

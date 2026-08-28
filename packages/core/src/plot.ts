@@ -687,18 +687,25 @@ function animate(
   const last = scaffold + WAVE_LAG + Math.max(marks.length - 1, 0) * step + m.build;
   const cycle = last + m.hold;
 
-  const fade = (selector: string, from: number, over = m.build * 0.8) => {
+  // `to` is the element's own resting opacity (its plain, unanimated value
+  // below) — not always full strength. Fading up to 1 regardless would leave
+  // a quiet element (grid, spoke, axis) stuck at full opacity forever once
+  // DESIGN 8.4's `'once'` holds this last keyframe, instead of settling back
+  // to the hairline it is meant to be.
+  const fade = (selector: string, from: number, to = 1, over = m.build * 0.8) => {
     const t = track(selector);
     t.at(0, { opacity: '0' });
     t.at(from, { opacity: '0' });
-    t.at(from + over, { opacity: '1' });
-    t.at(cycle, { opacity: '1' });
+    t.at(from + over, { opacity: String(to) });
+    t.at(cycle, { opacity: String(to) });
   };
 
   if (hasTitle) fade('.gc-plot-title', lead);
   if (hasLegend) fade('.gc-plot-legend', scaffold);
-  fade('.gc-plot-grid', lead + 0.1);
-  fade('.gc-plot-spoke, .gc-plot-axis, .gc-plot-tick, .gc-plot-axis-title', lead + 0.16);
+  fade('.gc-plot-grid', lead + 0.1, 0.26); // matches .gc-plot-grid's own opacity below
+  fade('.gc-plot-spoke', lead + 0.16, 0.3); // matches .gc-plot-spoke's own opacity below
+  fade('.gc-plot-axis', lead + 0.16, 0.55); // matches .gc-plot-axis's own opacity below
+  fade('.gc-plot-tick, .gc-plot-axis-title', lead + 0.16);
   if (plot.kind === 'quadrant') fade('.gc-plot-quad, .gc-plot-quad-label', lead + 0.2);
 
   marks.forEach((mark, i) => {
@@ -783,7 +790,7 @@ function animate(
     const draw = m.build * 2;
     for (let dot = 0; dot < (mark.dots ?? 0); dot++) {
       const along = mark.dots! > 1 ? dot / (mark.dots! - 1) : 0;
-      fade(`.gc-plot-dot[data-id="${mark.id}-d${dot}"]`, start + along * draw, m.build * 0.35);
+      fade(`.gc-plot-dot[data-id="${mark.id}-d${dot}"]`, start + along * draw, 1, m.build * 0.35);
     }
   });
 

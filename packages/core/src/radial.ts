@@ -556,12 +556,18 @@ function animate(marks: Mark[], hasTitle: boolean, scene: Scene): { css: string;
         const k = siblings.get(mark.parent) ?? 0;
         siblings.set(mark.parent, k + 1);
         const start = (done.get(mark.parent) ?? scaffold) + k * lag;
+        // A link's own resting opacity fades by depth — `.gc-mind-link-d1/d2/d3`
+        // below (1 / .7 / .5) — so deeper branches read quieter. Drawing it on
+        // at full opacity and never settling left every link stuck at 1 once
+        // DESIGN 8.4's `'once'` held this last keyframe, regardless of depth.
+        const depth = mark.depth ?? 0;
+        const rest = depth <= 1 ? '1' : depth === 2 ? '.7' : '.5';
         const t = track(`[data-id="${mark.id}"]`);
         t.at(0, { opacity: '0', 'stroke-dashoffset': '1' });
         t.at(start, { opacity: '0', 'stroke-dashoffset': '1' });
         t.at(start + 0.04, { opacity: '1' });
-        t.at(start + linkDur, { 'stroke-dashoffset': '0' });
-        t.at(cycle, { opacity: '1', 'stroke-dashoffset': '0' });
+        t.at(start + linkDur, { opacity: rest, 'stroke-dashoffset': '0' });
+        t.at(cycle, { opacity: rest, 'stroke-dashoffset': '0' });
         done.set(mark.id, start + linkDur);
       } else if (mark.id.startsWith('n-')) {
         const start = done.get(mark.parent) ?? scaffold;
