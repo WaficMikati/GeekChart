@@ -16,6 +16,7 @@ import { planRoutes, type Extent, type OrthoRoute } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
 import { TRUNK_OFFSET } from './layout/stack.ts';
 import { GRID } from './tokens.ts';
+import { RULES } from './rules.ts';
 
 /**
  * Draw the diagram.
@@ -229,12 +230,19 @@ function fingerprint(graph: Graph): string {
  * catches it, grows the one corridor at fault, and tries the whole drawing
  * again — every position computed so far belonged to a layout that is about
  * to change, so none of it is worth keeping.
+ *
+ * `axis` says which way to grow: `y` widens a row gap (a forward edge running
+ * down the flow, the DESIGN 1.5 case this was built for); `x` widens a column
+ * gap (a forward edge running across it — two side-by-side boxes, an ER
+ * relationship being the fixture that needs it) — same idea, the other axis.
  */
 class NeedsCorridorGrowth {
-  afterY: number;
+  axis: 'x' | 'y';
+  after: number;
   growBy: number;
-  constructor(afterY: number, growBy: number) {
-    this.afterY = afterY;
+  constructor(axis: 'x' | 'y', after: number, growBy: number) {
+    this.axis = axis;
+    this.after = after;
     this.growBy = growBy;
   }
 }
@@ -245,7 +253,12 @@ class NeedsCorridorGrowth {
  * is what re-enters this after growing a corridor DESIGN 6.9 left a label no
  * room in.
  */
-function attemptDraw(graph: Graph, scene: Scene, size: { width: number; height: number }): Drawing {
+function attemptDraw(
+  graph: Graph,
+  scene: Scene,
+  size: { width: number; height: number },
+  allowGrowth: boolean,
+): Drawing {
   const uid = fingerprint(graph);
   const placed = graph.nodes.filter(isPlaced);
   const byId = new Map(placed.map((n) => [n.id, n]));
@@ -553,6 +566,8 @@ function attemptDraw(graph: Graph, scene: Scene, size: { width: number; height: 
       const toBox = boxOf(edge.to);
       pendingLabels.push({
         id: edge.id,
+        from: edge.from,
+        to: edge.to,
         text: edge.label,
         points: line,
         // 6 of knockout either side of the words, per DESIGN 6.5.
@@ -560,25 +575,24 @@ function attemptDraw(graph: Graph, scene: Scene, size: { width: number; height: 
         height: scene.edgeLabelSize * 2,
         corridorY:
           !edge.backward && fromBox && toBox && toBox.y > fromBox.y ? toBox.y : undefined,
+        corridorX:
+          !edge.backward && fromBox && toBox && toBox.x > fromBox.x ? toBox.x : undefined,
       });
     }
   }
 
   // Labels are placed only once every route exists, because where one can go
-  // depends on where the others ended up.
-  const labelResult = placeLabels(
-    pendingLabels,
-    placed.map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height })),
-    scene,
-    edgeSegments,
-    // DESIGN 1.5 only: a stacked fan turned into an opaque unit for layout
-    // can leave the *other* branch of a decision reaching it through an
-    // extra bend that never existed before, whose only short segments then
-    // have nowhere sensible to swing a wide label out to. Scoped to charts
-    // that actually stacked a fan, so it changes nothing for the other 36
-    // fixtures, none of which ever set this.
-    graph.edges.some((e) => e.bus),
-  );
+  // depends on where the others ended up. Node boxes carry their id here so
+  // the placer can tell "the box this edge belongs to" (never-overlap only)
+  // from "every other box" (DESIGN 6.9's 8-clear) — panels count too, since a
+  // cluster is a box an edge can land on same as any node.
+  const labelNodeBoxes: NodeBox[] = [
+    ...placed.map((n) => ({ id: n.id, x: n.x, y: n.y, width: n.width, height: n.height })),
+    ...graph.clusters
+      .filter((c) => panels.has(c.id))
+      .map((c) => ({ id: c.id, ...panels.get(c.id)! })),
+  ];
+  const labelResult = placeLabels(pendingLabels, labelNodeBoxes, scene, edgeSegments, size, allowGrowth);
   parts.push(...labelResult.markup);
 
   // Every mark is drawn from its own line's tangent rather than hung off an SVG
@@ -637,18 +651,40 @@ function attemptDraw(graph: Graph, scene: Scene, size: { width: number; height: 
  * is drawn as the last attempt left it rather than looped forever.
  */
 export function draw(graph: Graph, scene: Scene, size: { width: number; height: number }): Drawing {
-  let extra = 0;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  let extraW = 0;
+  let extraH = 0;
+  // At most 3 corridor growths (DESIGN 6.9/6.10/6.11's placer spec): each of
+  // these attempts may throw and grow one corridor, then re-lay-out from
+  // scratch. The final call below disallows growth — placeLabels must not
+  // throw there, it has to seat every label somewhere, gate-reported
+  // violation or not, rather than this function running forever.
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return attemptDraw(graph, scene, { width: size.width, height: size.height + extra });
+      return attemptDraw(
+        graph,
+        scene,
+        { width: size.width + extraW, height: size.height + extraH },
+        true,
+      );
     } catch (grow) {
       if (!(grow instanceof NeedsCorridorGrowth)) throw grow;
-      for (const n of graph.nodes) if (n.y !== undefined && n.y >= grow.afterY) n.y += grow.growBy;
-      for (const c of graph.clusters) if (c.y !== undefined && c.y >= grow.afterY) c.y += grow.growBy;
-      extra += grow.growBy;
+      if (grow.axis === 'y') {
+        for (const n of graph.nodes) if (n.y !== undefined && n.y >= grow.after) n.y += grow.growBy;
+        for (const c of graph.clusters) if (c.y !== undefined && c.y >= grow.after) c.y += grow.growBy;
+        extraH += grow.growBy;
+      } else {
+        for (const n of graph.nodes) if (n.x !== undefined && n.x >= grow.after) n.x += grow.growBy;
+        for (const c of graph.clusters) if (c.x !== undefined && c.x >= grow.after) c.x += grow.growBy;
+        extraW += grow.growBy;
+      }
     }
   }
-  return attemptDraw(graph, scene, { width: size.width, height: size.height + extra });
+  return attemptDraw(
+    graph,
+    scene,
+    { width: size.width + extraW, height: size.height + extraH },
+    false,
+  );
 }
 
 /** Emit a tip's two halves, each on the class that paints it. */
@@ -761,6 +797,13 @@ function panelLabel(node: Placed, scene: Scene): string {
 
 interface LabelRequest {
   id: string;
+  // The two nodes this edge connects. DESIGN 6.9's own gate check (`labelClear`
+  // in packages/cli/src/measure/edges.ts) keeps a label 8 clear of every node
+  // uniformly, these two included, so `from`/`to` are not read as an
+  // exemption here — kept for `draw()`'s DrawnEdge bookkeeping and in case a
+  // future rule does need to tell "this edge's own node" from "any other".
+  from: string;
+  to: string;
   text: string;
   points: Point[];
   width: number;
@@ -772,6 +815,11 @@ interface LabelRequest {
   // fix there, and DESIGN 6.10's own scope is the forward, ranks-stack-down
   // case DESIGN 1.5's own charts hit.
   corridorY?: number;
+  // Same idea, the other axis: how far everything from the target rightward
+  // would shift, for a forward edge whose target sits to the right of its
+  // source in the same row (an ER relationship between two side-by-side
+  // entities is the fixture that needs this one).
+  corridorX?: number;
 }
 
 interface Box {
@@ -779,6 +827,13 @@ interface Box {
   y: number;
   width: number;
   height: number;
+}
+
+/** A node or panel box, identified — so the placer can tell "belongs to this
+ *  edge" (DESIGN 6.9's own boxes: never overlap, no 8-clear buffer needed)
+ *  from every other box (8-clear required). */
+interface NodeBox extends Box {
+  id: string;
 }
 
 /** One edge's own routed points, kept for the "not on another edge" check. */
@@ -793,294 +848,556 @@ const overlap = (a: Box, b: Box): number => {
   return w > 0 && h > 0 ? w * h : 0;
 };
 
-/**
- * An edge's segments as thin boxes, so a segment-vs-plate check can reuse
- * `overlap` above. Routes are axis-aligned polylines (DESIGN 6.1), so a
- * one-unit-wide box on either side of the line is exact, not an
- * approximation.
- */
-const segmentBoxes = (points: Point[]): Box[] => {
-  const boxes: Box[] = [];
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!,
-      b = points[i]!;
-    const half = 1;
-    boxes.push({
-      x: Math.min(a.x, b.x) - half,
-      y: Math.min(a.y, b.y) - half,
-      width: Math.abs(b.x - a.x) + half * 2,
-      height: Math.abs(b.y - a.y) + half * 2,
-    });
-  }
-  return boxes;
+/** Shortest distance from an axis-aligned box to a point (0 when inside). */
+const distBoxPoint = (b: Box, x: number, y: number): number => {
+  const dx = Math.max(b.x - x, 0, x - (b.x + b.width));
+  const dy = Math.max(b.y - y, 0, y - (b.y + b.height));
+  return Math.hypot(dx, dy);
+};
+
+/** Shortest distance from a point to a segment. */
+const distPointSeg = (
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number => {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 ? ((px - x1) * dx + (py - y1) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 };
 
 /**
- * Put each edge label somewhere it can actually be read.
+ * True Euclidean distance between an axis-aligned box and a straight segment
+ * — 0 when they overlap. Both are axis-aligned (DESIGN 6.1), so the true
+ * minimum is always at a box corner or a segment end, same as the gate's own
+ * `distBoxSeg` (packages/cli/src/measure/edges.ts) — kept in step with it so
+ * what this file measures agrees with what DESIGN 6.11 is checked against.
+ */
+const distBoxSeg = (b: Box, x1: number, y1: number, x2: number, y2: number): number => {
+  const sx1 = Math.min(x1, x2);
+  const sx2 = Math.max(x1, x2);
+  const sy1 = Math.min(y1, y2);
+  const sy2 = Math.max(y1, y2);
+  if (sx1 < b.x + b.width && sx2 > b.x && sy1 < b.y + b.height && sy2 > b.y) return 0;
+  let d = Math.min(distBoxPoint(b, x1, y1), distBoxPoint(b, x2, y2));
+  for (const [cx, cy] of [
+    [b.x, b.y],
+    [b.x + b.width, b.y],
+    [b.x + b.width, b.y + b.height],
+    [b.x, b.y + b.height],
+  ] as const) {
+    d = Math.min(d, distPointSeg(cx, cy, x1, y1, x2, y2));
+  }
+  return d;
+};
+
+/** Every consecutive pair of points in a routed polyline, as segment ends. */
+const pairsOf = (points: Point[]): { x1: number; y1: number; x2: number; y2: number }[] => {
+  const out: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  for (let i = 1; i < points.length; i++) {
+    out.push({ x1: points[i - 1]!.x, y1: points[i - 1]!.y, x2: points[i]!.x, y2: points[i]!.y });
+  }
+  return out;
+};
+
+/**
+ * Chebyshev "keeps clear" test: true when `a` and `b` are closer than `clear`
+ * on *both* axes at once. This is DESIGN 6.9's own gate check (`labelClear`
+ * in packages/cli/src/measure/edges.ts) — an inflate-and-overlap test, not a
+ * radial one — so a candidate this rejects is exactly one the gate would too.
+ */
+const tooClose = (a: Box, b: Box, clear: number): boolean =>
+  a.x < b.x + b.width + clear &&
+  b.x < a.x + a.width + clear &&
+  a.y < b.y + b.height + clear &&
+  b.y < a.y + a.height + clear;
+
+/**
+ * DESIGN 6.5/6.8: a plate only sits *on* its line — knocking the line out —
+ * when it covers at most 60% of a horizontal run, or at most 40% of a
+ * vertical one that is itself at least 64 long. A shorter vertical run never
+ * has room: the plate would swallow it regardless of how narrow the label
+ * is. Anything that fails this sits *beside* the line instead. Thresholds
+ * read from `rules.ts` so this file and the gate's own swallow check cannot
+ * drift apart.
+ */
+const onLineFits = (dir: Point, len: number, width: number, height: number): boolean => {
+  const horiz = Math.abs(dir.y) < 0.02;
+  const vert = Math.abs(dir.x) < 0.02;
+  if (horiz) return width <= RULES['6.5']!.threshold! * len;
+  if (vert) {
+    return height <= RULES['6.5-vertical']!.threshold! * len && len >= RULES['6.5-min-run']!.threshold!;
+  }
+  return true; // not axis-aligned (shouldn't happen per 6.1) — leave as-is
+};
+
+// Matches the `roundedPath(line, 12)` call above: a corner eats up to this
+// much off each straight run that meets it, capped to half of whichever
+// adjoining run is shorter. What the gate (and a viewer) sees as "the
+// straight part of the line" is the routed segment minus that cut at each
+// end it shares with a corner — not the full routed length — so that is
+// what DESIGN 6.5's coverage checks, and the search below, measure against.
+const CORNER_RADIUS = 12;
+
+interface OwnSegment {
+  a: Point;
+  b: Point;
+  /** The segment's own length minus its corner cuts — see `CORNER_RADIUS`. */
+  visLen: number;
+  dir: Point;
+  horiz: boolean;
+}
+
+/** An edge's routed polyline, split into its straight runs. */
+const ownSegments = (points: Point[]): OwnSegment[] => {
+  const raw = points.slice(1).map((b, i) => {
+    const a = points[i]!;
+    return { a, b, len: Math.hypot(b.x - a.x, b.y - a.y) };
+  });
+  const out: OwnSegment[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const seg = raw[i]!;
+    if (seg.len < 1) continue;
+    const prev = raw[i - 1];
+    const next = raw[i + 1];
+    const cutStart = prev ? Math.min(CORNER_RADIUS, seg.len / 2, prev.len / 2) : 0;
+    const cutEnd = next ? Math.min(CORNER_RADIUS, seg.len / 2, next.len / 2) : 0;
+    const visLen = Math.max(0, seg.len - cutStart - cutEnd);
+    const dir = { x: (seg.b.x - seg.a.x) / seg.len, y: (seg.b.y - seg.a.y) / seg.len };
+    out.push({ a: seg.a, b: seg.b, visLen, dir, horiz: Math.abs(dir.y) < 0.02 });
+  }
+  return out;
+};
+
+interface Candidate {
+  box: Box;
+  segLen: number;
+  midDist: number;
+  /** 0 when this candidate is the preferred kind (ON/BESIDE) for its own
+   *  segment, 1 otherwise — see the scoring rule below. */
+  kindRank: number;
+  /** Distance to the nearest other edge — the final tie-break, and (for a
+   *  fallback candidate) part of how "violating" it is. */
+  sideDist: number;
+}
+
+/**
+ * Put each edge label somewhere it can actually be read — DESIGN 6.5/6.9/6.11
+ * as one constrained search, not a search plus patches on top of it.
  *
- * A label pinned to its edge's midpoint is fine until two edges have midpoints
- * near each other — then the second label's opaque plate covers the first, and
- * the diagram silently loses a word. Sliding the label along its own edge keeps
- * it unambiguously attached to that edge while letting it step out of the way,
- * which moving it sideways would not.
+ * Per label: every 5% step along every straight run of its own edge offers
+ * up to three candidates (on the line, and beside it on each side, exactly 8
+ * clear); each is kept only if it clears every hard rule (6.9's node
+ * clearance, 6.11's 16-from-every-other-edge, the canvas itself, and every
+ * label already placed); survivors are scored by segment length, then
+ * nearness to that segment's middle, then whether the candidate's kind
+ * (on/beside) is the one this label and segment prefer, then, only to break
+ * an exact tie between a run's two sides, which one sits farther from the
+ * nearest other edge.
  *
- * Longest label first: it has the fewest positions that fit, so it should choose
- * before the short ones take the room.
+ * No survivor at all means the edge's own corridor is too tight — `draw()`
+ * grows it and redraws the whole chart, up to three times (DESIGN 6.9's own
+ * veto never stands with nothing behind it). Once growth is no longer
+ * allowed (the final attempt, or an edge with no corridor to grow — a
+ * loop-back, or one running the wrong way), DESIGN 6.10 still requires the
+ * label to be drawn: the least-bad candidate is used instead, and the gate
+ * reports whatever it still violates.
+ *
+ * Longest label first: it has the fewest positions that fit, so it should
+ * choose before the short ones take the room.
  */
 function placeLabels(
   requests: LabelRequest[],
-  nodes: Box[],
+  nodes: NodeBox[],
   scene: Scene,
   edgeSegments: EdgeSegments[],
-  capOffLineReach = false,
+  size: { width: number; height: number },
+  allowGrowth: boolean,
 ): { markup: string[]; boxes: Box[] } {
   const taken: Box[] = [];
   const out: string[] = [];
   const order = [...requests].sort((a, b) => b.width - a.width);
-  const segmentsByEdge = new Map(edgeSegments.map((e) => [e.id, segmentBoxes(e.points)]));
-
-  // Sliding alone is not always enough: two edges leaving the same box run close
-  // together for their whole length, so every position along one collides with
-  // the other. Stepping off the line perpendicular gives the search somewhere
-  // else to go, and the penalty below keeps it on the line when it can be.
-  // DESIGN §3's raised label size (11, up from 8) widened plates by about a
-  // third — "final project shipped" plates at 187 wide, wider than the old
-  // ceiling here could ever clear. The steps go past what a two-label clash
-  // needs (half of one wide plate plus the other's own half-width) so the
-  // search can actually find the clear spot instead of settling for the least
-  // bad of a set that never reached it.
-  // DESIGN 6.9: extended past the old 78 ceiling — a label whose own
-  // segment barely qualifies as "fits on-line" (width just under the
-  // 60%/40% ceiling) still only has that segment's own length to hide
-  // in sideways; clearing a neighbour that crosses it near one end can
-  // need more room than a comfortably-fitting label ever would.
-  const nudges = [0, 14, -14, 26, -26, 40, -40, 58, -58, 78, -78, 98, -98, 118, -118, 138, -138];
-
-  /**
-   * Where a label could sit on an orthogonal route.
-   *
-   * By *segment*, not by fraction of the whole length. A route that goes down,
-   * across and down has three quite different places to put a word, and the
-   * arc-length midpoint of the three is usually a corner — the one place a plate
-   * cannot go. Longest segment first, because that is the one with room.
-   */
-  // Matches the `roundedPath(line, 12)` call above: a corner eats up to this
-  // much off each straight run that meets it, capped to half of whichever
-  // adjoining run is shorter. What the gate (and a viewer) sees as "the
-  // straight part of the line" is the routed segment minus that cut at each
-  // end it shares with a corner — not the full routed length — so that is
-  // what the 64-long / 40% checks below have to measure against.
-  const CORNER_RADIUS = 12;
-
-  const anchors = (points: Point[]): { at: Point; dir: Point; drift: number; len: number }[] => {
-    const segments = points.slice(1).map((b, i) => {
-      const a = points[i]!;
-      const len = Math.hypot(b.x - a.x, b.y - a.y);
-      return { a, b, len };
-    });
-    const total = segments.reduce((sum, s) => sum + s.len, 0) || 1;
-    const out: { at: Point; dir: Point; drift: number; len: number }[] = [];
-    for (const seg of [...segments].sort((p, q) => q.len - p.len)) {
-      if (seg.len < 1) continue;
-      const i = segments.indexOf(seg);
-      const prev = segments[i - 1];
-      const next = segments[i + 1];
-      const cutStart = prev ? Math.min(CORNER_RADIUS, seg.len / 2, prev.len / 2) : 0;
-      const cutEnd = next ? Math.min(CORNER_RADIUS, seg.len / 2, next.len / 2) : 0;
-      const visLen = Math.max(0, seg.len - cutStart - cutEnd);
-      const dir = { x: (seg.b.x - seg.a.x) / seg.len, y: (seg.b.y - seg.a.y) / seg.len };
-      // DESIGN 6.9: every node box plus 8 is forbidden ground, so the search
-      // has to be able to slide all the way toward either end of a segment
-      // to find clear space past a neighbour that crowds the middle — five
-      // points clustered near the centre never reach far enough. Centre-out
-      // order, so a nearer spot still wins over a farther one whenever both
-      // turn out clear (the caller keeps searching past the first clear hit
-      // only to compare against ones already found — `drift`, below, is what
-      // actually decides that, but trying the near ones first keeps the
-      // common case cheap).
-      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.1, 0.9, 0.05, 0.95]) {
-        out.push({
-          at: { x: seg.a.x + (seg.b.x - seg.a.x) * t, y: seg.a.y + (seg.b.y - seg.a.y) * t },
-          dir,
-          // Short segments and off-centre stops are both a compromise; charge
-          // for them so the obvious place wins whenever it is free.
-          drift: (1 - seg.len / total) * 30 + Math.abs(t - 0.5) * 40,
-          len: visLen,
-        });
-      }
-    }
-    return out;
-  };
-
-  // DESIGN 6.5: a plate only sits *on* its line — knocking the line out —
-  // when it covers at most 60% of a horizontal segment, or at most 40% of a
-  // vertical one that is itself at least 64 long. A shorter vertical segment
-  // never has room: the plate would swallow it regardless of how narrow the
-  // label is. Anything that fails this sits *beside* the line instead: pushed
-  // perpendicular just clear of it (half the plate's cross-line size, plus an
-  // 8 gap), so the plate no longer overlaps the line at all and needs no
-  // knockout. This mirrors the gate's own swallow check (gate.mjs) so what
-  // passes here passes there.
-  const onLineFits = (dir: Point, len: number, width: number, height: number): boolean => {
-    const horiz = Math.abs(dir.y) < 0.02;
-    const vert = Math.abs(dir.x) < 0.02;
-    if (horiz) return width <= 0.6 * len;
-    if (vert) return height <= 0.4 * len && len >= 64;
-    return true; // not axis-aligned (shouldn't happen per 6.1) — leave as-is
-  };
+  const NODE_CLEAR = RULES['6.9']!.threshold!; // 8
+  const OTHER_EDGE_CLEAR = RULES['6.11-other']!.threshold!; // 16
+  const OWN_EDGE_CLEAR = RULES['6.11']!.threshold!; // 8 — matches the beside offset below
+  const LABEL_CLEAR = 8; // 6.5: plates never overlap each other
 
   for (const request of order) {
-    // Two costs, compared in order rather than added together. They were a
-    // single number, and because an overlap area and a displacement were in the
-    // same units a 0.2px overlap (cost 7.8) beat a clean 16px nudge (cost 9.6) —
-    // the label sat on its neighbour to stay nearer the middle of its line.
-    // Clearing other labels is not a preference to be traded off; it is the
-    // point.
-    // Every other edge's segments, not just the ones that carry a label —
-    // DESIGN 6.5 forbids a plate sitting on any edge but its own.
-    const otherSegments = edgeSegments
+    const segs = ownSegments(request.points);
+    // Every other edge's segments, not just the ones that carry a label of
+    // their own — DESIGN 6.11 forbids a plate sitting near any edge but its
+    // own, whether or not that edge is labelled.
+    const otherPairs = edgeSegments
       .filter((e) => e.id !== request.id)
-      .flatMap((e) => segmentsByEdge.get(e.id) ?? []);
+      .flatMap((e) => pairsOf(e.points));
+    const ownPairs = pairsOf(request.points);
 
-    // DESIGN 1.5 only (`capOffLineReach`): how far off-line a candidate may
-    // go, bounded by the edge's own reach rather than the label's size. A
-    // wide label beside a short segment on an edge that is otherwise short
-    // too has nowhere sensible to sit that far out — the plate-width
-    // clearance below (`minOffset`) does not know that, and can push the
-    // label well past everything the edge itself ever comes near: clash-free
-    // on a technicality, but nowhere a reader would connect back to it. Left
-    // unbounded for every ordinary chart (`capOffLineReach` false), since
-    // that is the search this file already relies on elsewhere.
-    const edgeBox = request.points.reduce(
-      (b, p) => ({
-        x0: Math.min(b.x0, p.x),
-        y0: Math.min(b.y0, p.y),
-        x1: Math.max(b.x1, p.x),
-        y1: Math.max(b.y1, p.y),
-      }),
-      { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity },
-    );
-    const cappedNudge = capOffLineReach
-      ? Math.max(edgeBox.x1 - edgeBox.x0, edgeBox.y1 - edgeBox.y0) + 20
-      : Infinity;
-
-    // One search, run once per allowed reach. DESIGN 6.10: a veto never
-    // stands with nothing behind it — the first pass keeps `capOffLineReach`
-    // charts (DESIGN 1.5) from reading a bus's own edge as its label's
-    // corridor; if that pass finds nothing (every candidate on the edge is
-    // within 8 of a box, DESIGN 6.9), a second, uncapped pass grows the
-    // search past it rather than dropping the label. Growing "by the
-    // label's own height + 8" is exactly what the off-line `minOffset`
-    // below already steps by — this just stops refusing to take enough of
-    // those steps.
-    // DESIGN 6.10's fallback pass reaches further off-line than a normal
-    // placement ever needs to — extra steps a chart that already finds a
-    // spot on the base list has no reason to be offered, and offering them
-    // anyway once moved `state.mmd`'s own label practically for free (a
-    // farther, still clash-free spot beat a nearer one on drift alone), which
-    // is a dimension change DESIGN 1.1 promises never to make outside this
-    // feature. `extraSteps` stays empty for the base attempt and is only
-    // ever filled in for the fallback, below.
-    const search = (
-      limit: number,
-      extraSteps: number[],
-    ): { box: Box; clash: number; drift: number } | null => {
-      let best: { box: Box; clash: number; drift: number } | null = null;
-      const spots = anchors(request.points);
-      // A short elbow — the corner stub between two longer runs, not a real
-      // place anyone would look for a label — is not a candidate for the
-      // off-line push at all once a longer run on the same edge exists: an
-      // 8-from-the-line offset that reads as "beside this run" on a long
-      // segment reads as "beside some other run entirely" on one this
-      // short, since the box ends up wider than the stub itself (DESIGN
-      // 6.11 asks for the label's own edge, not just any point on it).
-      const hasLongRun = spots.some((s) => s.len >= 40);
-      outer: for (const spot of spots) {
-        const { at, dir, len } = spot;
-        const perp = { x: -dir.y, y: dir.x };
-        // If sitting on this segment would swallow it, skip the on-line (nudge
-        // 0) spots entirely and start from just clear of the line instead:
-        // its centre offset by half the plate's own cross-line size (height
-        // for a horizontal segment, width for a vertical one) plus 8, which
-        // is what puts the plate's own *near* edge — not its centre — 8 from
-        // the line (DESIGN 6.11). Extra steps beyond that are only for
-        // dodging other labels/edges, same as the on-line case.
-        const horiz = Math.abs(dir.y) < 0.02;
-        const crossSize = horiz ? request.height : request.width;
-        const minOffset = crossSize / 2 + 8;
-        const fitsOnLine = onLineFits(dir, len, request.width, request.height);
-        if (!fitsOnLine && len < 40 && hasLongRun) continue;
-        const offLineSteps = fitsOnLine
-          ? nudges
-          : [0, 14, 26, 40, 58, 78, ...extraSteps].flatMap((step) => [
-              minOffset + step,
-              -(minOffset + step),
-            ]);
-        const spotNudges = offLineSteps.filter((n) => Math.abs(n) <= limit);
-        for (const nudge of spotNudges) {
-          const cx = at.x + perp.x * nudge;
-          const cy = at.y + perp.y * nudge;
-          const box: Box = {
-            x: cx - request.width / 2,
-            y: cy - request.height / 2,
-            width: request.width,
-            height: request.height,
-          };
-          // Tested with a little air around it, so two labels end up clearly
-          // apart rather than exactly touching.
-          const padded: Box = {
-            x: box.x - 3,
-            y: box.y - 3,
-            width: box.width + 6,
-            height: box.height + 6,
-          };
-          // DESIGN 6.9: a node box plus 8 is forbidden outright, not merely
-          // discouraged — a candidate that close is skipped before it is ever
-          // scored, so the search keeps sliding (more `t` values, above) or
-          // keeps stepping (more nudges) until it finds one that is not,
-          // rather than settling for "close enough" the way a discounted cost
-          // used to let it.
-          const nodeGuard: Box = { x: box.x - 8, y: box.y - 8, width: box.width + 16, height: box.height + 16 };
-          if (nodes.some((b) => overlap(nodeGuard, b) > 0)) continue;
-          // A label brushing another label — or another edge's own line — is
-          // not survivable; both are full weight, same as always.
-          const clash =
-            taken.reduce((sum, b) => sum + overlap(padded, b), 0) +
-            otherSegments.reduce((sum, b) => sum + overlap(padded, b), 0);
-          const drift = Math.abs(nudge) * 0.6 + spot.drift;
-          if (!best || clash < best.clash || (clash === best.clash && drift < best.drift)) {
-            best = { box, clash, drift };
-          }
-          if (clash === 0) break outer;
+    // The gate's own swallow check (`labelSwallow` in
+    // packages/cli/src/measure/edges.ts) reads the edge's *drawn* `d`
+    // attribute, not the straight-segment model above — and it extracts every
+    // number in that string as a point, `Q`'s own control point included. A
+    // corner's rounding (`roundedPath(line, 12)`, the same call `draw()`
+    // makes below) turns each real corner into three points spanning at most
+    // 12 units, which the gate then treats as its own tiny "segment" — one a
+    // wide plate can seem to sit "on" (its width alone puts its centre within
+    // that segment's own x-reach) even while sitting nowhere near it, exactly
+    // the way a wide label beside a long run can still read as swallowing a
+    // short stub elsewhere on the same edge. Rather than special-case that,
+    // this replicates the gate's own extraction and test, so a candidate
+    // this file accepts is one the gate accepts too.
+    const ownSwallowSegs = (() => {
+      const d = roundedPath(request.points, CORNER_RADIUS);
+      const nums = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+      const pts: Point[] = [];
+      for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
+      const segs: { x1: number; y1: number; x2: number; y2: number }[] = [];
+      for (let i = 1; i < pts.length; i++) {
+        segs.push({ x1: pts[i - 1]!.x, y1: pts[i - 1]!.y, x2: pts[i]!.x, y2: pts[i]!.y });
+      }
+      return segs;
+    })();
+    const swallowsOwnEdge = (box: Box): boolean => {
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      // A half-pixel of slack on the segment's own y/x range: an ON
+      // placement's cy sits exactly on the shared corner y between the run
+      // it is meant to be on and the tiny corner stub next to it (the corner
+      // and the run share that coordinate exactly), so the true membership
+      // test lands right on the boundary — where the gate's own arithmetic
+      // (real getBoundingClientRect measurements, not this file's rounded
+      // numbers) can land a hair either side. Treating "right at the edge"
+      // as "in range" here is the conservative reading, not a looser one.
+      const EPS = 0.6;
+      for (const { x1, y1, x2, y2 } of ownSwallowSegs) {
+        const horiz = Math.abs(y1 - y2) < 1;
+        const vert = Math.abs(x1 - x2) < 1;
+        const onH =
+          horiz &&
+          Math.abs(cy - y1) < box.height &&
+          cx > Math.min(x1, x2) - EPS &&
+          cx < Math.max(x1, x2) + EPS;
+        const onV =
+          vert &&
+          Math.abs(cx - x1) < box.width &&
+          cy > Math.min(y1, y2) - EPS &&
+          cy < Math.max(y1, y2) + EPS;
+        if (onH && box.width > RULES['6.5']!.threshold! * Math.abs(x2 - x1)) return true;
+        if (
+          onV &&
+          (box.height > RULES['6.5-vertical']!.threshold! * Math.abs(y2 - y1) ||
+            Math.abs(y2 - y1) < RULES['6.5-min-run']!.threshold!)
+        ) {
+          return true;
         }
       }
-      return best;
+      return false;
     };
 
-    // DESIGN 6.10: a veto never stands with nothing behind it. This is
-    // exactly the search every chart already relied on (original step
-    // list, `capOffLineReach`'s own cap for DESIGN 1.5 charts) — nothing
-    // about it changes for the other 36 fixtures, which always find a spot
-    // here. A label whose own edge has nowhere clear is not, any more,
-    // walked further and further off that edge until something happens to
-    // be empty (DESIGN 6.11: wherever it lands has to still be *its*
-    // edge) — it throws, and `draw()` grows the corridor this edge crosses
-    // and draws the whole chart again.
-    const best = search(cappedNudge, []);
-    if (!best) {
-      if (request.corridorY === undefined) continue;
-      throw new NeedsCorridorGrowth(
-        request.corridorY,
-        Math.ceil((request.height + 8) / GRID) * GRID,
-      );
+    const distToOthers = (box: Box): number => {
+      let d = Infinity;
+      for (const p of otherPairs) d = Math.min(d, distBoxSeg(box, p.x1, p.y1, p.x2, p.y2));
+      return d;
+    };
+    const distToOwnPath = (box: Box): number => {
+      let d = Infinity;
+      for (const p of ownPairs) d = Math.min(d, distBoxSeg(box, p.x1, p.y1, p.x2, p.y2));
+      return d;
+    };
+
+    // Hard constraints (DESIGN 6.9, 6.11, and the canvas/label bookkeeping
+    // every chart already relies on): reject outright rather than merely
+    // discourage — the search keeps trying other positions instead of
+    // settling for "close enough". The gate's own 6.9 check (`labelClear` in
+    // packages/cli/src/measure/edges.ts) applies the 8-clear to every node
+    // uniformly, with no exemption for the two the label's own edge
+    // connects — so this does too, even though DESIGN 6.9's prose reads as
+    // if "never overlap" were enough for those two.
+    const violates = (box: Box): boolean => {
+      // Not a hard "stay inside `size`": `size` is the layout's own
+      // pre-label content box, and DESIGN 1.1's frame is fitted to
+      // `drawing.extent` afterward — which already unions in every placed
+      // label's own box — so a candidate landing a little past it just
+      // grows the final frame to hug it, the same way it already hugs an
+      // edge that routes past `size`'s own edge. Only the canvas's *near*
+      // corner (negative x/y) stays a hard wall; there is no fitting step
+      // that would ever pull the origin back to meet a candidate above or
+      // left of it.
+      if (box.x < 0 || box.y < 0) return true;
+      for (const n of nodes) {
+        if (tooClose(box, n, NODE_CLEAR)) return true;
+      }
+      for (const p of otherPairs) {
+        if (distBoxSeg(box, p.x1, p.y1, p.x2, p.y2) < OTHER_EDGE_CLEAR) return true;
+      }
+      if (distToOwnPath(box) > OWN_EDGE_CLEAR - 1) return true; // 1 unit of safety margin against float/rendering rounding, not a rule change
+      if (swallowsOwnEdge(box)) return true;
+      for (const t of taken) {
+        if (tooClose(box, t, LABEL_CLEAR)) return true;
+      }
+      return false;
+    };
+
+    // DESIGN 6.10's own fallback: how deep a candidate sits inside each
+    // forbidden buffer, so that when nothing clears every rule the least-bad
+    // one still wins rather than an arbitrary one. Zero exactly when
+    // `violates` above would also say the candidate is clean.
+    const badness = (box: Box): number => {
+      let bad = 0;
+      const overshoot =
+        Math.max(0, -box.x) +
+        Math.max(0, -box.y) +
+        Math.max(0, box.x + box.width - size.width) +
+        Math.max(0, box.y + box.height - size.height);
+      bad += overshoot * 1000; // off the canvas is always worse than any crowding
+      for (const n of nodes) {
+        const padded: Box = {
+          x: n.x - NODE_CLEAR,
+          y: n.y - NODE_CLEAR,
+          width: n.width + NODE_CLEAR * 2,
+          height: n.height + NODE_CLEAR * 2,
+        };
+        bad += overlap(box, padded);
+      }
+      for (const p of otherPairs) {
+        const d = distBoxSeg(box, p.x1, p.y1, p.x2, p.y2);
+        if (d < OTHER_EDGE_CLEAR) bad += (OTHER_EDGE_CLEAR - d) * 20;
+      }
+      const own = distToOwnPath(box);
+      if (own > OWN_EDGE_CLEAR) bad += (own - OWN_EDGE_CLEAR) * 20;
+      if (swallowsOwnEdge(box)) bad += 500;
+      for (const t of taken) {
+        const padded: Box = {
+          x: t.x - LABEL_CLEAR,
+          y: t.y - LABEL_CLEAR,
+          width: t.width + LABEL_CLEAR * 2,
+          height: t.height + LABEL_CLEAR * 2,
+        };
+        bad += overlap(box, padded);
+      }
+      return bad;
+    };
+
+    // Scoring for survivors (DESIGN's own order): longest segment, then
+    // nearest that segment's middle, then the preferred kind for this
+    // label/segment pair, then — only ever a real tie-break between a run's
+    // two BESIDE sides — the one farther from the nearest other edge.
+    const better = (a: Candidate, b: Candidate): boolean => {
+      if (a.segLen !== b.segLen) return a.segLen > b.segLen;
+      if (a.midDist !== b.midDist) return a.midDist < b.midDist;
+      if (a.kindRank !== b.kindRank) return a.kindRank < b.kindRank;
+      return a.sideDist > b.sideDist;
+    };
+
+    let bestValid: Candidate | null = null;
+    let bestFallback: (Candidate & { bad: number }) | null = null;
+
+    const consider = (box: Box, segLen: number, midDist: number, kindRank: number) => {
+      const cand: Candidate = { box, segLen, midDist, kindRank, sideDist: distToOthers(box) };
+      if (!violates(box)) {
+        if (!bestValid || better(cand, bestValid)) bestValid = cand;
+        return;
+      }
+      const bad = badness(box);
+      if (!bestFallback || bad < bestFallback.bad || (bad === bestFallback.bad && better(cand, bestFallback))) {
+        bestFallback = { ...cand, bad };
+      }
+    };
+
+    for (const seg of segs) {
+      const alongSize = seg.horiz ? request.width : request.height;
+      const crossSize = seg.horiz ? request.height : request.width;
+      // The beside offset is fixed, not searched: the label's near edge sits
+      // exactly 8 clear of the line (DESIGN 6.11), half the plate's own
+      // cross-line size further out to reach the plate's centre.
+      const minOffset = crossSize / 2 + 8;
+      const eligibleOn = onLineFits(seg.dir, seg.visLen, request.width, request.height);
+      // DESIGN's own scoring rule: ON beats BESIDE when the label is shorter
+      // than the segment it would sit on; BESIDE beats ON otherwise.
+      const preferOn = alongSize < seg.visLen;
+      const perp = { x: -seg.dir.y, y: seg.dir.x };
+      for (let step = 1; step <= 19; step++) {
+        const t = step * 0.05;
+        const midDist = Math.abs(t - 0.5);
+        const px = seg.a.x + (seg.b.x - seg.a.x) * t;
+        const py = seg.a.y + (seg.b.y - seg.a.y) * t;
+        if (eligibleOn) {
+          consider(
+            { x: px - request.width / 2, y: py - request.height / 2, width: request.width, height: request.height },
+            seg.visLen,
+            midDist,
+            preferOn ? 0 : 1,
+          );
+        }
+        for (const side of [1, -1]) {
+          const cx = px + perp.x * minOffset * side;
+          const cy = py + perp.y * minOffset * side;
+          consider(
+            { x: cx - request.width / 2, y: cy - request.height / 2, width: request.width, height: request.height },
+            seg.visLen,
+            midDist,
+            preferOn ? 1 : 0,
+          );
+        }
+      }
     }
-    taken.push(best.box);
-    const cx = best.box.x + best.box.width / 2;
-    const cy = best.box.y + best.box.height / 2;
+
+    // Copied out of the mutable `let`s so TypeScript can narrow them below.
+    // Both are only ever reassigned inside the `consider` closure above —
+    // TypeScript's flow analysis does not see across that closure boundary,
+    // so without the cast it treats each as permanently `null`, its only
+    // directly-visible assignment in this function's own body.
+    const foundValid = bestValid as Candidate | null;
+    const foundFallback = bestFallback as (Candidate & { bad: number }) | null;
+
+    // How long a corridor growth's own segment already is, per axis — a
+    // horizontal growth lengthens the edge's longest *horizontal* run, a
+    // vertical one its longest *vertical* run, which are not always the same
+    // segment (`state.mmd`'s `Running`→`Graduated` has a 168-long horizontal
+    // middle run and two ~12-long vertical stubs either side of it).
+    const longestOf = (horiz: boolean): OwnSegment | null =>
+      segs.reduce<OwnSegment | null>(
+        (best, s) => (s.horiz === horiz && (!best || s.visLen > best.visLen) ? s : best),
+        null,
+      );
+
+    // How much a corridor growth widens by: enough that the segment it
+    // lengthens actually clears DESIGN 6.5/6.8's own coverage ceiling in one
+    // step, not just "the label's own size plus a margin" — a segment has to
+    // reach *width÷0.6* (horizontal) or *height÷0.4*, and at least 64, to
+    // stop reading as swallowed, which is a bigger jump than the label's own
+    // footprint. Sized off the segment that growth would actually lengthen
+    // rather than assumed short, so one growth is normally enough — leaving
+    // the 3-growth cap for the rest of the chart's own labels instead of one
+    // edge spending it all in small steps.
+    const growBy = (horiz: boolean): number => {
+      const current = longestOf(horiz)?.visLen ?? 0;
+      const dim = horiz ? request.width : request.height;
+      // The gate's own swallow check (replicated in `swallowsOwnEdge` above)
+      // treats a candidate as "on" a short vertical/horizontal run whenever
+      // the candidate's centre is within the plate's own width/height of
+      // that run's coordinate — including the short corner stubs either end
+      // of the run a label actually wants sits between. A candidate that
+      // close to *both* stub ends at once is unavoidable unless the run
+      // itself is at least twice the plate's own size, which is a bigger
+      // floor than the 60%/40% coverage ceiling alone asks for.
+      const needed = horiz
+        ? Math.max(dim / RULES['6.5']!.threshold!, 2 * dim, dim + 32)
+        : Math.max(RULES['6.5-min-run']!.threshold!, dim / RULES['6.5-vertical']!.threshold!, 2 * dim, dim + 32);
+      const deficit = Math.max(0, needed - current);
+      // A Z-shaped edge's vertical growth splits roughly evenly between the
+      // stub leaving its source and the stub arriving at its target — the
+      // channel-centred middle run (DESIGN 6.1) redistributes the whole
+      // corridor gap between them — so reaching a given stub's own target
+      // length costs about twice the plain deficit, not the deficit itself.
+      // A horizontal growth has no such split: the one long middle run is
+      // the segment that actually needs the room.
+      const split = !horiz && segs.filter((s) => !s.horiz).length > 1 ? 2 : 1;
+      return Math.max(GRID, Math.ceil((deficit * split) / GRID) * GRID);
+    };
+
+    // DESIGN 1.1: a chart at a declared `display` has already been packed to
+    // fit it (1.5's leaf stacking, 1.2's fold) — a label-driven corridor
+    // growth is not allowed to spend that budget back out. Only the width
+    // side of this is capped; height is "whatever the content needs" (1.1)
+    // and grows freely either way.
+    const maxContentWidth = scene.canvas.width - scene.canvas.margin * 2;
+    // DESIGN 7.4 (the gate's own `7.4-even-whitespace`): two nodes in the
+    // same row band never end up more than 200 apart edge-to-edge with
+    // nothing between them. An X growth only shifts nodes at or past its own
+    // threshold (`state.mmd`'s `Graduated`, not its row-mate `Paused`, which
+    // sits to the left of it) — so it can turn a tight, even row into one
+    // with a single node stranded far to the right. Checked here, before the
+    // growth is ever thrown, rather than after the fact.
+    const wouldStrandRowMate = (thresholdX: number, targetId: string, growAmount: number): boolean => {
+      const target = nodes.find((n) => n.id === targetId);
+      if (!target) return false;
+      const rowMates = nodes.filter(
+        (n) =>
+          n.id !== targetId &&
+          n.x < thresholdX &&
+          n.y < target.y + target.height &&
+          n.y + n.height > target.y,
+      );
+      if (!rowMates.length) return false;
+      const nearestRight = Math.max(...rowMates.map((n) => n.x + n.width));
+      // `target.x` is its *current* left edge; growth shifts it (and
+      // everything at or past `thresholdX`) right by `growAmount`, so its
+      // new left edge — what the row-mate would actually end up that far
+      // from — is `target.x + growAmount`, not `target.x` itself.
+      return target.x + growAmount - nearestRight > RULES['7.4-even-whitespace']!.threshold!;
+    };
+    // Can this axis actually grow right now? X additionally has to stay
+    // inside the display cap and not actually strand a row-mate past 200
+    // (7.4); Y never has to ask either question.
+    const canGrow = (axis: 'x' | 'y'): boolean =>
+      axis === 'x'
+        ? request.corridorX !== undefined &&
+          size.width + growBy(true) <= maxContentWidth &&
+          !wouldStrandRowMate(request.corridorX, request.to, growBy(true))
+        : request.corridorY !== undefined;
+    // Whichever axis actually costs less canvas: an X growth of `g` adds
+    // `g × current height` of area, a Y growth of `g` adds `g × current
+    // width` — comparing those, not just the raw growth amounts, is what
+    // "least canvas area" means once the two axes start from different
+    // sizes.
+    const addedArea = (axis: 'x' | 'y'): number =>
+      axis === 'x' ? growBy(true) * size.height : growBy(false) * size.width;
+    // DESIGN 6.10: a veto never stands with nothing behind it. Cheapest,
+    // 7.4-safe axis first; if only one of the two can grow at all, that one;
+    // if only X can and it would break 7.4, take it anyway rather than drop
+    // the label — a 7.4 fail is still better than 6.9/6.11 not holding.
+    const xOk = allowGrowth && canGrow('x');
+    const yOk = allowGrowth && canGrow('y');
+    const growAxis: 'x' | 'y' | undefined = xOk
+      ? yOk
+        ? addedArea('x') <= addedArea('y')
+          ? 'x'
+          : 'y'
+        : 'x'
+      : yOk
+        ? 'y'
+        : allowGrowth && request.corridorX !== undefined && size.width + growBy(true) <= maxContentWidth
+          ? 'x'
+          : undefined;
+
+    let winner: Box;
+    if (foundValid) {
+      winner = foundValid.box;
+    } else if (growAxis === 'x') {
+      throw new NeedsCorridorGrowth('x', request.corridorX!, growBy(true));
+    } else if (growAxis === 'y') {
+      throw new NeedsCorridorGrowth('y', request.corridorY!, growBy(false));
+    } else if (foundFallback) {
+      winner = foundFallback.box;
+    } else {
+      // No measurable segment at all (a degenerate, near-zero-length edge):
+      // the last resort so DESIGN 6.10 still holds — the centre of the
+      // path's own bounding box.
+      const xs = request.points.map((p) => p.x);
+      const ys = request.points.map((p) => p.y);
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+      const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+      winner = {
+        x: cx - request.width / 2,
+        y: cy - request.height / 2,
+        width: request.width,
+        height: request.height,
+      };
+    }
+
+    taken.push(winner);
+    const cx = winner.x + winner.width / 2;
+    const cy = winner.y + winner.height / 2;
     out.push(
       `<g class="gc-edge-label" data-id="${esc(request.id)}">` +
-        `<rect class="gc-plate" x="${round(best.box.x)}" y="${round(best.box.y)}" ` +
-        `width="${round(best.box.width)}" height="${round(best.box.height)}" rx="3"/>` +
+        `<rect class="gc-plate" x="${round(winner.x)}" y="${round(winner.y)}" ` +
+        `width="${round(winner.width)}" height="${round(winner.height)}" rx="3"/>` +
         `<text x="${round(cx)}" y="${round(cy + scene.edgeLabelSize * 0.36)}">${esc(request.text)}</text>` +
         `</g>`,
     );

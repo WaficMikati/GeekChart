@@ -11,6 +11,7 @@ import {
   nodeById,
   outline,
   rect,
+  texts,
   visible,
   type Check,
   type Ctx,
@@ -226,6 +227,81 @@ export const orphanColumns: Check = {
   },
 };
 
+/**
+ * DESIGN 7.4: two nodes in the same row band are never more than 200 units
+ * apart edge-to-edge unless a node or label sits between them — the prose
+ * version of "content covers a share of the canvas" made measurable at the
+ * gap level, not just the aggregate. Row bands group by vertical overlap
+ * (compositionRows' own approach, applied to nodes directly rather than
+ * panel boxes), so a wide, empty stretch inside one row reads as a fail
+ * whether or not the chart's overall coverage number still clears 7.4's
+ * other threshold.
+ */
+export const evenWhitespace: Check = {
+  id: '7.4-even-whitespace',
+  rule: '7.4',
+  run(svg, ctx) {
+    const boxes = [...nodeById(ctx)]
+      .filter(([, n]) => !n.classList.contains('gc-kind-marker'))
+      .map(([id, n]) => ({ id, b: rect(outline(n)) }))
+      .filter((x) => x.b.width);
+    const bands: { top: number; bottom: number; items: typeof boxes }[] = [];
+    for (const bx of [...boxes].sort((a, b) => a.b.top - b.b.top)) {
+      const band = bands.find((r) => bx.b.top < r.bottom - 1 && bx.b.bottom > r.top + 1);
+      if (band) {
+        band.items.push(bx);
+        band.top = Math.min(band.top, bx.b.top);
+        band.bottom = Math.max(band.bottom, bx.b.bottom);
+      } else {
+        bands.push({ top: bx.b.top, bottom: bx.b.bottom, items: [bx] });
+      }
+    }
+    const labelBoxes = texts(ctx)
+      .map((t) => rect(t))
+      .filter((b) => b.width);
+    const threshold = RULES['7.4-even-whitespace']!.threshold!;
+    let violations = 0;
+    const ids: string[] = [];
+    for (const band of bands) {
+      const items = [...band.items].sort((a, b) => a.b.left - b.b.left);
+      for (let i = 1; i < items.length; i++) {
+        const prev = items[i - 1]!;
+        const next = items[i]!;
+        const gap = (next.b.left - prev.b.right) / ctx.unit;
+        if (gap <= threshold) continue;
+        const l = prev.b.right;
+        const r = next.b.left;
+        const between =
+          boxes.some(
+            (x) =>
+              x.id !== prev.id &&
+              x.id !== next.id &&
+              x.b.left < r - 1 &&
+              x.b.right > l + 1 &&
+              x.b.top < band.bottom + 1 &&
+              x.b.bottom > band.top - 1,
+          ) ||
+          labelBoxes.some(
+            (b) =>
+              b.left < r - 1 && b.right > l + 1 && b.top < band.bottom + 1 && b.bottom > band.top - 1,
+          );
+        if (!between) {
+          violations++;
+          ids.push(`${prev.id}~${next.id}:${Math.round(gap)}`);
+        }
+      }
+    }
+    return violations
+      ? [
+          {
+            severity: 'fail',
+            message: `7.4 ${violations} row gaps wider than ${threshold} with nothing between them (${ids.slice(0, 3).join(' ')})`,
+          },
+        ]
+      : [];
+  },
+};
+
 export const clipped: Check = {
   id: '7.5-clipped',
   rule: '7.5',
@@ -278,4 +354,5 @@ export const CANVAS_CHECKS: Check[] = [
   clipped,
   unbalancedRows,
   orphanColumns,
+  evenWhitespace,
 ];

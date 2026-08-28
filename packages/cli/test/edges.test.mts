@@ -422,3 +422,37 @@ describe('label clearance', () => {
     assert.deepEqual(findings, [], findings.join('; '));
   });
 });
+
+describe('label placement (placeLabels rewrite)', () => {
+  // The old placer (a capped search, off-line offsets, a dodge-nudge array,
+  // a corridor-growth retry) had grown by patches until it could no longer
+  // satisfy 6.5 and 6.11 together: `python-or-java`'s "no, enterprise or
+  // Android" swallowed its own edge; `state`'s "final project shipped" and
+  // "holiday" did too; `4geeks-journey`'s "no" landed 8 short of its own
+  // edge and near another one; `er`'s "submits"/"leads" were the same drift.
+  // Rewritten as one constrained search (draw.ts's `placeLabels`) — these
+  // pin every one of those in place so none of them come back.
+  test('python-or-java: no label swallows its edge or drifts off it', async () => {
+    await mount('blog/python-or-java.mmd');
+    assert.deepEqual(await gateFindings('6.5-label-swallow'), []);
+    assert.deepEqual(await gateFindings('6.11-label-on-edge'), []);
+  });
+
+  test('4geeks-journey: no label swallows its edge or drifts off it', async () => {
+    await mount('4geeks-journey.mmd');
+    assert.deepEqual(await gateFindings('6.5-label-swallow'), []);
+    assert.deepEqual(await gateFindings('6.11-label-on-edge'), []);
+  });
+
+  test('state: no label swallows its edge or drifts off it', async () => {
+    await mount('state.mmd');
+    assert.deepEqual(await gateFindings('6.5-label-swallow'), []);
+    assert.deepEqual(await gateFindings('6.11-label-on-edge'), []);
+  });
+
+  test('er: no relationship name swallows its edge or drifts off it', async () => {
+    await mount('er.mmd');
+    assert.deepEqual(await gateFindings('6.5-label-swallow'), []);
+    assert.deepEqual(await gateFindings('6.11-label-on-edge'), []);
+  });
+});

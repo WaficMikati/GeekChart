@@ -114,4 +114,9 @@ export const RULES: Record<string, Rule> = {
     title: 'Content covers at least this share of the canvas area',
     threshold: 0.35,
   },
+  '7.4-even-whitespace': {
+    title:
+      'Two nodes in the same row band are never more than this far apart edge-to-edge, unless a node or label sits between them',
+    threshold: 200,
+  },
 };

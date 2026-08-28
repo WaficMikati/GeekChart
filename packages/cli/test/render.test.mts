@@ -170,7 +170,7 @@ describe('DESIGN 8.4: a chart plays once instead of looping', () => {
     // under a two-id selector and implies `running`; without !important the
     // outlines, labels and captions kept running off-screen (18 of 39 here).
     const session = await getSession();
-    await session.page.setContent(`<style>${reply.css}</style>${reply.svg}`);
+    await session.page.setContent(reply.html);
     const count = () =>
       session.page.evaluate(() => {
         const svg = document.querySelector('svg')!;

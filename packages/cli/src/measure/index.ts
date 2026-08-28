@@ -13,6 +13,7 @@ import {
   clipped,
   unbalancedRows,
   orphanColumns,
+  evenWhitespace,
   native,
 } from './canvas.ts';
 import {
@@ -97,6 +98,7 @@ export const ALL_CHECKS: Check[] = [
   wrongSide,
   orphanColumns,
   unbalancedRows,
+  evenWhitespace,
   parallelClearance,
   sharedRow,
   sharedSegment,

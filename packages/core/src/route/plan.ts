@@ -1114,5 +1114,74 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
     });
   }
 
+  // Two forward edges leaving the *same* node can still end up with
+  // parallel, too-close stubs — DESIGN 6.4's own 8-apart port spacing
+  // promises they never converge on one pixel, not that they stay 16 clear
+  // along a run that only grows this long after a later pass moves one of
+  // their targets away (DESIGN 6.10's own corridor growth is exactly such a
+  // pass: `state.mmd`'s `Running`→`Paused` and `Running`→`Graduated` start 8
+  // apart and stay clear until growth stretches `Paused`'s own edge long
+  // enough to overlap `Graduated`'s stub by more than 16). The general
+  // interior-run pass above deliberately never touches a stub for a good
+  // reason on record (pulling 4geeks-journey's `E`→`F` onto the `I`→`F`
+  // retry's own return run) — so this is scoped tightly to a case that
+  // reason does not cover: both conflicting runs are the leaving stub of a
+  // forward edge, and both leave the exact same node. Widening the two
+  // ports symmetrically keeps each still on the node's own face (a few units
+  // either side of where it already was) rather than detaching either from
+  // it the way moving an already-distant elbow would.
+  const fromOf = new Map(resolved.map((r) => [r.edgeId, r.item.edge.from]));
+  const stubRun = (edgeId: string, route: OrthoRoute): Run | null => {
+    const pts = route.points;
+    if (pts.length < 2) return null;
+    const a = pts[0]!,
+      b = pts[1]!;
+    if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) > 8) {
+      return { edgeId, idx: 1, vert: true, c: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) };
+    }
+    if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 8) {
+      return { edgeId, idx: 1, vert: false, c: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) };
+    }
+    return null;
+  };
+  const stubsBySource = new Map<string, Run[]>();
+  for (const [edgeId, route] of routes) {
+    if (backwardIds.has(edgeId)) continue;
+    const from = fromOf.get(edgeId);
+    const run = from ? stubRun(edgeId, route) : null;
+    if (run) stubsBySource.set(from!, [...(stubsBySource.get(from!) ?? []), run]);
+  }
+  for (const runs of stubsBySource.values()) {
+    for (let i = 0; i < runs.length; i++) {
+      for (let j = i + 1; j < runs.length; j++) {
+        const a = runs[i]!,
+          b = runs[j]!;
+        if (a.vert !== b.vert) continue;
+        const gap = Math.abs(a.c - b.c);
+        if (gap < 0.5 || gap >= 16) continue; // already clear, or a bus sharing one point
+        if (Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo) <= 16) continue;
+        const [lower, higher] = a.c <= b.c ? [a, b] : [b, a];
+        const mid = (lower.c + higher.c) / 2;
+        for (const [run, target] of [
+          [lower, mid - 8],
+          [higher, mid + 8],
+        ] as const) {
+          const delta = target - run.c;
+          if (Math.abs(delta) < 0.5) continue;
+          const pts = routes.get(run.edgeId)!.points;
+          const p0 = pts[0]!,
+            p1 = pts[1]!;
+          if (run.vert) {
+            p0.x += delta;
+            p1.x += delta;
+          } else {
+            p0.y += delta;
+            p1.y += delta;
+          }
+        }
+      }
+    }
+  }
+
   return routes;
 }
