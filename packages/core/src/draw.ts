@@ -12,8 +12,9 @@ import {
   type Point,
   type Shape,
 } from './geometry.ts';
-import { planRoutes, type Extent } from './route.ts';
+import { planRoutes, type Extent, type OrthoRoute } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
+import { TRUNK_OFFSET } from './layout/stack.ts';
 
 /**
  * Draw the diagram.
@@ -292,7 +293,45 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
       .filter((c) => panels.has(c.id))
       .map((c) => ({ id: c.id, box: panels.get(c.id)!, holds: c.nodes })),
   ];
-  const routes = planRoutes(routed, boxOf, (id) => shapes.get(id), flow, content, obstacles);
+  const routes = planRoutes(
+    routed.filter((edge) => !edge.bus),
+    boxOf,
+    (id) => shapes.get(id),
+    flow,
+    content,
+    obstacles,
+  );
+
+  // DESIGN 1.5: a stacked fan's parent→leaf edges are a bus, not a routed
+  // edge — each leaf's own edge is the *whole* path from the parent's own
+  // hanging port straight down the indent strip `layout/stack.ts` left
+  // clear of both the parent and the leaf column, then one turn into the
+  // leaf's left side at its own row. Drawn as a full, ordinary edge (same
+  // classes, same transform, same draw-on animation as every other edge)
+  // rather than a separate untracked element, so every leaf's edge sharing
+  // the identical vertical run down to its own row reads as one trunk —
+  // exactly DESIGN 6.4/6.8's "no two edges share a segment, except a fan
+  // bus from one point" (they all leave the parent at the same point) —
+  // without inventing a second kind of drawn thing that needs its own
+  // styling and animation wiring.
+  for (const edge of routed) {
+    if (!edge.bus) continue;
+    const from = boxOf(edge.from);
+    const to = boxOf(edge.to);
+    if (!from || !to) continue;
+    const trunkX = from.x + TRUNK_OFFSET;
+    const rowY = to.y + to.height / 2;
+    const route: OrthoRoute = {
+      points: [
+        { x: trunkX, y: from.y + from.height },
+        { x: trunkX, y: rowY },
+        { x: to.x, y: rowY },
+      ],
+      startSide: 'bottom',
+      endSide: 'left',
+    };
+    routes.set(edge.id, route);
+  }
 
   // DESIGN 6.3: edges that route.ts converged onto the same point on the
   // same node's face — a fan-in merge — share one arrowhead. The first edge
@@ -461,7 +500,7 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     endLabels.push(...cardinality(edge, tail.at, tail.dir, tip.at, tip.dir, scene));
 
     parts.push(
-      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}" data-id="${esc(edge.id)}" ` +
+      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus ? ' gc-bus' : ''}" data-id="${esc(edge.id)}" ` +
         `data-from="${esc(edge.from)}" data-to="${esc(edge.to)}" pathLength="1" d="${d}"/>`,
     );
     arrows.push(marks);
@@ -504,6 +543,13 @@ export function draw(graph: Graph, scene: Scene, size: { width: number; height: 
     placed.map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height })),
     scene,
     edgeSegments,
+    // DESIGN 1.5 only: a stacked fan turned into an opaque unit for layout
+    // can leave the *other* branch of a decision reaching it through an
+    // extra bend that never existed before, whose only short segments then
+    // have nowhere sensible to swing a wide label out to. Scoped to charts
+    // that actually stacked a fan, so it changes nothing for the other 36
+    // fixtures, none of which ever set this.
+    graph.edges.some((e) => e.bus),
   );
   parts.push(...labelResult.markup);
 
@@ -715,6 +761,7 @@ function placeLabels(
   nodes: Box[],
   scene: Scene,
   edgeSegments: EdgeSegments[],
+  capOffLineReach = false,
 ): { markup: string[]; boxes: Box[] } {
   const taken: Box[] = [];
   const out: string[] = [];
@@ -731,7 +778,12 @@ function placeLabels(
   // needs (half of one wide plate plus the other's own half-width) so the
   // search can actually find the clear spot instead of settling for the least
   // bad of a set that never reached it.
-  const nudges = [0, 14, -14, 26, -26, 40, -40, 58, -58, 78, -78];
+  // DESIGN 6.9: extended past the old 78 ceiling — a label whose own
+  // segment barely qualifies as "fits on-line" (width just under the
+  // 60%/40% ceiling) still only has that segment's own length to hide
+  // in sideways; clearing a neighbour that crosses it near one end can
+  // need more room than a comfortably-fitting label ever would.
+  const nudges = [0, 14, -14, 26, -26, 40, -40, 58, -58, 78, -78, 98, -98, 118, -118, 138, -138];
 
   /**
    * Where a label could sit on an orthogonal route.
@@ -766,7 +818,16 @@ function placeLabels(
       const cutEnd = next ? Math.min(CORNER_RADIUS, seg.len / 2, next.len / 2) : 0;
       const visLen = Math.max(0, seg.len - cutStart - cutEnd);
       const dir = { x: (seg.b.x - seg.a.x) / seg.len, y: (seg.b.y - seg.a.y) / seg.len };
-      for (const t of [0.5, 0.36, 0.64, 0.24, 0.76]) {
+      // DESIGN 6.9: every node box plus 8 is forbidden ground, so the search
+      // has to be able to slide all the way toward either end of a segment
+      // to find clear space past a neighbour that crowds the middle — five
+      // points clustered near the centre never reach far enough. Centre-out
+      // order, so a nearer spot still wins over a farther one whenever both
+      // turn out clear (the caller keeps searching past the first clear hit
+      // only to compare against ones already found — `drift`, below, is what
+      // actually decides that, but trying the near ones first keeps the
+      // common case cheap).
+      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.1, 0.9, 0.05, 0.95]) {
         out.push({
           at: { x: seg.a.x + (seg.b.x - seg.a.x) * t, y: seg.a.y + (seg.b.y - seg.a.y) * t },
           dir,
@@ -810,6 +871,28 @@ function placeLabels(
       .filter((e) => e.id !== request.id)
       .flatMap((e) => segmentsByEdge.get(e.id) ?? []);
 
+    // DESIGN 1.5 only (`capOffLineReach`): how far off-line a candidate may
+    // go, bounded by the edge's own reach rather than the label's size. A
+    // wide label beside a short segment on an edge that is otherwise short
+    // too has nowhere sensible to sit that far out — the plate-width
+    // clearance below (`minOffset`) does not know that, and can push the
+    // label well past everything the edge itself ever comes near: clash-free
+    // on a technicality, but nowhere a reader would connect back to it. Left
+    // unbounded for every ordinary chart (`capOffLineReach` false), since
+    // that is the search this file already relies on elsewhere.
+    const edgeBox = request.points.reduce(
+      (b, p) => ({
+        x0: Math.min(b.x0, p.x),
+        y0: Math.min(b.y0, p.y),
+        x1: Math.max(b.x1, p.x),
+        y1: Math.max(b.y1, p.y),
+      }),
+      { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity },
+    );
+    const maxNudge = capOffLineReach
+      ? Math.max(edgeBox.x1 - edgeBox.x0, edgeBox.y1 - edgeBox.y0) + 20
+      : Infinity;
+
     let best: { box: Box; clash: number; drift: number } | null = null;
     search: for (const spot of anchors(request.points)) {
       const { at, dir, len } = spot;
@@ -828,9 +911,11 @@ function placeLabels(
       // near-miss placements as well as exact ones. Clearing that margin
       // takes a full cross-axis step, not half of one.
       const minOffset = crossSize + 8;
-      const spotNudges = onLineFits(dir, len, request.width, request.height)
-        ? nudges
-        : [0, 14, 26, 40, 58, 78].flatMap((step) => [minOffset + step, -(minOffset + step)]);
+      const spotNudges = (
+        onLineFits(dir, len, request.width, request.height)
+          ? nudges
+          : [0, 14, 26, 40, 58, 78].flatMap((step) => [minOffset + step, -(minOffset + step)])
+      ).filter((n) => Math.abs(n) <= maxNudge);
       for (const nudge of spotNudges) {
         const cx = at.x + perp.x * nudge;
         const cy = at.y + perp.y * nudge;
@@ -848,13 +933,19 @@ function placeLabels(
           width: box.width + 6,
           height: box.height + 6,
         };
-        // Nodes count for less than other labels: a label brushing a box edge is
-        // survivable, one sitting on another label — or another edge's own line
-        // — is not, so both are full weight.
+        // DESIGN 6.9: a node box plus 8 is forbidden outright, not merely
+        // discouraged — a candidate that close is skipped before it is ever
+        // scored, so the search keeps sliding (more `t` values, above) or
+        // keeps stepping (more nudges) until it finds one that is not,
+        // rather than settling for "close enough" the way a discounted cost
+        // used to let it.
+        const nodeGuard: Box = { x: box.x - 8, y: box.y - 8, width: box.width + 16, height: box.height + 16 };
+        if (nodes.some((b) => overlap(nodeGuard, b) > 0)) continue;
+        // A label brushing another label — or another edge's own line — is
+        // not survivable; both are full weight, same as always.
         const clash =
           taken.reduce((sum, b) => sum + overlap(padded, b), 0) +
-          otherSegments.reduce((sum, b) => sum + overlap(padded, b), 0) +
-          nodes.reduce((sum, b) => sum + overlap(box, b), 0) * 0.4;
+          otherSegments.reduce((sum, b) => sum + overlap(padded, b), 0);
         const drift = Math.abs(nudge) * 0.6 + spot.drift;
         if (!best || clash < best.clash || (clash === best.clash && drift < best.drift)) {
           best = { box, clash, drift };

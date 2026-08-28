@@ -125,6 +125,14 @@ export interface GraphEdge {
   labelWidth?: number;
   /** True when the edge points backwards against the flow — a loop or retry. */
   backward?: boolean;
+  /**
+   * True for a parent→leaf edge inside a DESIGN 1.5 leaf stack: drawn as a
+   * shared trunk with a short branch into the leaf's left side, rather than
+   * routed by `route/plan.ts`. Every edge in one stack shares its start point
+   * with every other, which is what DESIGN 6.8's "fan bus from one point"
+   * shared-segment exemption is for.
+   */
+  bus?: boolean;
 }
 
 export interface GraphCluster {

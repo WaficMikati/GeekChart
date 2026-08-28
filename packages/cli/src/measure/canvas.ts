@@ -105,8 +105,14 @@ export const canvasWidth: Check = {
   rule: '1.1',
   run(svg) {
     const w = Math.round(svg.viewBox.baseVal.width);
-    return w < CANVAS.min || w > CANVAS.max
-      ? [{ severity: 'fail', message: `1.1 canvas ${w}w` }]
+    if (w < CANVAS.min || w > CANVAS.max) return [{ severity: 'fail', message: `1.1 canvas ${w}w` }];
+    // DESIGN 1.5: leaf stacking (then DESIGN 1.2's fold) pack toward the
+    // declared display width, but a chart whose shared box size alone needs
+    // more than that can still come out wider — accepted, per 1.5's own
+    // words, as a WARN rather than a silent rescale or a FAIL.
+    const display = Number(svg.dataset.display) || 1000;
+    return w > display
+      ? [{ severity: 'warn', message: `1.1 wider than the declared display width (${w} > ${display})` }]
       : [];
   },
 };

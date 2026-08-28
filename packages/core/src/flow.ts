@@ -174,7 +174,12 @@ export function sceneCss(scene: Scene): string {
  * `packages/cli/scripts/spike-node.mjs` for a side-by-side comparison against
  * the real `getBBox()`-measured browser render.
  */
-function fitToCanvas(svg: string, canvas: Canvas, extent: Drawing['extent']): string {
+function fitToCanvas(
+  svg: string,
+  canvas: Canvas,
+  extent: Drawing['extent'],
+  display: number,
+): string {
   if (!extent.width) return svg;
   const m = canvas.margin;
   const frame = fitCanvas(
@@ -192,13 +197,17 @@ function fitToCanvas(svg: string, canvas: Canvas, extent: Drawing['extent']): st
   // Intrinsic width/height, so `max-height` on the frame can actually hold it.
   // Without them the SVG has no natural size and stretches to fill any width,
   // which turns a tall diagram into a billboard.
+  // `data-display` is the declared width (DESIGN 1.1) this chart was laid
+  // out for — 1000 (this canvas's own default) when no caller named one —
+  // so the gate can read the same cap the layout itself packed to, at
+  // DESIGN 3.1's min(760, display) rather than a flat 760.
   const openTag = open[0]
     .replace(/\s+viewBox="[^"]*"/, '')
     .replace(/\s+width="[^"]*"/, '')
     .replace(/\s+height="[^"]*"/, '')
     .replace(
       />$/,
-      ` viewBox="0 0 ${frame.width} ${frame.height}" width="${frame.width}" height="${frame.height}">`,
+      ` data-display="${display}" viewBox="0 0 ${frame.width} ${frame.height}" width="${frame.width}" height="${frame.height}">`,
     );
   return `${openTag}${wrapped}</svg>`;
 }
@@ -260,6 +269,14 @@ export interface FlowOptions {
   height?: number;
   /** Draw the finished frame with no animation. */
   motion?: boolean;
+  /**
+   * The width, in CSS px, this chart will actually be shown at — a narrow
+   * blog column, say. DESIGN 1.1: the canvas is capped to this instead of
+   * the default 1000 (1200 for boards), and the layout packs to fit it
+   * (DESIGN 1.5's leaf stacking, then DESIGN 1.2's chain fold) before
+   * anything is scaled down to match. Unset behaves exactly as before.
+   */
+  display?: number;
 }
 
 /**
@@ -586,7 +603,15 @@ export interface SequenceRender {
 
 export async function renderFlow(source: string, options: FlowOptions = {}): Promise<FlowResult> {
   await ensureFonts(options.fonts);
-  const scene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
+  const baseScene = withPalette(withFonts(pickScene(options), options.fonts), options.palette);
+  // DESIGN 1.1: capped to the declared display width instead of the scene's
+  // own default (1000) when the caller names one. Threaded through as the
+  // scene's own canvas width, not a separate parameter, because every pass
+  // that has to pack to the cap — `fold`'s room, the panel refit, DESIGN
+  // 1.5's leaf stacking, `fitCanvas` itself — already reads it from there.
+  const scene = options.display
+    ? { ...baseScene, canvas: { ...baseScene.canvas, width: options.display } }
+    : baseScene;
   const measureWith = measurerFor(options);
 
   const kind = options.kind ?? 'flowchart';
@@ -597,13 +622,29 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   const graph = kind === 'flowchart' ? await toGraph(source) : await toUnifiedGraph(source, kind);
   if (graph.nodes.length === 0) throw new Error('Nothing to draw — the diagram has no nodes.');
 
-  const size = await layout(graph, scene, measureWith);
+  const size = await layout(graph, scene, measureWith, Boolean(options.display));
   const drawing = draw(graph, scene, size);
   // The static rules only — not the motion CSS, whose transforms would move
   // geometry out from under a viewer's eye without moving `drawing.extent`,
   // which is computed from the same pre-motion placement either way (DESIGN 7.3).
   const staticCss = sceneCss(scene);
-  const framed = { ...drawing, svg: fitToCanvas(drawing.svg, scene.canvas, drawing.extent) };
+  // DESIGN 1.5's own tail: leaf stacking (and DESIGN 1.2's fold, on top of it)
+  // pack toward the declared display width, but a chart whose shared box size
+  // alone already needs more than that can still come out wider than asked.
+  // Handing `fitCanvas` the tight, display-capped `scene.canvas` in that case
+  // would only reach for the last-resort *scale* the packing was meant to
+  // avoid — the exact defect this feature exists to fix, just moved from CSS
+  // into the SVG's own transform. So a chart that packing could not bring
+  // under the cap is framed at the ordinary default ceiling instead: still as
+  // narrow as fold and stacking got it, never shrunk further, and the gate's
+  // own `data-display` check is what says so is a WARN, not a silent fix.
+  const packedSpan = drawing.extent.width + scene.canvas.margin * 2;
+  const displayMet = !options.display || packedSpan <= scene.canvas.width;
+  const fitAgainst = displayMet ? scene.canvas : baseScene.canvas;
+  const framed = {
+    ...drawing,
+    svg: fitToCanvas(drawing.svg, fitAgainst, drawing.extent, scene.canvas.width),
+  };
   const timeline = options.motion === false ? null : animate(drawing, graph, scene);
   const css = staticCss + (timeline?.css ?? '');
 

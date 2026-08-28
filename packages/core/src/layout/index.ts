@@ -16,6 +16,7 @@ import {
   type Metrics,
 } from './measure.ts';
 import { identifySatellites, placeSatellites } from './satellites.ts';
+import { expandFan, findFans, planFan, type FanPlan } from './stack.ts';
 
 // Re-exported because `makeMeasurer` is a public entry point in its own
 // right: every non-ELK chart family (boards, plot, radial, chronicle,
@@ -56,6 +57,14 @@ export async function layout(
   graph: Graph,
   scene: Scene,
   measureWith?: string | Measurer,
+  // DESIGN 1.5 only ever runs for a caller that named a display width: every
+  // chart in the catalog already fits the plain 1000/1200 default (`fold`'s
+  // own wrap and serpentine handle the few that need help), so leaving this
+  // off for them is not a missed optimisation — it is what keeps 37/37 of
+  // them laying out exactly as they did before this file existed. Turning it
+  // on for every chart whose bare-ELK pass merely exceeds *some* cap would
+  // hand `fold()` a graph it never asked for and was not tuned against.
+  packToDisplay = false,
 ): Promise<LayoutResult> {
   const measurer = resolveMeasurer(measureWith);
   const flow = graph.direction === 'LR' || graph.direction === 'RL' ? 'horizontal' : 'vertical';
@@ -312,46 +321,146 @@ export async function layout(
       ? graph.edges.reduce((most, e) => Math.max(most, e.label ? (e.labelWidth ?? 0) + 30 : 0), 0)
       : 0;
 
-  const runLayout = async (extra: Record<string, string>) =>
-    (await getElk()).layout({
-      id: 'root',
-      layoutOptions: {
-        'elk.algorithm': 'layered',
-        'elk.direction': elkDirection,
-        // Straightest possible spines; this is what keeps a linear run truly linear.
-        'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-        'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-        'elk.layered.cycleBreaking.strategy': 'DEPTH_FIRST',
-        'elk.spacing.nodeNode': String(scene.gapNode),
-        'elk.layered.spacing.nodeNodeBetweenLayers': String(
-          Math.round(scene.gapLayer + reach + labelRoom),
-        ),
-        'elk.spacing.edgeNode': String(scene.gapNode * 0.5),
-        'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-        // We draw our own curves between ports, so ELK's routes are never read.
-        'elk.edgeRouting': 'POLYLINE',
-        ...extra,
-      },
-      children,
-      // Retry edges are handed to ELK reversed. Left as-is they make the layering
-      // pass treat the loop's target as a prerequisite, which drags the node it
-      // returns to into the first layer — the entry node ends up second.
-      edges: graph.edges
-        .filter((edge) => !satelliteIds.has(edge.from) && !satelliteIds.has(edge.to))
-        .map((edge) => ({
-          id: edge.id,
-          sources: [endpoint(edge.backward ? edge.to : edge.from)],
-          targets: [endpoint(edge.backward ? edge.from : edge.to)],
-        })),
-    } as ElkNode) as Promise<ElkNode>;
+  // Built as a factory rather than one fixed closure so DESIGN 1.5's leaf
+  // stacking (below) can re-run the exact same ELK call against a graph with
+  // one or more fans folded into a stand-in node, without duplicating any of
+  // the layout options.
+  const makeRunLayout =
+    (childrenX: ElkNode[], endpointX: (id: string) => string) =>
+    async (extra: Record<string, string>) =>
+      (await getElk()).layout({
+        id: 'root',
+        layoutOptions: {
+          'elk.algorithm': 'layered',
+          'elk.direction': elkDirection,
+          // Straightest possible spines; this is what keeps a linear run truly linear.
+          'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+          'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+          'elk.layered.cycleBreaking.strategy': 'DEPTH_FIRST',
+          'elk.spacing.nodeNode': String(scene.gapNode),
+          'elk.layered.spacing.nodeNodeBetweenLayers': String(
+            Math.round(scene.gapLayer + reach + labelRoom),
+          ),
+          'elk.spacing.edgeNode': String(scene.gapNode * 0.5),
+          'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+          // We draw our own curves between ports, so ELK's routes are never read.
+          'elk.edgeRouting': 'POLYLINE',
+          ...extra,
+        },
+        children: childrenX,
+        // Retry edges are handed to ELK reversed. Left as-is they make the layering
+        // pass treat the loop's target as a prerequisite, which drags the node it
+        // returns to into the first layer — the entry node ends up second.
+        edges: graph.edges
+          .filter((edge) => !satelliteIds.has(edge.from) && !satelliteIds.has(edge.to))
+          .map((edge) => ({
+            id: edge.id,
+            sources: [endpointX(edge.backward ? edge.to : edge.from)],
+            targets: [endpointX(edge.backward ? edge.from : edge.to)],
+          }))
+          // A fan's own parent→leaf edges are drawn as the bus (DESIGN 1.5),
+          // never routed by ELK — once both ends remap to the same stand-in
+          // id they would be a self-loop with nothing for ELK to lay out.
+          .filter((e) => e.sources[0] !== e.targets[0]),
+      } as ElkNode) as Promise<ElkNode>;
 
-  const result = await fold(runLayout, graph, scene, flow, { claimed, satelliteIds, soleParent });
+  const runLayout = makeRunLayout(children, endpoint);
+
+  // DESIGN 1.5: when the plain layout above is wider than the canvas, a fan
+  // of leaf children collapses into one column under its parent before
+  // anything is scaled or folded into rows. Cheap to check: this first call
+  // is the exact one `fold()` itself makes as its own first attempt, so
+  // nothing extra is spent when a chart already fits (every chart in the
+  // gallery today does, so this never runs there).
+  const room = scene.canvas.width - scene.canvas.margin * 2;
+  const first = await runLayout({});
+  let fanPlansById = new Map<string, FanPlan>();
+  let finalRunLayout = runLayout;
+  // Set only when a stacked prefix already fit the cap on its own — the
+  // fold-skipping fast path below. Left null for every chart that never
+  // stacks at all, and for the "stacking still isn't enough" tail, both of
+  // which fall through to the ordinary `fold()` call same as always.
+  let winner: { result: ElkNode; plans: FanPlan[] } | null = null;
+  if (packToDisplay && (first.width ?? 0) > room) {
+    const fans = findFans(graph, new Set([...claimed, ...satelliteIds])).map(planFan);
+    const stackedGraph = (plans: FanPlan[]) => {
+      const unitOf = new Map<string, string>();
+      for (const plan of plans) {
+        unitOf.set(plan.parent.id, plan.unitId);
+        for (const leaf of plan.leaves) unitOf.set(leaf.id, plan.unitId);
+      }
+      const fannedIds = new Set(unitOf.keys());
+      const stackedChildren = [
+        ...children.filter((c) => !fannedIds.has(c.id)),
+        ...plans.map((p) => ({ id: p.unitId, width: p.unitWidth, height: p.unitHeight })),
+      ];
+      const stackedEndpoint = (id: string) => unitOf.get(id) ?? endpoint(id);
+      return makeRunLayout(stackedChildren, stackedEndpoint);
+    };
+    // Widest fan first; stop stacking as soon as a prefix fits (DESIGN 1.5).
+    // Fans the same size (Python's and Java's are both two 200-wide leaves)
+    // are added a whole tier at a time, not one at a time: stacking only
+    // one of two identically-shaped branches leaves the other exactly the
+    // single row it always was, next to a column now several rows tall —
+    // a row-sharing mismatch DESIGN 2.3 measures (a node's own band no
+    // longer lines up with anything), not just an asymmetry with no reason
+    // behind it.
+    //
+    // A prefix that already fits is taken as-is, not handed to `fold()` for
+    // a further pass: `fold` reshapes a *wasteful* layout (its own height
+    // more than 1.2× its width, DESIGN 1.4) even after it fits the canvas,
+    // and doing that to an already-narrow stacked fan is what pulled a
+    // decision's own edge into a needless extra bend, stranding its label.
+    // Fold gets its turn only in the tail below, once stacking genuinely
+    // could not reach the cap on its own.
+    const tiers: FanPlan[][] = [];
+    for (const fan of fans) {
+      const last = tiers[tiers.length - 1];
+      const sameTier =
+        last &&
+        last[0]!.leaves.length === fan.leaves.length &&
+        last[0]!.leaves.reduce((s, n) => s + n.width!, 0) ===
+          fan.leaves.reduce((s, n) => s + n.width!, 0);
+      if (sameTier) last!.push(fan);
+      else tiers.push([fan]);
+    }
+    for (let n = 1; n <= tiers.length && !winner; n++) {
+      const plans = tiers.slice(0, n).flat();
+      const candidateRunLayout = stackedGraph(plans);
+      const trial = await candidateRunLayout({});
+      if ((trial.width ?? 0) <= room) winner = { result: trial, plans };
+    }
+    if (winner) {
+      fanPlansById = new Map(winner.plans.map((p) => [p.unitId, p]));
+    } else if (fans.length) {
+      // Stacking every fan still doesn't fit: DESIGN 1.5 says fold still
+      // gets a turn, then the chart is accepted as wide (a gate WARN, not a
+      // FAIL) — so the fully-stacked graph is what's worth handing fold,
+      // not a plain one it has already failed to wrap narrow enough on its
+      // own.
+      finalRunLayout = stackedGraph(fans);
+      fanPlansById = new Map(fans.map((p) => [p.unitId, p]));
+    }
+  }
+
+  const result = winner
+    ? winner.result
+    : await fold(finalRunLayout, graph, scene, flow, {
+        claimed,
+        satelliteIds,
+        soleParent,
+      });
 
   // ELK reports child coordinates relative to their parent; flatten to the root.
   const place = (list: ElkNode[] | undefined, dx: number, dy: number): void => {
     for (const item of list ?? []) {
       const x = (item.x ?? 0) + dx;
       const y = (item.y ?? 0) + dy;
+      const fanPlan = fanPlansById.get(item.id);
+      if (fanPlan) {
+        expandFan(fanPlan, x, y);
+        continue;
+      }
       if (item.id.startsWith('cluster:')) {
         const cluster = graph.clusters.find((c) => `cluster:${c.id}` === item.id);
         if (cluster) {
@@ -383,6 +492,16 @@ export async function layout(
     }
   };
   place(result.children, 0, 0);
+
+  // Every parent→leaf edge inside a stacked fan is drawn as the bus
+  // (DESIGN 1.5), never routed by `route/plan.ts` — draw.ts reads this flag
+  // to build the shared-trunk path directly from the final positions above.
+  for (const plan of fanPlansById.values()) {
+    const leafIds = new Set(plan.leaves.map((l) => l.id));
+    for (const edge of graph.edges) {
+      if (edge.from === plan.parent.id && leafIds.has(edge.to)) edge.bus = true;
+    }
+  }
 
   // Pin each excluded satellite on a row's centre line of its own, appended
   // after the last row and past the grid's own outer column. See

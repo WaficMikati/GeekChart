@@ -84,3 +84,30 @@ for (const path of FIXTURES) {
     assert.ok(maxDelta < 2, `expected every box within 2 units, worst was ${maxDelta}`);
   });
 }
+
+test('python-or-java at display 620: Node and browser engines agree, DESIGN 1.5', async () => {
+  // The leaf-stacking pass (DESIGN 1.5) reruns ELK several times inside
+  // `layout()` before settling — worth its own parity case rather than
+  // trusting the loop above's `width: 1180` (a different option entirely,
+  // the HTML frame, not the canvas cap) to exercise it at all.
+  const source = readFileSync(join(fixturesBlog, 'python-or-java.mmd'), 'utf8');
+  const options = { display: 620 };
+
+  const browserReply = ok(
+    await cachedRender('renderAny', source, options, () => renderAny(session.page, source, options)),
+  );
+  const nodeResult = await cachedRender('renderNode', source, options, () => renderNode(source, options));
+
+  assert.equal(viewBoxOf(nodeResult.svg), viewBoxOf(browserReply.svg), 'viewBox should match exactly');
+  assert.match(nodeResult.svg, /data-display="620"/, 'Node engine should stamp the declared display');
+  assert.match(browserReply.svg, /data-display="620"/, 'browser engine should stamp the declared display');
+
+  const nodeNums = boxNumsOf(nodeResult.svg);
+  const browserNums = boxNumsOf(browserReply.svg);
+  assert.equal(nodeNums.length, browserNums.length, 'same number of boxes drawn');
+  let maxDelta = 0;
+  for (let i = 0; i < nodeNums.length; i++) {
+    maxDelta = Math.max(maxDelta, Math.abs((nodeNums[i] ?? 0) - (browserNums[i] ?? 0)));
+  }
+  assert.ok(maxDelta < 2, `expected every box within 2 units, worst was ${maxDelta}`);
+});

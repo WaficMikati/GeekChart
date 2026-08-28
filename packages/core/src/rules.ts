@@ -91,6 +91,10 @@ export const RULES: Record<string, Rule> = {
     threshold: CLEARANCE.node,
     token: 'CLEARANCE',
   },
+  '6.9': {
+    title: 'An edge label keeps this much clear of every node it does not belong to',
+    threshold: 8,
+  },
   '7.3': {
     title: 'Content is centred within this many units of the canvas centre',
     threshold: 8,

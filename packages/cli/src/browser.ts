@@ -36,6 +36,8 @@ export interface AnyRequest {
   motion?: boolean;
   width?: number;
   height?: number;
+  /** DESIGN 1.1/1.5: the width, in CSS px, this chart will actually be shown at. */
+  display?: number;
   aspect?: 'auto' | '16:9' | '1:1' | '4:5' | '9:16';
   fonts?: 'inherit' | { display?: string; label?: string; mono?: string; measureWith?: string };
   palette?: {

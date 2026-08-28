@@ -17,13 +17,21 @@ strokes, gutters, clearances, motion timings, palettes) and `rules.ts`
 (gate thresholds); the gate reads them from there, so this file, the renderer
 and the check that enforces it cannot drift apart.
 
-- **1.1** The canvas is **at most 1000 units wide** (boards up to 1200) and
-  **hugs its content**: width = content + 2×48, snapped to 8, never below 480.
-  Height is whatever the content needs. Charts are responsive, so a narrow
-  chart padded out to 1000 would only lose type size to the padding in a
-  narrow viewer; hugging keeps 11-unit text at or near 1:1. (Revised 2026-08-21
-  from a fixed 1000: the fixed width only gave consistent type while every
-  chart was shown at the same pixel width.)
+- **1.1** The canvas is **at most the declared display width** — a render
+  option (`display`, in CSS px), default 1000 (boards 1200) when a caller
+  names none — and **hugs its content**: width = content + 2×48, snapped to
+  8, never below 480. Height is whatever the content needs. Charts are
+  responsive, so a narrow chart padded out to its cap would only lose type
+  size to the padding in a narrow viewer; hugging keeps 11-unit text at or
+  near 1:1. When the natural layout is wider than the cap, the layout **packs
+  to fit** — DESIGN 1.5's leaf stacking, then 1.2's chain fold — before
+  anything is scaled: scaling a finished layout down to the cap is the same
+  defect this option exists to remove, just moved from the embedding page's
+  CSS into the SVG's own transform. A chart packing cannot bring under the
+  cap is drawn at whatever width packing did reach instead, wider than asked
+  (the gate's own WARN, never a FAIL — see 1.5). (Revised 2026-08-28 from a
+  flat 1000: a chart bound for a 612px blog column was still laid out for
+  1000, and arrived at scale 0.62 — an 8px name.)
 - **1.2** The content box is 904 wide (1000 − 2×48). A left-to-right run that
   does not fit it **wraps into rows**; a run that fits but uses under half the
   width is the same fault and is re-laid out. Content covers at least 35% of
@@ -32,6 +40,27 @@ and the check that enforces it cannot drift apart.
 - **1.3** Outer margin 48. Content touches neither the edge nor the margin line.
 - **1.4** Height never exceeds 1.4× width. Tall stacks (Subgraphs is 470×1095
   today) go side by side instead.
+- **1.5** **Leaf stacking.** When the canvas would exceed the display width, a
+  node whose children are all leaves (two or more of them) shows them as a
+  vertical stack directly under it — one column, at the chart's own shared
+  box width, indented 24 off the parent's own left edge, 16 apart — joined by
+  a bus: one vertical trunk leaving the parent's bottom edge from a hanging
+  port 12 off its left edge (the one attachment DESIGN 6.2's midpoint rule
+  does not cover — earned by this pattern alone), straight down the 24-wide
+  indent strip to the last leaf's centre line, then a short horizontal branch
+  into each leaf's left side at its own row, one arrowhead per leaf. The
+  trunk is drawn once, not once per leaf: every branch leaves it rather than
+  repeating the shared run, which is what keeps a stack of leaves reading as
+  one bus and not a bundle of coincidentally overlapping lines (DESIGN
+  6.4/6.8's "no two edges share a segment, except a fan bus from one point").
+  A fan this way costs the shared box width plus 24, not the width doubled —
+  two 200-wide fans either side of a decision come to 224 + 32 + 224, not
+  332 + 32 + 332. Stacking is applied to the widest fans first and stops as
+  soon as the layout fits. If stacking every fan still is not enough, DESIGN
+  1.2's chain fold gets a turn on top of it; past that, the chart is accepted
+  as wide rather than shrunk — a gate WARN, not a FAIL. (Added 2026-08-28;
+  revised the same day from a fan centred on the parent, which cost the
+  parent's own half-width twice over and could not reach a 620px column.)
 
 ## 2. Grid and sizing
 
@@ -74,8 +103,11 @@ most **three** of these (name, caption, label); the title block adds its two:
 - **3.1** Nothing smaller than **11 canvas units**. Charts are responsive and a
   1000-unit canvas is routinely shown at ~760px (an artifact panel, a phone in
   landscape), where 11 units is 8.4px — the legibility floor. The gate measures
-  on-screen size at 760px. (Raised from 8 on 2026-08-21: the gallery's 8 was
-  only legible because it never scaled below 1:1.)
+  on-screen size at **min(760, the declared display width)** — a chart laid
+  out for a 620px column is never shown wider than that, so testing it at a
+  flat 760 would check a width it will never actually be. (Raised from 8 on
+  2026-08-21: the gallery's 8 was only legible because it never scaled below
+  1:1. Revised 2026-08-28 for DESIGN 1.1's display option.)
 - **3.2** Every node is **two-tier**: a name and a one-line caption (Lyzr:
   "CRM / pipeline", gallery: "Cloudflare / Pages · cache"). A node with no
   caption gets the 160×48 box, not a centred name in a 56-high box.
@@ -159,6 +191,11 @@ most **three** of these (name, caption, label); the title block adds its two:
   nearest corridor (length ≤ Manhattan distance of its ends + 128), and edges
   arriving on one side of a node merge into a single centred trunk with one
   arrowhead.
+- **6.9** An edge label never overlaps a node box; it keeps **8 units clear**
+  of every box it does not belong to. (Added 2026-08-28: DESIGN 1.5's own
+  labels exposed a placement the gate had never measured — a wide label
+  beside a short run can still, technically, avoid its own edge's two nodes
+  while landing on someone else's.)
 
 ## 7. Composition
 

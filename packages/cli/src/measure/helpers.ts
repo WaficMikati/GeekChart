@@ -49,12 +49,19 @@ export function createCtx(svg: SVGSVGElement, opts: MeasureOptions = {}): Ctx {
   const vbb = svg.viewBox.baseVal;
   const sb = svg.getBoundingClientRect();
   const cache = new Map<string, unknown>();
+  // DESIGN 3.1: the gate measures on-screen size at min(760, declared display
+  // width) — a chart laid out for a 620px column is never shown wider than
+  // that, so simulating a 760px viewer for it would test a width the chart
+  // will never actually be. `data-display` is stamped by the renderer with
+  // whatever it packed to (1000 when no caller named one), so a chart with no
+  // opinion measures exactly as it always has.
+  const display = Number(svg.dataset.display) || 1000;
   return {
     svg,
     vb: { width: vbb.width, height: vbb.height },
     sb,
     unit: sb.width / vbb.width,
-    stagePx: opts.stagePx ?? 760,
+    stagePx: Math.min(opts.stagePx ?? 760, display),
     chartId: opts.chartId ?? '',
     memo<T>(key: string, compute: () => T): T {
       if (!cache.has(key)) cache.set(key, compute());

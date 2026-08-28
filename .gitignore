@@ -7,3 +7,4 @@ gallery-node.html
 packages/geekchart/.lazy-chunk.json
 packages/geekchart/.gc-ssr-*
 packages/geekchart/.probe/
+.claude/worktrees/

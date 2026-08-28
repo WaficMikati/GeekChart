@@ -1,6 +1,6 @@
 import { before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderAny, type AnyReply, type Session } from '../src/browser.ts';
@@ -43,6 +43,33 @@ const ok = (reply: AnyReply): Extract<AnyReply, { ok: true }> => {
   assert.equal(reply.ok, true, reply.ok ? '' : JSON.stringify(reply));
   return reply as Extract<AnyReply, { ok: true }>;
 };
+
+const measureBundle = join(here, '..', 'dist', 'measure.js');
+
+/** The gate's own DESIGN.md checks (packages/cli/src/measure/), the same
+ *  bundle gate.mjs injects — see packages/cli/scripts/gate.mjs. */
+type GateGlobal = {
+  geekchartMeasure: {
+    runCheck: (
+      svg: SVGSVGElement,
+      id: string,
+      opts: { chartId: string },
+    ) => { severity: 'fail' | 'warn'; message: string }[];
+  };
+};
+
+async function gateFindings(id: string): Promise<string[]> {
+  if (!existsSync(measureBundle)) {
+    throw new Error('run `pnpm --filter @geekchart/cli build` first');
+  }
+  await session.page.addScriptTag({ path: measureBundle });
+  return session.page.evaluate((checkId) => {
+    const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+    return (window as unknown as GateGlobal).geekchartMeasure
+      .runCheck(svg, checkId, { chartId: '' })
+      .map((f) => f.message);
+  }, id);
+}
 
 async function mount(name: string) {
   const source = readFileSync(join(fixtures, name), 'utf8');
@@ -372,5 +399,26 @@ describe('panels, loops and the grid', () => {
         );
       }
     }
+  });
+});
+
+describe('label clearance', () => {
+  // DESIGN 6.9: an edge label keeps 8 units clear of every node box it does
+  // not belong to. Both of these were real fails once the gate could see
+  // it: G→I's "no" (4geeks-journey) sat 5.68 short of the decision diamond
+  // it answers, and the "leads" relationship name (er) sat squeezed between
+  // MENTOR and COHORT with under 8 either side. Fixed at the placer itself
+  // (DESIGN 1.5's own `capOffLineReach` cap aside, every chart shares this
+  // search), not per chart — these pin the fix in place.
+  test('4geeks-journey: no label sits within 8 of a node box', async () => {
+    await mount('4geeks-journey.mmd');
+    const findings = await gateFindings('6.9-label-clear');
+    assert.deepEqual(findings, [], findings.join('; '));
+  });
+
+  test('er: no relationship name sits within 8 of an entity box', async () => {
+    await mount('er.mmd');
+    const findings = await gateFindings('6.9-label-clear');
+    assert.deepEqual(findings, [], findings.join('; '));
   });
 });

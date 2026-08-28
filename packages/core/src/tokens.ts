@@ -175,11 +175,12 @@ export const STROKE = { node: 1.5, edge: 1.5, cluster: 1, divider: 0.8 } as cons
 /**
  * Clearances: DESIGN 6.1/6.8's 16 units an edge keeps from a node it does not
  * connect to (also what makes an edge under 16 long "touching" its nodes,
- * 2.3); 6.7's 24 around whatever a loop-back goes around; 10.3's 6-unit stub
- * an arrow's line stops short by, so the head reads as meeting the box rather
+ * 2.3); 6.7's 24 around whatever a loop-back goes around; the stub an arrow's
+ * line stops short by — the head's own length (5× the edge stroke, 7.5), so
+ * the head's base meets the line exactly and reads as meeting the box rather
  * than piercing it.
  */
-export const CLEARANCE = { node: 16, loop: 24, stub: 6 } as const;
+export const CLEARANCE = { node: 16, loop: 24, stub: STROKE.edge * 5 } as const;
 
 /** DESIGN 8.1: Manim's `smooth()`, fitted to within 0.01 — the only ease used
  *  anywhere except the one exception below. */

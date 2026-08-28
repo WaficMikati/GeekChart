@@ -10,6 +10,9 @@
  *   pnpm gallery                 # browser engine, writes gallery.html
  *   pnpm gallery --engine=node   # renderNode(), writes gallery-node.html
  *   pnpm gallery some/path.html  # either engine, explicit output path
+ *   pnpm gallery --display=620 && pnpm gate
+ *                                 # every chart laid out for a 620px display
+ *                                 # (DESIGN 1.1/1.5), same output file
  */
 import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -21,6 +24,12 @@ const repo = join(here, '..', '..', '..');
 const fixturesRoot = join(repo, 'fixtures');
 const argv = process.argv.slice(2);
 const engine = argv.find((a) => a.startsWith('--engine='))?.slice('--engine='.length) === 'node' ? 'node' : 'browser';
+// DESIGN 1.1/1.5: render the whole catalog at one declared display width, so
+// `pnpm gallery --display=620 && pnpm gate` can measure it the way a caller
+// who actually names that width would see it — rather than every fixture's
+// own natural, undeclared-display size.
+const displayArg = argv.find((a) => a.startsWith('--display='))?.slice('--display='.length);
+const display = displayArg ? Number(displayArg) : undefined;
 const explicitOut = argv.find((a) => !a.startsWith('--'));
 const fixturesBlog = join(fixturesRoot, 'blog');
 
@@ -201,7 +210,7 @@ try {
   for (const group of GROUPS) {
     for (const [file, title, keyword] of group.items) {
       const source = readFileSync(join(group.dir, `${file}.mmd`), 'utf8');
-      const reply = await renderOne(source, { width: 1180 });
+      const reply = await renderOne(source, { width: 1180, ...(display ? { display } : {}) });
       if (!reply.ok) {
         process.stderr.write(`  ${file}: ${reply.error.message}\n`);
         continue;

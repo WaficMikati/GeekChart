@@ -17,6 +17,7 @@ import {
   pathPoints,
   pathPointsHV,
   rect,
+  visible,
   type Check,
   type Ctx,
 } from './helpers.ts';
@@ -76,7 +77,15 @@ export function edgeShapeStats(ctx: Ctx): {
     let overBent = 0;
     const bentIds: string[] = [];
     for (const e of edgeEls(ctx)) {
-      if (e.classList.contains('gc-back') || /back|loop/.test(e.dataset.kind || '')) continue;
+      // DESIGN 1.5: a bus branch is deliberately short — the trunk carries
+      // the real distance — so the same under-16 reading that means "nodes
+      // touching" for an ordinary edge means nothing here.
+      if (
+        e.classList.contains('gc-back') ||
+        e.classList.contains('gc-bus') ||
+        /back|loop/.test(e.dataset.kind || '')
+      )
+        continue;
       const pts = pathPoints(e.getAttribute('d'));
       if (pts.length < 2) continue;
       let len = 0;
@@ -445,6 +454,10 @@ export const arrivalSide: Check = {
     let wrongArrive = 0;
     const arriveIds: string[] = [];
     for (const [e, g] of geom) {
+      // DESIGN 1.5: a leaf stack's bus always arrives on the leaf's side
+      // facing the parent, whatever the chart's flow axis — the sanctioned
+      // exception 1.5 itself carves out, the same way a loop-back (6.7) is.
+      if (e.classList.contains('gc-bus')) continue;
       const { ra, rb, back, arrives, to } = g;
       const below = rb.top >= ra.bottom - 1;
       const above = rb.bottom <= ra.top + 1;
@@ -522,7 +535,7 @@ export const wrongSide: Check = {
     const ids = nodeById(ctx);
     let n = 0;
     for (const e of edgeEls(ctx)) {
-      if (e.classList.contains('gc-back')) continue;
+      if (e.classList.contains('gc-back') || e.classList.contains('gc-bus')) continue;
       const { from: fromId, to: toId } = edgeFromTo(e);
       const A = fromId && ids.get(fromId);
       const B = toId && ids.get(toId);
@@ -677,6 +690,52 @@ export const longLoop: Check = {
   },
 };
 
+/**
+ * DESIGN 6.9: an edge label's plate never sits within 8 of a node box it
+ * does not belong to. Added alongside DESIGN 1.5's leaf stacking, which
+ * exposed the gap: nothing before this measured a label against nodes at
+ * all, only against other labels and other edges (6.5's own checks above).
+ */
+export const labelClear: Check = {
+  id: '6.9-label-clear',
+  rule: '6.9',
+  run(svg, ctx) {
+    const plates = [...svg.querySelectorAll('.gc-edge-label .gc-plate')].filter((p) =>
+      visible(p, svg),
+    );
+    const nodeRects = [...nodeById(ctx).values()]
+      .map((n) => rect(outline(n)))
+      .filter((r) => r.width);
+    const clear = RULES['6.9']!.threshold! * ctx.unit;
+    let violations = 0;
+    const ids: string[] = [];
+    for (const plate of plates) {
+      const p = rect(plate);
+      if (!p.width) continue;
+      const hits = nodeRects.some(
+        (nb) =>
+          p.left < nb.right + clear &&
+          nb.left < p.right + clear &&
+          p.top < nb.bottom + clear &&
+          nb.top < p.bottom + clear,
+      );
+      if (hits) {
+        violations++;
+        const id = plate.closest('.gc-edge-label')?.getAttribute('data-id');
+        if (id) ids.push(id);
+      }
+    }
+    return violations
+      ? [
+          {
+            severity: 'fail',
+            message: `6.9 ${violations} labels closer than 8 to a node (${ids.slice(0, 3).join(' ')})`,
+          },
+        ]
+      : [];
+  },
+};
+
 // degrees/edgeMeta are re-exported only for grid.ts's 2.3 checks that need
 // per-node in/out degree without recomputing it.
 export { degrees, edgeMeta };
@@ -698,4 +757,5 @@ export const EDGE_CHECKS: Check[] = [
   parallelClearance,
   hairpin,
   longLoop,
+  labelClear,
 ];

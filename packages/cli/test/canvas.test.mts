@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { renderAny, type AnyReply, type Session } from '../src/browser.ts';
 import { getSession } from './helpers/session.ts';
 import { cachedRender } from './helpers/render-cache.ts';
+import { CLEARANCE } from '../../core/src/tokens.ts';
 
 /**
  * The canvas and the type scale — DESIGN 1.1–1.4, 3, 3.1, 10.2, 10.3.
@@ -346,6 +347,188 @@ describe('canvas', () => {
       const findings = await gateCheck('7.4-coverage');
       assert.deepEqual(findings, [], `${name}: ${findings.join('; ')} (DESIGN 7.4)`);
     }
+  });
+});
+
+/** Every leaf-stack bus edge's own points, plus how many arrowheads it drew —
+ *  read straight from the DOM rather than recomputed, so the test pins what
+ *  actually got drawn. */
+async function busEdges(session_: Session) {
+  return session_.page.evaluate(() => {
+    const byId = new Map<string, SVGGElement>();
+    for (const n of document.querySelectorAll<SVGGElement>('.gc-node[data-id]')) {
+      byId.set(n.getAttribute('data-id')!, n);
+    }
+    const boxOf = (id: string) => {
+      const n = byId.get(id);
+      if (!n) return null;
+      const outline = n.querySelector('.gc-outline') as SVGGraphicsElement | null;
+      if (!outline) return null;
+      const b = (outline as unknown as SVGGeometryElement).getBBox();
+      return { x: b.x, y: b.y, width: b.width, height: b.height };
+    };
+    const centreOf = (id: string) => {
+      const b = boxOf(id);
+      return b && { x: b.x, y: b.y };
+    };
+    return [...document.querySelectorAll<SVGPathElement>('.gc-edge.gc-bus[data-id]')].map((e) => {
+      const id = e.getAttribute('data-id')!;
+      const from = e.getAttribute('data-from')!;
+      const to = e.getAttribute('data-to')!;
+      const heads = document.querySelectorAll(`.gc-arrow[data-id="${id}"]`).length;
+      // The path's own bounding box: its left edge is the shared vertical
+      // trunk's x (the path only ever moves right of its start), and its
+      // width is exactly the horizontal branch's reach, since the trunk
+      // portion never changes x at all.
+      const pathBox = (e as unknown as SVGGeometryElement).getBBox();
+      const strokeClass = [...e.classList].find((c) => c.startsWith('gc-stroke-')) ?? null;
+      return {
+        id,
+        from,
+        to,
+        fromXY: centreOf(from),
+        toXY: centreOf(to),
+        toBox: boxOf(to),
+        heads,
+        trunkX: pathBox.x,
+        branchLength: pathBox.width,
+        branchEndX: pathBox.x + pathBox.width,
+        isEdge: e.classList.contains('gc-edge'),
+        strokeClass,
+      };
+    });
+  });
+}
+
+describe('display', () => {
+  // DESIGN 1.1, 1.5: python-or-java.mmd hugs to 968 wide with no declared
+  // display (unchanged — see the "no display option" test below). Its
+  // shared box comes out 200 wide (START's own title needs it), so Python's
+  // and Java's two-leaf fans push it to 968 naturally; a 612px blog column
+  // used to receive that at scale 0.62, an 8px name.
+  const pythonOrJava = () => readFileSync(join(fixtures, 'blog', 'python-or-java.mmd'), 'utf8');
+
+  test('leaf stacking fits python-or-java under a 620px column, DESIGN 1.5', async () => {
+    // Indented under the parent (32 off its left edge, not centred beside
+    // it — wide enough that the trunk to a lower leaf clears the 16-unit
+    // floor from every leaf above it, DESIGN 6.1/6.8) and joined by a bus
+    // leaving a hanging port 12 off the parent's own left edge, a fan costs
+    // the shared box width plus 32 — not the width doubled — so this
+    // chart's two 200-wide branches pack to well under 620, not the 968
+    // they need undeclared.
+    await mount(pythonOrJava(), { display: 620 });
+    const m = await measure();
+    assert.ok(m.width <= 620, `canvas ${m.width} exceeds the declared display width of 620`);
+    // The point of 1.5: nothing is smaller than its DESIGN §3 size. Fitting
+    // the cap is only a win if it was reached by packing, not by a `scale()`
+    // on the drawing — that is the exact defect (8px names) this feature
+    // exists to remove.
+    const names = m.texts.filter((t) => t.cls.includes('gc-title'));
+    assert.ok(names.length >= 5, `expected node names, found ${names.length}`);
+    assert.ok(
+      names.every((t) => t.size === TYPE.name),
+      `a node name drew at ${names.map((t) => t.size).join(',')} instead of the full ${TYPE.name} (DESIGN §3)`,
+    );
+    const scale = Math.min(1, 620 / m.width);
+    assert.equal(scale, 1, `expected no shrink at all once packing fits; canvas is ${m.width}`);
+
+    // At least one of Python's or Java's fans is stacked — whichever the
+    // widest-first search actually needed — one column, ascending y, one
+    // arrowhead each (DESIGN 1.5, 6.3).
+    const buses = await busEdges(session);
+    const byParent = new Map<string, typeof buses>();
+    for (const e of buses) byParent.set(e.from, [...(byParent.get(e.from) ?? []), e]);
+    assert.ok(
+      byParent.size >= 1 && [...byParent.keys()].every((p) => p === 'PY' || p === 'JAVA'),
+      `expected a leaf stack under Python and/or Java, found buses from ${[...byParent.keys()]}`,
+    );
+    for (const [parent, edges] of byParent) {
+      assert.equal(edges.length, 2, `${parent}: expected 2 stacked leaves, found ${edges.length}`);
+      assert.ok(
+        edges.every((e) => e.heads === 1),
+        `${parent}: a stacked leaf has ${edges.map((e) => e.heads).join(',')} arrowheads, want 1 each`,
+      );
+      const xs = new Set(edges.map((e) => e.toXY!.x));
+      assert.equal(xs.size, 1, `${parent}: leaves are not in one column (x = ${[...xs]})`);
+      const ys = edges.map((e) => e.toXY!.y).sort((a, b) => a - b);
+      assert.deepEqual(
+        edges.map((e) => e.toXY!.y),
+        ys,
+        `${parent}: leaves are not stacked in ascending y (${edges.map((e) => e.toXY!.y)})`,
+      );
+
+      // The bus is a real, drawn edge — same classes, same coordinate frame,
+      // same draw-on animation as any other — not a separate untracked
+      // element. Its own bounding box's left edge is the shared trunk's x
+      // (DESIGN 1.5's hanging port, parent.x + 12); its width is the
+      // horizontal branch, which must actually reach toward the leaf (at
+      // least 6 units) and stop exactly 6 short of the leaf's own left edge
+      // for the arrowhead to bridge (DESIGN 10.3).
+      const parentX = edges[0]!.fromXY!.x;
+      for (const e of edges) {
+        assert.ok(e.isEdge, `${e.id}: a bus edge must carry the gc-edge class to be drawn at all`);
+        assert.ok(
+          e.strokeClass,
+          `${e.id}: a bus edge must carry a gc-stroke-* class to have a visible stroke`,
+        );
+        assert.ok(
+          Math.abs(e.trunkX - (parentX + 12)) < 0.5,
+          `${e.id}: trunk x is ${e.trunkX}, expected parent.x + 12 = ${parentX + 12}`,
+        );
+        assert.ok(
+          e.branchLength >= 6,
+          `${e.id}: branch is only ${e.branchLength} long, want at least 6`,
+        );
+        const stub = CLEARANCE.stub;
+        assert.ok(
+          Math.abs(e.branchEndX - (e.toBox!.x - stub)) < 0.5,
+          `${e.id}: branch ends at ${e.branchEndX}, expected ${e.toBox!.x - stub} (${stub} short of the leaf's left edge)`,
+        );
+      }
+    }
+
+    // Packing reached the declared display width outright — no WARN at all.
+    const findings = await gateFindings('1.1-canvas-width');
+    assert.deepEqual(findings, [], `1.1 should be clean once packing fits: ${findings.map((f) => f.message).join('; ')}`);
+
+    // DESIGN 6.9: no edge label — including "no, enterprise or Android",
+    // which used to land on top of Java's own stacked leaves — sits within
+    // 8 of a node box it does not belong to.
+    const labelClear = await gateFindings('6.9-label-clear');
+    assert.deepEqual(
+      labelClear,
+      [],
+      `6.9 should be clean: ${labelClear.map((f) => f.message).join('; ')}`,
+    );
+  });
+
+  test('leaf stacking fits cleanly under a taller display cap', async () => {
+    // 760 is comfortably past this chart's own packed floor once leaf
+    // stacking applies — the case DESIGN 1.5's display cap is for: an
+    // on-screen name at its full, undiminished size, same as the 620 case
+    // above but with room to spare.
+    await mount(pythonOrJava(), { display: 760 });
+    const m = await measure();
+    assert.ok(m.width <= 760, `canvas ${m.width} exceeds the declared display width of 760`);
+    const names = m.texts.filter((t) => t.cls.includes('gc-title'));
+    assert.ok(
+      names.every((t) => t.size === TYPE.name),
+      `a node name drew at ${names.map((t) => t.size).join(',')} instead of the full ${TYPE.name}`,
+    );
+    const scale = Math.min(1, 760 / m.width);
+    assert.equal(scale, 1, `expected no shrink at all once packing fits; canvas is ${m.width}`);
+    const findings = await gateFindings('1.1-canvas-width');
+    assert.deepEqual(findings, [], `1.1 should be clean once packing fits: ${findings.map((f) => f.message).join('; ')}`);
+  });
+
+  test('no display option leaves the canvas exactly as it was', async () => {
+    // DESIGN 1.1: the default catalog is not moved by this feature at all —
+    // every chart in it already fits the plain 1000/1200 ceiling, so leaf
+    // stacking (DESIGN 1.5) never even runs without a declared display.
+    await mount(pythonOrJava());
+    const m = await measure();
+    assert.equal(m.width, 968, `python-or-java's undeclared-display width moved to ${m.width}`);
+    assert.equal(await session.page.evaluate(() => document.querySelector('svg')!.dataset.display), '1000');
   });
 });
 

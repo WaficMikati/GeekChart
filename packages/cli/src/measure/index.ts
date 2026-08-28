@@ -44,6 +44,7 @@ import {
   parallelClearance,
   hairpin,
   longLoop,
+  labelClear,
 } from './edges.ts';
 import { labelOverlaps, labelSwallow, textShapeCollision, labelOnOtherEdge } from './labels.ts';
 import { laneRide, laneOverrun, hashLabel } from './charts.ts';
@@ -99,6 +100,7 @@ export const ALL_CHECKS: Check[] = [
   minEdgeLength,
   rawTag,
   labelOnOtherEdge,
+  labelClear,
 ];
 
 export interface MeasureResult {
