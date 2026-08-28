@@ -17,10 +17,12 @@ import {
   pathPoints,
   pathPointsHV,
   rect,
+  trimCoincidentRuns,
   visible,
   type Check,
   type Ctx,
   type Finding,
+  type Seg as XySeg,
 } from './helpers.ts';
 
 /** Path points, in screen space — the same transform-aware read `labels.ts`
@@ -530,10 +532,22 @@ export const departsSource: Check = {
       const tol = 32 * ctx.unit; // 16 for a plain stub, more for an ER crow's-foot glyph the line starts past
       const spanX = p[0] >= nb.left - 1 && p[0] <= nb.right + 1;
       const spanY = p[1] >= nb.top - 1 && p[1] <= nb.bottom + 1;
-      const onSide =
-        (spanX && (Math.abs(p[1] - nb.top) <= tol || Math.abs(p[1] - nb.bottom) <= tol)) ||
-        (spanY && (Math.abs(p[0] - nb.left) <= tol || Math.abs(p[0] - nb.right) <= tol)) ||
-        (spanX && spanY);
+      // DESIGN 1.5/6.2: a diamond or circle's outline reaches its own
+      // bounding box only at each face's centre — the rest of a "side" this
+      // check otherwise accepts is empty space past the point/curve. The one
+      // edge allowed to leave from there (a non-boxy fan parent's bus trunk)
+      // must start within 8 of that centre, not merely somewhere along the
+      // box's edge.
+      const nonBoxy = node.classList.contains('gc-shape-diamond') || node.classList.contains('gc-shape-circle');
+      const faceTol = 8 * ctx.unit;
+      const cx = (nb.left + nb.right) / 2;
+      const cy = (nb.top + nb.bottom) / 2;
+      const onSide = nonBoxy
+        ? (spanX && Math.abs(p[0] - cx) <= faceTol && (Math.abs(p[1] - nb.top) <= tol || Math.abs(p[1] - nb.bottom) <= tol)) ||
+          (spanY && Math.abs(p[1] - cy) <= faceTol && (Math.abs(p[0] - nb.left) <= tol || Math.abs(p[0] - nb.right) <= tol))
+        : (spanX && (Math.abs(p[1] - nb.top) <= tol || Math.abs(p[1] - nb.bottom) <= tol)) ||
+          (spanY && (Math.abs(p[0] - nb.left) <= tol || Math.abs(p[0] - nb.right) <= tol)) ||
+          (spanX && spanY);
       if (!onSide) {
         floating++;
         floatIds.push(`${e.dataset.id}:${Math.round((p[0] - nb.left) / ctx.unit)},${Math.round((p[1] - nb.top) / ctx.unit)}`);
@@ -940,15 +954,32 @@ export const labelOnEdge: Check = {
           ids.push(`${own}:${nearest.toFixed(0)}`);
         }
       }
-      for (const [id, pts] of pathsOf) {
+      const tol = 1.5 * ctx.unit;
+      const ownSegs: XySeg[] = [];
+      for (let j = 1; ownPts && j < ownPts.length; j++) {
+        const [x1, y1] = ownPts[j - 1]!;
+        const [x2, y2] = ownPts[j]!;
+        ownSegs.push({ x1, y1, x2, y2 });
+      }
+      outer: for (const [id, pts] of pathsOf) {
         if (id === own) continue;
         for (let i = 1; i < pts.length; i++) {
           const [x1, y1] = pts[i - 1]!;
           const [x2, y2] = pts[i]!;
-          if (distBoxSeg(b, x1, y1, x2, y2) / ctx.unit < RULES['6.11-other']!.threshold!) {
-            nearOther++;
-            ids.push(`${own}~${id}`);
-            break;
+          // DESIGN 6.4/6.8: the stretch this other edge shares with the
+          // label's own path (a bus trunk, or two branches leaving one point
+          // together) is not "another edge" — only that shared stretch is
+          // trimmed away, not the rest of the segment past where the two
+          // edges part.
+          for (const trimmed of trimCoincidentRuns({ x1, y1, x2, y2 }, ownSegs, tol)) {
+            if (
+              distBoxSeg(b, trimmed.x1, trimmed.y1, trimmed.x2, trimmed.y2) / ctx.unit <
+              RULES['6.11-other']!.threshold!
+            ) {
+              nearOther++;
+              ids.push(`${own}~${id}`);
+              continue outer;
+            }
           }
         }
       }

@@ -4,7 +4,16 @@
  * another edge than their own.
  */
 import { RULES } from '@geekchart/core';
-import { pathPoints, rect, texts, visible, type Check, pathPointsHV } from './helpers.ts';
+import {
+  pathPoints,
+  rect,
+  texts,
+  trimCoincidentRuns,
+  visible,
+  type Check,
+  type Seg,
+  pathPointsHV,
+} from './helpers.ts';
 
 function transformPts(pts: [number, number][], ctm: DOMMatrix): [number, number][] {
   return pts.map(([x, y]) => [x * ctm.a + ctm.e, y * ctm.d + ctm.f]);
@@ -73,33 +82,56 @@ export const textShapeCollision: Check = {
 export const labelOnOtherEdge: Check = {
   id: '6.5-label-on-other-edge',
   rule: '6.5',
-  run(svg) {
+  run(svg, ctx) {
     const edgeEls = [...svg.querySelectorAll<SVGGeometryElement>('.gc-edge[data-id]')];
+    const pointsOf = new Map<string, [number, number][]>();
+    for (const e of edgeEls) {
+      const ctm = e.getScreenCTM();
+      if (!ctm) continue;
+      pointsOf.set(e.getAttribute('data-id')!, transformPts(pathPoints(e.getAttribute('d')), ctm));
+    }
+    const tol = 1.5 * ctx.unit;
     let labelOnEdge = 0;
     for (const t of svg.querySelectorAll('.gc-edge-label text, .gc-card, text.gc-msg-label')) {
       if (!visible(t, svg)) continue;
       const b = rect(t);
       if (!b.width) continue;
       const own = t.closest('[data-id]')?.getAttribute('data-id');
-      for (const e of edgeEls) {
-        if (e.getAttribute('data-id') === own) continue;
-        const ctm = e.getScreenCTM();
-        if (!ctm) continue;
-        const pts = transformPts(pathPoints(e.getAttribute('d')), ctm);
+      const ownPts = own ? pointsOf.get(own) : undefined;
+      const ownSegs: Seg[] = [];
+      for (let j = 1; ownPts && j < ownPts.length; j++) {
+        const [x1, y1] = ownPts[j - 1]!;
+        const [x2, y2] = ownPts[j]!;
+        ownSegs.push({ x1, y1, x2, y2 });
+      }
+      for (const [id, pts] of pointsOf) {
+        if (id === own) continue;
         // Breaks only this edge's own segment scan — a label overlapping more
         // than one other edge is counted once per edge, matching the gate.
-        for (let i = 1; i < pts.length; i++) {
+        let hit = false;
+        for (let i = 1; i < pts.length && !hit; i++) {
           const [x1, y1] = pts[i - 1]!;
           const [x2, y2] = pts[i]!;
-          const sx1 = Math.min(x1, x2);
-          const sx2 = Math.max(x1, x2);
-          const sy1 = Math.min(y1, y2);
-          const sy2 = Math.max(y1, y2);
-          if (sx1 < b.right && sx2 > b.left && sy1 < b.bottom && sy2 > b.top) {
-            labelOnEdge++;
-            break;
+          // DESIGN 6.4/6.8: the stretch this other edge shares with the
+          // label's own path (a bus trunk, or two branches leaving one
+          // point together) is not "another edge" — only that shared
+          // stretch is trimmed away, not the rest past where they part.
+          for (const { x1: sx1, y1: sy1, x2: sx2, y2: sy2 } of trimCoincidentRuns(
+            { x1, y1, x2, y2 },
+            ownSegs,
+            tol,
+          )) {
+            const lo1 = Math.min(sx1, sx2);
+            const hi1 = Math.max(sx1, sx2);
+            const lo2 = Math.min(sy1, sy2);
+            const hi2 = Math.max(sy1, sy2);
+            if (lo1 < b.right && hi1 > b.left && lo2 < b.bottom && hi2 > b.top) {
+              hit = true;
+              break;
+            }
           }
         }
+        if (hit) labelOnEdge++;
       }
     }
     return labelOnEdge

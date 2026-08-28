@@ -72,6 +72,65 @@ export function createCtx(svg: SVGSVGElement, opts: MeasureOptions = {}): Ctx {
 
 export const rect = (el: Element): DOMRect => el.getBoundingClientRect();
 
+export interface Seg {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+const subtractInterval = (lo: number, hi: number, oLo: number, oHi: number): [number, number][] => {
+  if (oHi <= lo || oLo >= hi) return [[lo, hi]];
+  const out: [number, number][] = [];
+  if (oLo > lo) out.push([lo, oLo]);
+  if (oHi < hi) out.push([oHi, hi]);
+  return out;
+};
+
+/**
+ * DESIGN 6.4/6.8: a bus's shared trunk (a leaf stack's fan-out, 1.6's shared
+ * start, a decision's two branches leaving one point together) is the same
+ * run drawn on more than one edge on purpose — "no two edges share a
+ * segment, except a fan bus from one point". Only the *stretch* of another
+ * edge's segment that coincides with one on this edge's own path — same
+ * line, overlapping extent — is that shared run, not "another edge" DESIGN
+ * 6.5/6.11's clearance checks are measuring a label against; the two edges
+ * still part ways further along, and a label near that unshared tail is
+ * sitting on a real other edge, not the shared start. Cutting the whole
+ * segment (rather than just the coincident stretch) let a label meant for
+ * the far edge land on the near one's own unshared tail with nothing left
+ * to catch it. Kept in step with the renderer's own copy of this test
+ * (`packages/core/src/draw.ts`'s `trimCoincidentRuns`).
+ */
+export function trimCoincidentRuns(seg: Seg, ownPairs: Seg[], tol: number): Seg[] {
+  const vertical = Math.abs(seg.x1 - seg.x2) < tol;
+  const horizontal = Math.abs(seg.y1 - seg.y2) < tol;
+  if (!vertical && !horizontal) return [seg];
+  let intervals: [number, number][] = [
+    vertical
+      ? [Math.min(seg.y1, seg.y2), Math.max(seg.y1, seg.y2)]
+      : [Math.min(seg.x1, seg.x2), Math.max(seg.x1, seg.x2)],
+  ];
+  for (const o of ownPairs) {
+    const oVert = Math.abs(o.x1 - o.x2) < tol;
+    const oHoriz = Math.abs(o.y1 - o.y2) < tol;
+    if (vertical && oVert && Math.abs(seg.x1 - o.x1) < tol) {
+      const oLo = Math.min(o.y1, o.y2);
+      const oHi = Math.max(o.y1, o.y2);
+      intervals = intervals.flatMap(([lo, hi]) => subtractInterval(lo, hi, oLo, oHi));
+    } else if (horizontal && oHoriz && Math.abs(seg.y1 - o.y1) < tol) {
+      const oLo = Math.min(o.x1, o.x2);
+      const oHi = Math.max(o.x1, o.x2);
+      intervals = intervals.flatMap(([lo, hi]) => subtractInterval(lo, hi, oLo, oHi));
+    }
+  }
+  return intervals
+    .filter(([lo, hi]) => hi - lo > tol)
+    .map(([lo, hi]) =>
+      vertical ? { x1: seg.x1, y1: lo, x2: seg.x1, y2: hi } : { x1: lo, y1: seg.y1, x2: hi, y2: seg.y1 },
+    );
+}
+
 /** True unless `el` or an ancestor up to (not including) `root` is hidden. */
 export function visible(el: Element, root: Element): boolean {
   for (let e: Element | null = el; e && e !== root; e = e.parentElement) {

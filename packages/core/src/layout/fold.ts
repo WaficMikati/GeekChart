@@ -72,8 +72,21 @@ export async function fold(
   // record chain) still folds exactly as before; the risk is specific to the
   // shape a cycle creates, not to being short.
   const shortBackEdged = graph.edges.some((e) => e.backward) && longestPath(graph) <= 6;
-  const wasteful = (r: ElkNode) =>
-    !shortBackEdged && ((r.width ?? 0) < room * 0.55 || (r.height ?? 0) > (r.width ?? 1) * 1.2);
+  // The room-relative half of this used to also fire on "uses under 55% of
+  // `room`" — right while DESIGN 1.1 padded every chart out to a fixed 1000
+  // regardless of content, where a narrow stack really did leave most of a
+  // *fixed* canvas empty (7.4). Since 1.1's 2026-08-21 hugging revision,
+  // `fitCanvas` hugs width down to content + 2×48 for any undeclared-display
+  // chart, so that emptiness cannot happen any more: coverage is a function
+  // of the content's own shape, not of how much of `room` it used. Comparing
+  // against `room` instead of the content's own aspect is what reshaped
+  // python-or-java-short's plain 448×315 decision-and-two-leaves (which hugs
+  // to a perfectly ordinary ~544×410, 63% covered) into a wide, short row
+  // that packed two boxes almost level with the diamond and routed an edge
+  // under a neighbour it didn't belong to (DESIGN 6.1/6.8). What is still a
+  // real, hugging-proof fault is a shape taller than it is wide by more than
+  // a bit — a true spindle — which the second half alone still catches.
+  const wasteful = (r: ElkNode) => !shortBackEdged && (r.height ?? 0) > (r.width ?? 1) * 1.2;
   if (fits(first) && !overlong && !wasteful(first)) return first;
 
   // ELK's own wrapping (`wrapping.strategy: MULTI_EDGE`, below) cannot be

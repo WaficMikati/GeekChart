@@ -627,6 +627,172 @@ describe('display', () => {
   });
 });
 
+describe('display: python-or-java-short', () => {
+  // fixtures/blog/python-or-java-short.mmd: a bare decision — one diamond,
+  // two leaf branches, each with a caption long enough to force DESIGN 2.2's
+  // own wrap. Exercises two things together no other fixture does: a
+  // caption that has to wrap to a second line (2.2), and a leaf-stack fan
+  // (1.5) whose parent is a diamond rather than a rect — the non-boxy
+  // exception, since a diamond's outline never reaches its own bounding
+  // box's left edge the way a rect's flat side does.
+  const shortDecision = () =>
+    readFileSync(join(fixtures, 'blog', 'python-or-java-short.mmd'), 'utf8');
+
+  test('612: a caption too long for its box wraps to two lines, DESIGN 2.2', async () => {
+    await mount(shortDecision(), { display: 612 });
+    const m = await measure();
+    assert.ok(m.width <= 612, `canvas ${m.width} exceeds the declared display width of 612`);
+
+    // "Pandas · Django · #1 on TIOBE" (PY) and "Spring · Android · top 5 on
+    // TIOBE" (JAVA) are both longer than the shared 200-wide box can hold on
+    // one line — each wraps into two `.gc-caption` rows rather than
+    // escaping the box or forcing it wider than DESIGN 2.2's list allows.
+    const captions = m.texts.filter((t) => t.cls.includes('gc-caption'));
+    assert.equal(
+      captions.length,
+      4,
+      `expected 2 wrapped captions × 2 lines each, found ${captions.length} caption rows`,
+    );
+
+    const escapes = await gateCheck('2.2-label-escape-box');
+    assert.deepEqual(escapes, [], `2.2 should be clean: ${escapes.join('; ')}`);
+
+    // The wrapped-caption box is DESIGN 2.2's taller `captionWrap` size (72),
+    // not the plain one-line-caption `captioned` size (56) — a captionless
+    // name centred in the taller box would be exactly what 3.2 forbids.
+    const boxHeight = await session.page.evaluate(() => {
+      const n = document.querySelector('[data-id="PY"] .gc-outline') as SVGGraphicsElement;
+      return n.getBBox().height;
+    });
+    assert.equal(
+      boxHeight,
+      72,
+      `PY's box is ${boxHeight} tall, expected DESIGN 2.2's captionWrap size (72)`,
+    );
+  });
+
+  test('500: the leaf-stack trunk leaves a diamond parent at its own bottom centre, DESIGN 1.5', async () => {
+    // Wide enough that the stacked fan (~328 units) fits under the display
+    // on its own — DESIGN 1.5's own leaf stacking wins outright here, no
+    // need for 1.6's sibling-wrap on top.
+    await mount(shortDecision(), { display: 500 });
+
+    // DESIGN 1.5's ordinary hanging port (parent.x + 12) is a point in empty
+    // space under a diamond — the outline only reaches its own bounding box
+    // at the bottom vertex, straight below the centre. The non-boxy
+    // exception routes the trunk from there instead.
+    const q1 = await session.page.evaluate(() => {
+      const n = document.querySelector('[data-id="Q1"] .gc-outline') as SVGGraphicsElement;
+      const b = n.getBBox();
+      return { x: b.x, width: b.width };
+    });
+    const q1CentreX = q1.x + q1.width / 2;
+
+    const buses = await busEdges(session);
+    assert.equal(buses.length, 2, `expected a 2-leaf stack under Q1, found ${buses.length} bus edges`);
+    for (const e of buses) {
+      assert.ok(
+        Math.abs(e.trunkX - q1CentreX) < 0.5,
+        `${e.id}: trunk x is ${e.trunkX}, expected the diamond's own centre (${q1CentreX}), not a hanging port off its left edge`,
+      );
+      // DESIGN 1.5: a leaf hangs off a non-boxy parent's centre by at least
+      // 20, not off its left edge by 32 — `leaf.x = parent centre + 20` is
+      // the floor; DESIGN 6.10 can still grow it further right to seat a
+      // wide label ("no, enterprise or Android") beside the trunk.
+      assert.ok(
+        e.toBox!.x >= q1CentreX + 20 - 0.5,
+        `${e.id}: leaf x is ${e.toBox!.x}, expected at least parent centre + 20 (${q1CentreX + 20})`,
+      );
+    }
+
+    // DESIGN 6.11: "no, enterprise or Android" used to read as sitting
+    // within 16 of Q1→PY's own trunk once both edges left the diamond from
+    // the same point — a shared start DESIGN 6.4 allows, not "another edge".
+    const labelOnEdge = await gateFindings('6.11-label-on-edge');
+    assert.deepEqual(
+      labelOnEdge,
+      [],
+      `6.11 should be clean: ${labelOnEdge.map((f) => f.message).join('; ')}`,
+    );
+  });
+
+  test('358: too narrow to stack the fan — DESIGN 1.5/1.6 un-stack and wrap the siblings instead', async () => {
+    // Under 358 the stacked fan alone (~328 units, plus the wide caption box)
+    // cannot reach the cap — DESIGN 1.5 does not force it through anyway
+    // (which used to leave the chart wider than asked, a WARN): the plain,
+    // unstacked graph is tried too, and DESIGN 1.6's own sibling-wrap turns
+    // Python and Java — two ordinary 200-wide siblings of one row — into a
+    // column of their own, each centred under the diamond, which fits with
+    // room to spare.
+    await mount(shortDecision(), { display: 358, motion: false });
+    const m = await measure();
+    assert.ok(m.width <= 358, `canvas ${m.width} exceeds the declared display width of 358`);
+    const scale = Math.min(1, 358 / m.width);
+    assert.equal(scale, 1, `expected no shrink at all once packing fits; canvas is ${m.width}`);
+
+    // No leaf stacking here — every `.gc-bus` edge at this width must also
+    // carry `gc-wrap`, DESIGN 1.6's own sibling-wrap reusing the bus shape
+    // for a parent's edge into a row it pushed down — not DESIGN 1.5's leaf
+    // stacking, which never sets `gc-wrap`.
+    const wrapBusCount = await session.page.evaluate(
+      () => document.querySelectorAll('.gc-edge.gc-bus.gc-wrap[data-id]').length,
+    );
+    const leafBusCount = await session.page.evaluate(
+      () => document.querySelectorAll('.gc-edge.gc-bus[data-id]:not(.gc-wrap)').length,
+    );
+    assert.equal(leafBusCount, 0, `expected no leaf-stack bus at 358, found ${leafBusCount}`);
+    assert.equal(wrapBusCount, 1, `expected Java's edge as DESIGN 1.6's wrap-bus, found ${wrapBusCount}`);
+
+    // Python and Java share one column, one above the other, each centred
+    // under the diamond — not two branches side by side.
+    const pyBox = await session.page.evaluate(() => {
+      const n = document.querySelector('[data-id="PY"] .gc-outline') as SVGGraphicsElement;
+      const b = n.getBBox();
+      return { x: b.x, y: b.y };
+    });
+    const javaBox = await session.page.evaluate(() => {
+      const n = document.querySelector('[data-id="JAVA"] .gc-outline') as SVGGraphicsElement;
+      const b = n.getBBox();
+      return { x: b.x, y: b.y };
+    });
+    assert.ok(
+      Math.abs(pyBox.x - javaBox.x) < 0.5,
+      `Python (x=${pyBox.x}) and Java (x=${javaBox.x}) should share one column`,
+    );
+    assert.ok(javaBox.y > pyBox.y, `expected Java's row below Python's`);
+
+    // A caption that wraps breaks *after* its own "·" separator, not before
+    // it — "Pandas · Django" / "· #1 on TIOBE" reads as though a word went
+    // missing off the front of the second line.
+    const captions = m.texts.filter((t) => t.cls.includes('gc-caption'));
+    assert.ok(captions.length > 0, 'expected wrapped captions at 358');
+    assert.ok(
+      captions.every((t) => !t.text.trimStart().startsWith('·')),
+      `a caption line starts with "·": ${captions.map((t) => t.text).join(' | ')}`,
+    );
+
+    // A full gate sweep — every rule, not just the ones this feature
+    // touches — must report nothing: no FAIL and, per DESIGN 1.1, no WARN
+    // either once packing actually reaches the cap.
+    await session.page.addScriptTag({ path: measureBundle });
+    const { fails, warns } = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      return (
+        window as unknown as {
+          geekchartMeasure: {
+            measureChart: (
+              svg: SVGSVGElement,
+              opts: { chartId: string },
+            ) => { fails: string[]; warns: string[] };
+          };
+        }
+      ).geekchartMeasure.measureChart(svg, { chartId: 'python-or-java-short-358' });
+    });
+    assert.deepEqual(fails, [], `gate FAILs at display 358: ${fails.join('; ')}`);
+    assert.deepEqual(warns, [], `gate WARNs at display 358: ${warns.join('; ')}`);
+  });
+});
+
 describe('type', () => {
   test('nothing is set below 11 units, on any chart', async () => {
     for (const name of [

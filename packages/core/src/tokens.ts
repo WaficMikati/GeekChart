@@ -149,11 +149,19 @@ export const BOX_SIZES: {
   standard: Extent;
   /** Title + caption. DESIGN 3.2's two-tier node gets this one. */
   captioned: Extent;
+  /**
+   * Title + a two-line caption. DESIGN 2.2: a caption that does not fit the
+   * chart's shared box even at its widest wraps to a second line the way a
+   * caption-less title already does — one more caption row-step (16) taller
+   * than `captioned`, on the 8-grid.
+   */
+  captionWrap: Extent;
   wide: Extent;
 } = {
   compact: { width: 120, height: 48 },
   standard: { width: 160, height: 48 },
   captioned: { width: 160, height: 56 },
+  captionWrap: { width: 160, height: 72 },
   wide: { width: 200, height: 48 },
 };
 

@@ -33,8 +33,30 @@ export const LEAF_INDENT = 32;
  *  centre on purpose, so the trunk sits in the indent strip rather than
  *  through the parent's own body or the leaf column either. Allowed only
  *  for this pattern (DESIGN 6.2's ordinary midpoint attachment still holds
- *  everywhere else). */
+ *  everywhere else). Only for a *boxy* parent (`isBoxyShape`, below) — a
+ *  diamond or circle's outline does not reach its own bounding box except at
+ *  each face's centre, so a port 12 off the left edge is a point in empty
+ *  space under one, not a hanging port. */
 export const TRUNK_OFFSET = 12;
+/**
+ * DESIGN 1.5: for a non-boxy parent (diamond, circle — the shapes whose
+ * outline does not reach its own bounding-box corners, mirroring
+ * `route/elbows.ts`'s `isBoxy`), the trunk leaves the one point the outline
+ * actually touches on that face — the bottom centre — so leaves are indented
+ * off the parent's own *centre* instead of its left edge: `leaf.x = parent
+ * centre + LEAF_CENTRE_OFFSET`, wide enough (20) that the trunk running down
+ * to a lower leaf still clears every leaf above it by DESIGN 6.1/6.8's 16.
+ */
+export const LEAF_CENTRE_OFFSET = 20;
+
+/** DESIGN 1.5: a fan parent whose outline does not reach its own
+ *  bounding-box corners — the trunk can only leave from the one point on
+ *  each face the outline actually touches, not "12 off the left edge" the
+ *  way a plain rect's flat bottom allows. Matches `shapeOf` in draw.ts,
+ *  which draws exactly these two shapes off-rectangle. */
+export function isBoxyShape(shape: GraphNode['shape']): boolean {
+  return shape !== 'diamond' && shape !== 'circle';
+}
 /** Room below the parent before the first leaf. */
 const FIRST_GAP = 24;
 /** DESIGN 1.5: leaves stack 16 apart. */
@@ -126,7 +148,12 @@ export interface FanPlan extends Fan {
 export function planFan(fan: Fan): FanPlan {
   const { parent, leaves } = fan;
   const leafWidth = Math.max(...leaves.map((n) => n.width!));
-  const leafLocalX = LEAF_INDENT;
+  // DESIGN 1.5: a boxy parent indents leaves off its own left edge; a
+  // diamond or circle indents them off its own centre instead — the trunk
+  // can only leave a non-boxy shape from the one point on its bottom face
+  // the outline actually touches, and that point is the centre, not 12 in
+  // from the bounding box's left edge.
+  const leafLocalX = isBoxyShape(parent.shape) ? LEAF_INDENT : parent.width! / 2 + LEAF_CENTRE_OFFSET;
   const leafLocalY = parent.height! + FIRST_GAP;
   let y = leafLocalY;
   for (const leaf of leaves) y += leaf.height! + LEAF_GAP;

@@ -164,6 +164,37 @@ export async function layout(
     );
   }
 
+  // DESIGN 2.2: the same "wrap rather than widen" for a caption that will
+  // not fit the chart's shared box even at its widest — "Pandas · Django ·
+  // #1 on TIOBE" is the case: a caption in its own mono face can easily run
+  // longer than any title on the same box. Wrapped in the caption's own
+  // style, on the same `baseWidth` every sibling already has, never the box
+  // grown past what DESIGN 2.2's list allows.
+  for (const item of pool) {
+    const { node } = item;
+    if (!node.caption || ownShape.includes(node.shape)) continue;
+    const captionWidth = measurer.measure(
+      node.caption,
+      scene.captionFont,
+      scene.captionSize,
+      scene.captionTracking,
+    );
+    if (captionWidth + scene.padX * 2 <= baseWidth) continue;
+    const wrapped = wrapTitle(
+      node.caption,
+      (s) => measurer.measure(s, scene.captionFont, scene.captionSize, scene.captionTracking),
+      baseWidth - scene.padX * 2,
+    );
+    if (!wrapped) continue;
+    node.captionLines = wrapped;
+    item.label.width = Math.max(
+      item.label.width,
+      ...wrapped.map((l) =>
+        measurer.measure(l, scene.captionFont, scene.captionSize, scene.captionTracking),
+      ),
+    );
+  }
+
   // DESIGN 1.1/1.6: a diamond solves its own geometry from its label (it is
   // in `ownShape`, above, exactly so a long diamond label never drags the
   // *shared* box wider) — but under a declared display that leaves it as the
@@ -208,15 +239,22 @@ export async function layout(
   const grid = GRID;
   const roundUp = (v: number) => Math.ceil(v / grid) * grid;
 
-  // Two box heights only, and which one a chart uses is decided by the chart,
-  // not by the node: 56 when anything in it carries a caption, 48 when nothing
-  // does. DESIGN 2.2 and 3.2 — a captionless name centred in a 56-high box is
-  // the thing 3.2 forbids, and one row of 48s beside a row of 56s breaks 2.3.
-  // A wrapped title's second line gets the same 56-high box a caption would.
+  // Three box heights only, and which one a chart uses is decided by the
+  // chart, not by the node: 72 when anything in it carries a caption that
+  // itself had to wrap (DESIGN 2.2), 56 when anything carries a plain
+  // one-line caption, 48 when nothing does. A captionless name centred in a
+  // 56- or 72-high box is the thing 3.2 forbids, and one row of 48s beside a
+  // row of 56s/72s breaks 2.3. A wrapped title's second line gets the same
+  // 56-high box a caption would.
+  const wrappedCaption = graph.nodes.some((n) => Boolean(n.captionLines));
   const twoTier = graph.nodes.some((n) => Boolean(n.caption) || Boolean(n.titleLines));
   const base = {
     width: baseWidth,
-    height: twoTier ? BOX_SIZES.captioned.height : BOX_SIZES.standard.height,
+    height: wrappedCaption
+      ? BOX_SIZES.captionWrap.height
+      : twoTier
+        ? BOX_SIZES.captioned.height
+        : BOX_SIZES.standard.height,
   };
 
   for (const item of intrinsic) {
@@ -417,12 +455,62 @@ export async function layout(
   const room = scene.canvas.width - scene.canvas.margin * 2;
   const first = await runLayout({});
   let fanPlansById = new Map<string, FanPlan>();
-  let finalRunLayout = runLayout;
   // Set only when a stacked prefix already fit the cap on its own — the
   // fold-skipping fast path below. Left null for every chart that never
   // stacks at all, and for the "stacking still isn't enough" tail, both of
   // which fall through to the ordinary `fold()` call same as always.
   let winner: { result: ElkNode; plans: FanPlan[] } | null = null;
+
+  // DESIGN 1.6: fold's own wrap-into-rows, then a sibling-wrap pass on top
+  // when the result is still wider than the display. Factored out so the
+  // "stacking still isn't enough" tail below can run it against more than
+  // one candidate layout and compare, rather than committing to one before
+  // knowing whether it actually reaches the cap.
+  const wrapOnTop = (
+    folded: ElkNode,
+    plansById: Map<string, FanPlan>,
+  ): { corridors: Map<string, number>; rows: WrappedRow[] } => {
+    if (!(packToDisplay && (folded.width ?? 0) > room && folded.children)) {
+      return { corridors: new Map(), rows: [] };
+    }
+    // A top-level ELK item's id is a fan stand-in, a cluster, or a plain
+    // node — this resolves any of the three back to the graph id its edges
+    // actually name.
+    const resolveId = (itemId: string): string =>
+      itemId.startsWith('fan:')
+        ? (plansById.get(itemId)?.parent.id ?? itemId)
+        : itemId.startsWith('cluster:')
+          ? itemId.slice('cluster:'.length)
+          : itemId;
+    // DESIGN 6.9: a wrap edge's own label needs 8 clear of every node on
+    // both sides — taller than the ordinary 32 between rows holds, so a row
+    // an edge like that arrives at gets a grown gap above it instead of a
+    // label with nowhere to fit.
+    const needsLabelGap = new Set(
+      folded.children
+        .map((item) => item.id)
+        .filter((id) => {
+          const realId = resolveId(id);
+          return graph.edges.some((e) => !e.backward && e.to === realId && e.label);
+        }),
+    );
+    const labelGap = scene.edgeLabelSize * 2 + CLEARANCE.node * 2 + GRID * 3;
+    return wrapSiblings(folded.children, room, needsLabelGap, labelGap);
+  };
+  // How wide the packed row/column of top-level items actually is, read
+  // back from where `wrapOnTop` (above) leaves them — ELK's own `.width` is
+  // the pre-wrap row's, exactly the number a "did this candidate actually
+  // reach the cap" comparison needs to see past.
+  const packedWidth = (folded: ElkNode): number =>
+    folded.children?.length
+      ? Math.max(...folded.children.map((c) => (c.x ?? 0) + (c.width ?? 0))) -
+        Math.min(...folded.children.map((c) => c.x ?? 0))
+      : (folded.width ?? 0);
+
+  let result: ElkNode;
+  let wrapCorridors = new Map<string, number>();
+  let wrappedRows: WrappedRow[] = [];
+
   if (packToDisplay && (first.width ?? 0) > room) {
     const fans = findFans(graph, new Set([...claimed, ...satelliteIds])).map(planFan);
     const stackedGraph = (plans: FanPlan[]) => {
@@ -472,26 +560,65 @@ export async function layout(
       const trial = await candidateRunLayout({});
       if ((trial.width ?? 0) <= room) winner = { result: trial, plans };
     }
+
     if (winner) {
       fanPlansById = new Map(winner.plans.map((p) => [p.unitId, p]));
+      result = winner.result;
+      ({ corridors: wrapCorridors, rows: wrappedRows } = wrapOnTop(result, fanPlansById));
     } else if (fans.length) {
-      // Stacking every fan still doesn't fit: DESIGN 1.5 says fold still
-      // gets a turn, then the chart is accepted as wide (a gate WARN, not a
-      // FAIL) — so the fully-stacked graph is what's worth handing fold,
-      // not a plain one it has already failed to wrap narrow enough on its
-      // own.
-      finalRunLayout = stackedGraph(fans);
-      fanPlansById = new Map(fans.map((p) => [p.unitId, p]));
-    }
-  }
-
-  const result = winner
-    ? winner.result
-    : await fold(finalRunLayout, graph, scene, flow, {
+      // DESIGN 1.5/1.6: no stacked prefix reaches the cap on its own — a
+      // stacked fan is one atomic ELK node, so neither `fold()` nor 1.6's
+      // own sibling-wrap can reshape anything *inside* it once it is handed
+      // one. Packing picks whatever fits: the fully-stacked graph and the
+      // plain, unstacked one — whose ordinary siblings 1.6 already knows
+      // how to wrap into a column of their own — are both folded and
+      // wrapped, and whichever actually reaches the cap wins (the narrower
+      // of the two if both do, or if neither does). A diamond fanning to
+      // two boxes it cannot stack and fit at once (python-or-java-short at
+      // 358) is exactly this case: stacked, the whole diamond-plus-column
+      // is one ~328-wide unit nothing can narrow further; unstacked, Python
+      // and Java are two ordinary 200-wide siblings DESIGN 1.6 wraps into a
+      // column of their own, each centred under the diamond — ~296 wide
+      // with margins, comfortably under the cap, at scale 1.
+      const stackedPlans = new Map(fans.map((p) => [p.unitId, p]));
+      const stackedFolded = await fold(stackedGraph(fans), graph, scene, flow, {
         claimed,
         satelliteIds,
         soleParent,
       });
+      const stackedWrap = wrapOnTop(stackedFolded, stackedPlans);
+      const stackedWidth = packedWidth(stackedFolded);
+
+      const plainFolded = await fold(runLayout, graph, scene, flow, {
+        claimed,
+        satelliteIds,
+        soleParent,
+      });
+      const plainWrap = wrapOnTop(plainFolded, new Map());
+      const plainWidth = packedWidth(plainFolded);
+
+      const stackedFits = stackedWidth <= room;
+      const plainFits = plainWidth <= room;
+      const useStacked = stackedFits === plainFits ? stackedWidth <= plainWidth : stackedFits;
+
+      if (useStacked) {
+        fanPlansById = stackedPlans;
+        result = stackedFolded;
+        wrapCorridors = stackedWrap.corridors;
+        wrappedRows = stackedWrap.rows;
+      } else {
+        fanPlansById = new Map();
+        result = plainFolded;
+        wrapCorridors = plainWrap.corridors;
+        wrappedRows = plainWrap.rows;
+      }
+    } else {
+      result = await fold(runLayout, graph, scene, flow, { claimed, satelliteIds, soleParent });
+      ({ corridors: wrapCorridors, rows: wrappedRows } = wrapOnTop(result, fanPlansById));
+    }
+  } else {
+    result = await fold(runLayout, graph, scene, flow, { claimed, satelliteIds, soleParent });
+  }
 
   // A top-level ELK item's id is a fan stand-in, a cluster, or a plain node —
   // this is the one place that knows how to read any of the three back to
@@ -503,36 +630,6 @@ export async function layout(
       : itemId.startsWith('cluster:')
         ? itemId.slice('cluster:'.length)
         : itemId;
-
-  // DESIGN 1.6: leaf stacking and fold have both had their turn — anything
-  // still wider than the display is siblings sharing a row that neither of
-  // them reshapes on its own (two already-stacked fans side by side, say).
-  // Wrapping only ever runs past this point, on whatever `winner`/`fold` left,
-  // so a chart that already fits (every chart in the gallery today) never
-  // reaches it — same guard `packToDisplay` already puts around 1.5 itself.
-  let wrapCorridors = new Map<string, number>();
-  let wrappedRows: WrappedRow[] = [];
-  if (packToDisplay && (result.width ?? 0) > room && result.children) {
-    // DESIGN 6.9: a wrap edge's own label needs 8 clear of every node on
-    // both sides — taller than the ordinary 32 between rows holds, so a row
-    // an edge like that arrives at gets a grown gap above it instead of a
-    // label with nowhere to fit.
-    const needsLabelGap = new Set(
-      result.children
-        .map((item) => item.id)
-        .filter((id) => {
-          const realId = resolveRealId(id);
-          return graph.edges.some((e) => !e.backward && e.to === realId && e.label);
-        }),
-    );
-    const labelGap = scene.edgeLabelSize * 2 + CLEARANCE.node * 2 + GRID * 3;
-    ({ corridors: wrapCorridors, rows: wrappedRows } = wrapSiblings(
-      result.children,
-      room,
-      needsLabelGap,
-      labelGap,
-    ));
-  }
 
   // ELK reports child coordinates relative to their parent; flatten to the root.
   const place = (list: ElkNode[] | undefined, dx: number, dy: number): void => {

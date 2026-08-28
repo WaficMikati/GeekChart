@@ -69,13 +69,24 @@ export function resolveMeasurer(measureWith?: string | Measurer): Measurer {
  * A single unsplittable word, or a title with no space to break at, returns
  * `null` — the caller keeps the one-line label rather than force a break
  * that would leave a word overhanging.
+ *
+ * A lone `·` — the separator "Pandas · Django · #1 on TIOBE" uses between
+ * facts — is welded onto the word before it before any split is considered,
+ * so a break never lands between a word and the dot that follows it: the
+ * dot stays at the end of the line it was already reading with, never
+ * leading the next one ("· Django" reads as if a word went missing).
  */
 export function wrapTitle(
   title: string,
   measure: (s: string) => number,
   maxWidth: number,
 ): [string, string] | null {
-  const words = title.split(/\s+/).filter(Boolean);
+  const rawWords = title.split(/\s+/).filter(Boolean);
+  const words: string[] = [];
+  for (const w of rawWords) {
+    if (w === '·' && words.length) words[words.length - 1] += ' ·';
+    else words.push(w);
+  }
   if (words.length < 2) return null;
   let best: { lines: [string, string]; worst: number } | null = null;
   for (let i = 1; i < words.length; i++) {

@@ -14,7 +14,7 @@ import {
 } from './geometry.ts';
 import { planRoutes, type Extent, type OrthoRoute } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
-import { TRUNK_OFFSET } from './layout/stack.ts';
+import { isBoxyShape, TRUNK_OFFSET } from './layout/stack.ts';
 import { GRID, GUTTER } from './tokens.ts';
 import { RULES } from './rules.ts';
 
@@ -384,7 +384,20 @@ function attemptDraw(
     // stand-in `layout/wrap.ts` measured the corridor against — `x` is the
     // one coordinate the two always agree on (DESIGN 1.5's own `expandFan`
     // sits the parent at the stand-in's origin, unmoved).
-    const trunkX = wrapped ? to.x + edge.wrapTrunkX! : from.x + TRUNK_OFFSET;
+    //
+    // DESIGN 1.5: a boxy parent's hanging port sits 12 off its own left edge
+    // — a point on its flat bottom the outline actually has. A diamond or
+    // circle's outline only touches its bounding box's bottom edge at the
+    // one point straight below its centre, so the trunk leaves from there
+    // instead (`layout/stack.ts`'s `planFan` indents the leaf column to
+    // match, off the parent's centre rather than its left edge).
+    const fromNode = byId.get(edge.from);
+    const fromBoxy = !fromNode || isBoxyShape(fromNode.shape);
+    const trunkX = wrapped
+      ? to.x + edge.wrapTrunkX!
+      : fromBoxy
+        ? from.x + TRUNK_OFFSET
+        : from.x + from.width / 2;
     const route: OrthoRoute = wrapped
       ? (() => {
           const arriveX = to.x + to.width / 2;
@@ -926,6 +939,18 @@ function centredLabel(node: Placed, cx: number, cy: number): string {
       `<text class="gc-title" x="${cx}" y="${round(cy + 14)}">${esc(node.titleLines[1])}</text>`
     );
   }
+  // DESIGN 2.2: a caption that would not fit even the widest shared box wraps
+  // to two lines the same way a caption-less title does — the box is already
+  // the taller `captionWrap` size (`layout/index.ts`) by the time this runs,
+  // one more caption row-step (16) than the plain title+caption pair below,
+  // so the whole three-line block shifts up by exactly that to stay centred.
+  if (node.captionLines) {
+    return (
+      `<text class="gc-title" x="${cx}" y="${round(cy - 12)}">${esc(node.title)}</text>` +
+      `<text class="gc-caption" x="${cx}" y="${round(cy + 4)}">${esc(node.captionLines[0])}</text>` +
+      `<text class="gc-caption" x="${cx}" y="${round(cy + 20)}">${esc(node.captionLines[1])}</text>`
+    );
+  }
   const titleY = node.caption ? cy - 4 : cy + 4;
   return (
     `<text class="gc-title" x="${cx}" y="${round(titleY)}">${esc(node.title)}</text>` +
@@ -1081,6 +1106,63 @@ const pairsOf = (points: Point[]): { x1: number; y1: number; x2: number; y2: num
   return out;
 };
 
+type Seg = { x1: number; y1: number; x2: number; y2: number };
+
+/** An interval with whatever's left after every coincident overlap is cut out. */
+const subtractInterval = (lo: number, hi: number, oLo: number, oHi: number): [number, number][] => {
+  if (oHi <= lo || oLo >= hi) return [[lo, hi]];
+  const out: [number, number][] = [];
+  if (oLo > lo) out.push([lo, oLo]);
+  if (oHi < hi) out.push([oHi, hi]);
+  return out;
+};
+
+/**
+ * DESIGN 6.4/6.8: a bus's shared trunk (a leaf stack's fan-out, 1.6's shared
+ * start) is the *same* run drawn on more than one edge on purpose — "no two
+ * edges share a segment, except a fan bus from one point". The stretch of
+ * another edge's segment that coincides with one on this edge's own path —
+ * same line, overlapping extent — is that shared run, not "another edge"
+ * DESIGN 6.11's 16-clear is checking a label against.
+ *
+ * Only the coincident *stretch* is cut out, not the whole segment: two edges
+ * that share a start (Q1's two branches, both leaving its bottom vertex)
+ * coincide for only as far as they run together before one turns off — a
+ * decision's "no" branch bending away 32 units down still has a further
+ * 80 units running on its own afterward, and a label near *that* stretch is
+ * sitting on a real other edge, not the shared start. Cutting the whole
+ * segment let a label meant for the far edge land on the near one's
+ * unshared tail with nothing left to catch it.
+ *
+ * Kept in step with the gate's own copy of this test
+ * (`packages/cli/src/measure/edges.ts`, `packages/cli/src/measure/labels.ts`).
+ */
+function trimCoincidentRuns(seg: Seg, ownPairs: Seg[]): Seg[] {
+  const TOL = 1;
+  const vertical = Math.abs(seg.x1 - seg.x2) < TOL;
+  const horizontal = Math.abs(seg.y1 - seg.y2) < TOL;
+  if (!vertical && !horizontal) return [seg];
+  let intervals: [number, number][] = [
+    vertical ? [Math.min(seg.y1, seg.y2), Math.max(seg.y1, seg.y2)] : [Math.min(seg.x1, seg.x2), Math.max(seg.x1, seg.x2)],
+  ];
+  for (const o of ownPairs) {
+    const oVert = Math.abs(o.x1 - o.x2) < TOL;
+    const oHoriz = Math.abs(o.y1 - o.y2) < TOL;
+    if (vertical && oVert && Math.abs(seg.x1 - o.x1) < TOL) {
+      const oLo = Math.min(o.y1, o.y2);
+      const oHi = Math.max(o.y1, o.y2);
+      intervals = intervals.flatMap(([lo, hi]) => subtractInterval(lo, hi, oLo, oHi));
+    } else if (horizontal && oHoriz && Math.abs(seg.y1 - o.y1) < TOL) {
+      const oLo = Math.min(o.x1, o.x2);
+      const oHi = Math.max(o.x1, o.x2);
+      intervals = intervals.flatMap(([lo, hi]) => subtractInterval(lo, hi, oLo, oHi));
+    }
+  }
+  return intervals
+    .filter(([lo, hi]) => hi - lo > TOL)
+    .map(([lo, hi]) => (vertical ? { x1: seg.x1, y1: lo, x2: seg.x1, y2: hi } : { x1: lo, y1: seg.y1, x2: hi, y2: seg.y1 }));
+}
+
 /**
  * Chebyshev "keeps clear" test: true when `a` and `b` are closer than `clear`
  * on *both* axes at once. This is DESIGN 6.9's own gate check (`labelClear`
@@ -1205,13 +1287,18 @@ function placeLabels(
 
   for (const request of order) {
     const segs = ownSegments(request.points);
+    const ownPairs = pairsOf(request.points);
     // Every other edge's segments, not just the ones that carry a label of
     // their own — DESIGN 6.11 forbids a plate sitting near any edge but its
-    // own, whether or not that edge is labelled.
+    // own, whether or not that edge is labelled. Except the stretch of a
+    // segment that coincides with the own edge's own path: a shared bus
+    // trunk (DESIGN 1.5/6.4) is the same run on both edges, not "another
+    // edge" to keep 16 clear of — only that shared stretch is cut out, not
+    // the rest of the segment past where the two edges part ways.
     const otherPairs = edgeSegments
       .filter((e) => e.id !== request.id)
-      .flatMap((e) => pairsOf(e.points));
-    const ownPairs = pairsOf(request.points);
+      .flatMap((e) => pairsOf(e.points))
+      .flatMap((p) => trimCoincidentRuns(p, ownPairs));
 
     // The gate's own swallow check (`labelSwallow` in
     // packages/cli/src/measure/edges.ts) reads the edge's *drawn* `d`

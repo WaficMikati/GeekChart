@@ -90,6 +90,16 @@ export interface GraphNode {
    * `caption`.
    */
   titleLines?: [string, string];
+  /**
+   * `caption`, wrapped to two lines in the caption's own style rather than
+   * given a wider box (DESIGN 2.2: "labels that don't fit are shortened or
+   * wrapped to a second line, never given a wider box" applies to a caption
+   * exactly the way it does to a title). Set only when the caption alone
+   * would not fit the chart's shared box even at its widest (200); the box
+   * then takes the taller `BOX_SIZES.captionWrap` size instead of
+   * `captioned`.
+   */
+  captionLines?: [string, string];
   shape: NodeShape;
   kind: NodeKind;
   classes: string[];

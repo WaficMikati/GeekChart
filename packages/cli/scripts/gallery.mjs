@@ -54,6 +54,7 @@ const GROUPS = [
       ['first-ai-app', 'First AI app', 'sequenceDiagram'],
       ['rigobot-loop', 'Rigobot mentor', 'sequenceDiagram'],
       ['python-or-java', 'Python or Java?', 'flowchart'],
+      ['python-or-java-short', 'Python or Java? (short)', 'flowchart'],
       ['regex-engine', 'Regex engine', 'stateDiagram-v2'],
     ],
   },
