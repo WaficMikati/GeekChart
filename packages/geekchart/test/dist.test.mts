@@ -14,11 +14,29 @@ const dist = join(root, 'dist');
 const probeDir = join(root, '.probe');
 const BUDGET_BYTES = 420 * 1024;
 
-test('dist has the three published entries and fonts.css', () => {
+test('dist has the four published entries and fonts.css', () => {
   assert.ok(existsSync(dist), 'dist/ is missing — run `pnpm --filter geekchart build` first');
-  for (const file of ['index.js', 'server.js', 'cli.js', 'fonts.css']) {
+  for (const file of ['index.js', 'server.js', 'cli.js', 'observe.js', 'fonts.css']) {
     assert.ok(existsSync(join(dist, file)), `missing dist/${file}`);
   }
+});
+
+test('observe.js exports playInView and pulls in no React, mermaid or core', () => {
+  // DESIGN 8.4: `geekchart/observe` has to run in a plain `<script
+  // type="module">` on a page with no bundler and no other JavaScript at
+  // all — nothing in its own dependency-free source may end up pulling in
+  // React or this package's much heavier render path.
+  const source = readFileSync(join(dist, 'observe.js'), 'utf8');
+  assert.match(source, /playInView/);
+  for (const forbidden of ['react', 'mermaid', '@geekchart/core']) {
+    assert.ok(
+      !source.toLowerCase().includes(forbidden),
+      `dist/observe.js unexpectedly mentions "${forbidden}"`,
+    );
+  }
+  // A few kB at most — this is one function and an IntersectionObserver
+  // callback, not a bundle.
+  assert.ok(source.length < 4096, `dist/observe.js is ${source.length} bytes, larger than expected`);
 });
 
 test('the chunk fetched on first chart mount stays under the 420 kB brotli budget', () => {

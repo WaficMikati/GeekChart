@@ -57,6 +57,24 @@ export interface RenderRequest {
     edge?: string;
     surface?: string;
   };
+  /**
+   * DESIGN 8.4: `'loop'` repeats the build forever (the old default).
+   * `'once'` plays it once and holds the finished frame. `'in-view'`
+   * (the default) is the same single pass, held paused until a host calls
+   * `geekchart/observe`'s `playInView()` and the chart is scrolled 40% into
+   * view — a page that never calls it shows a paused chart to anyone whose
+   * OS is not also asking for reduced motion. Ship to a page with no
+   * JavaScript at all? Pass `'once'`.
+   */
+  play?: 'loop' | 'once' | 'in-view';
+  /**
+   * The width in CSS px the chart will be shown at — a blog column, a card.
+   * The canvas never exceeds it (DESIGN 1.1): when the natural layout is
+   * wider, leaf fans stack under their parent (1.5) and long chains fold
+   * (1.2) before anything is scaled, so 13-unit names stay 13px on screen.
+   * Stamped on the svg as `data-display`. Default 1000 (boards 1200).
+   */
+  display?: number;
 }
 
 /**
@@ -206,9 +224,14 @@ const defaultCache = new ByteBoundedLru<RenderToSvgResult>(DEFAULT_CACHE_MAX_BYT
 
 const inflightByKey = new Map<string, Promise<unknown>>();
 
+/**
+ * Drop the `cache` field and normalize `play`'s default, so two calls that
+ * differ only in "did not say `play`" vs. "said `play: 'in-view'`" hash to
+ * the same cache key.
+ */
 function stripCache(options: RenderToSvgOptions): RenderRequest {
-  const { cache: _cache, ...rest } = options;
-  return rest;
+  const { cache: _cache, play, ...rest } = options;
+  return { ...rest, play: play ?? 'in-view' };
 }
 
 /**
@@ -224,9 +247,16 @@ async function renderWithNode(source: string, request: RenderRequest): Promise<R
   const { renderNode } = await import('../../core/src/node/render.ts');
   try {
     const r = await renderNode(source, request);
+    // DESIGN 8.4: charts no longer loop by default. `renderNode` draws every
+    // native family through `flow.ts`, which has no `play` option of its own
+    // (see `animate.ts`'s `applyPlayMode` for why) — applied here, once, on
+    // the finished result instead.
+    const { applyPlayMode } = await import('../../core/src/animate.ts');
+    const play = request.play ?? 'in-view';
+    const played = applyPlayMode({ svg: r.svg, css: r.css }, play);
     return {
-      svg: r.svg,
-      css: r.css,
+      svg: played.svg,
+      css: played.css,
       cycle: r.cycle,
       summary: r.summary,
       repairs: r.repairs,

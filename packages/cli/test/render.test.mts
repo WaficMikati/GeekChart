@@ -129,6 +129,58 @@ describe('the animation is actually wired up', () => {
   });
 });
 
+describe('DESIGN 8.4: a chart plays once instead of looping', () => {
+  // `preset: 'flow'` is the one legacy preset that actually loops something
+  // (the travelling-light overlay) — cascade/reveal never emit `infinite` at
+  // all, so `'loop'` needs this preset to prove the default is unchanged.
+  const flowPreset = {
+    ...baseRequest,
+    animation: { ...baseRequest.animation, preset: 'flow' },
+  };
+  // Scoped to this renderer's own `gc-`-prefixed animation names: the legacy
+  // render path also embeds mermaid's own CSS verbatim, which ships an
+  // unrelated, never-applied `dash`/`edge-animation-*` pair that always
+  // says `infinite` regardless of `play` — a plain `/infinite/` match on the
+  // whole markup would wrongly catch that too.
+  const gcInfinite = /animation:\s*gc-[\w-]*[^;{}]*\binfinite\b/;
+  const gcHeldOnce = /animation:\s*gc-[\w-]*[^;{}]*\b1 forwards\b/;
+
+  test('play: "loop" (the default) is unaffected', async () => {
+    const reply = await renderCached(source('flow.mmd'), flowPreset);
+    assert.equal(reply.ok, true);
+    if (!reply.ok) return;
+    assert.ok(!reply.svg.includes('data-gc-play'), 'no attribute while looping');
+    assert.match(reply.svg, gcInfinite, 'the travelling accent still loops');
+  });
+
+  test('play: "in-view" holds the finished frame, paused until scrolled in', async () => {
+    const reply = await renderCached(source('flow.mmd'), { ...flowPreset, play: 'in-view' });
+    assert.equal(reply.ok, true);
+    if (!reply.ok) return;
+    assert.ok(reply.svg.includes('data-gc-play="in-view"'), 'svg is marked with its play mode');
+    assert.doesNotMatch(reply.svg, gcInfinite, 'nothing this renderer draws may still be looping');
+    assert.match(reply.svg, gcHeldOnce, 'the once-looping accent now plays once and holds');
+    assert.ok(
+      reply.svg.includes(
+        '[data-gc-play="in-view"]:not([data-gc-playing]) * { animation-play-state: paused; }',
+      ),
+      'ships paused until geekchart/observe\'s playInView() runs',
+    );
+  });
+
+  test('play: "once" plays immediately, holding the finished frame with no observer needed', async () => {
+    const reply = await renderCached(source('flow.mmd'), { ...flowPreset, play: 'once' });
+    assert.equal(reply.ok, true);
+    if (!reply.ok) return;
+    assert.ok(reply.svg.includes('data-gc-play="once"'));
+    assert.doesNotMatch(reply.svg, gcInfinite);
+    assert.ok(
+      !reply.svg.includes('animation-play-state: paused'),
+      '"once" autoplays — nothing waits on an observer',
+    );
+  });
+});
+
 describe('styling survives serialisation', () => {
   test('edge labels sit on the page background, not the ink', async () => {
     // Regression: these rendered as solid black boxes.

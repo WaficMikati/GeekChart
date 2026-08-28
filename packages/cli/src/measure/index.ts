@@ -48,6 +48,7 @@ import {
 } from './edges.ts';
 import { labelOverlaps, labelSwallow, textShapeCollision, labelOnOtherEdge } from './labels.ts';
 import { laneRide, laneOverrun, hashLabel } from './charts.ts';
+import { holdsFinished } from './motion.ts';
 import { createCtx, type Check, type Finding, type MeasureOptions } from './helpers.ts';
 
 // Exact order of the fails/warns pushes in the pre-extraction gate.mjs, so a
@@ -101,6 +102,7 @@ export const ALL_CHECKS: Check[] = [
   rawTag,
   labelOnOtherEdge,
   labelClear,
+  holdsFinished,
 ];
 
 export interface MeasureResult {
@@ -134,3 +136,4 @@ export { TYPE_CHECKS } from './type.ts';
 export { EDGE_CHECKS, edgeShapeStats } from './edges.ts';
 export { LABEL_CHECKS } from './labels.ts';
 export { CHART_CHECKS } from './charts.ts';
+export { MOTION_CHECKS } from './motion.ts';

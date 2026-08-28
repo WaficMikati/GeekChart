@@ -221,9 +221,12 @@ most **three** of these (name, caption, label); the title block adds its two:
 - **8.2** Stroke draws on, then fill fades in (DrawBorderThenFill). A plain
   opacity fade on a node is wrong.
 - **8.3** Elements overlap in time (`lag_ratio` 0.1–0.5) rather than queue.
-- **8.4** After build, one pass of the accent travelling the primary path, with
-  an Indicate (scale 1.05 + accent flash) on each node as it arrives; then a
-  `wait()` beat of at least 1.5s before the loop restarts.
+- **8.4** After build, one pass of the accent travelling the primary path with
+  an Indicate on each node; then the chart **holds its finished state**.
+  Nothing restarts. Playback starts when the chart enters the viewport (40%
+  visible), once. (Revised 2026-08-28 from a looping `wait()` beat: charts no
+  longer loop, matching how every product site plays a build-out animation
+  once on scroll-into-view.)
 - **8.5** Activation bars, plates and sparks sit **below** arrowheads in stacking
   order; a head is never covered.
 

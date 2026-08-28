@@ -7,7 +7,7 @@ import { analyze } from './analyze.ts';
 import { decorate } from './decorate.ts';
 import { normalize } from './normalize.ts';
 import { styles } from './styles.ts';
-import { bake, defaultAnimation } from './animate.ts';
+import { bake, defaultAnimation, playModeCss } from './animate.ts';
 import { ensureFonts } from './fonts.ts';
 import { standaloneHtml } from './export.ts';
 import { CANVAS, fitCanvas, frameTransform } from './scene.ts';
@@ -265,10 +265,16 @@ export async function renderChart(input: string, opts: RenderInput = {}): Promis
     );
 
     const analysis = analyze(svg, source);
-    const animation = bake(svg, analysis, options.theme, options.animation);
+    const play = options.play ?? options.animation.play ?? 'loop';
+    const animation = bake(svg, analysis, options.theme, { ...options.animation, play });
     decorate(svg, analysis, spec, id);
     frameToCanvas(svg);
-    const css = themeCss(id, options.theme, options.style) + animation.css;
+    // DESIGN 8.4: `bake()` already stopped the two decorations it can loop;
+    // this is the `data-gc-play`/pause half `applyPlayMode` gives a
+    // string-serialized result — done directly on the live DOM here instead,
+    // since this renderer still has one.
+    if (play !== 'loop') svg.setAttribute('data-gc-play', play);
+    const css = themeCss(id, options.theme, options.style) + animation.css + playModeCss(play);
 
     const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
     style.textContent = toAttributeSelectors(css);
