@@ -839,11 +839,14 @@ function animateSequence(
       plate.at(start + m.build * 0.9, { opacity: '1' });
       plate.at(cycle, { opacity: '1' });
 
+      // `.gc-msg-label`'s own resting opacity is .9, not 1 (see the rule
+      // below) — fading all the way to 1 left the label stuck brighter than
+      // its resting look once DESIGN 8.4's `'once'` holds this last keyframe.
       const label = track(`.gc-msg-label[data-id="${beat.id}"]`);
       label.at(0, { opacity: '0' });
       label.at(start + m.build * 0.3, { opacity: '0' });
-      label.at(start + m.build * 0.9, { opacity: '1' });
-      label.at(cycle, { opacity: '1' });
+      label.at(start + m.build * 0.9, { opacity: '.9' });
+      label.at(cycle, { opacity: '.9' });
     } else {
       const note = track(`.gc-note[data-id="${beat.id}"]`);
       note.at(0, { opacity: '0' });
