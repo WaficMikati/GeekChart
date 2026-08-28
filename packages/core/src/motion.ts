@@ -15,11 +15,19 @@ import { PRESS_EASE, WAVE_LAG } from './tokens.ts';
  *
  * Three structural decisions worth knowing.
  *
- * The whole sequence is one looping timeline. Every element shares the same
- * duration and iterates forever, with its own moment expressed as a percentage
- * inside that cycle. `animation-delay` cannot express this — a delay applies
- * only to the first iteration, so a delayed loop drifts out of formation on the
- * second pass.
+ * The whole sequence is one timeline. Every element shares the same duration,
+ * with its own moment expressed as a percentage inside that cycle.
+ * `animation-delay` cannot express this — a delay applies only to the first
+ * iteration, so a delayed loop drifts out of formation on the second pass.
+ * This file always emits the loop (`animation-iteration-count: infinite`,
+ * below) — `flow.ts`, its only caller, has no option to ask for anything
+ * else, and sits outside this change. DESIGN 8.4's `'once'`/`'in-view'` (a
+ * chart plays this once and holds the final frame, not forever) is applied
+ * after the fact instead, by `animate.ts`'s `applyPlayMode`, which rewrites
+ * every rule's trailing `infinite` into `1 forwards` on the finished
+ * stylesheet — safe here because every track already ends each property at
+ * its resting value at `cycle` (see the `.at(cycle, ...)` call in every track
+ * below), so holding that last keyframe *is* holding the finished chart.
  *
  * Each element gets exactly one track. Two `animation` declarations on the same
  * selector do not combine; the later one replaces the earlier. Accumulating
@@ -475,6 +483,9 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
   for (const [selector, value] of tracks) {
     if (value.empty) continue;
     const name = `gc-t${index++}`;
+    // Always `infinite` — see this file's top comment for why a `play` flag
+    // does not belong here, and `animate.ts`'s `applyPlayMode` for where
+    // `'once'`/`'in-view'` actually stop it.
     rules.push(`${selector}{animation:${name} ${cycle.toFixed(2)}s ${m.ease} infinite}`);
     frames.push(`@keyframes ${name}{${value.frames(cycle)}}`);
   }

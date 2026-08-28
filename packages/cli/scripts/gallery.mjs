@@ -180,10 +180,17 @@ let closeEngine = async () => {};
 if (engine === 'node') {
   const { renderNode } = await import('../../core/src/node/render.ts');
   const { ChartError } = await import('../../core/src/chart-error.ts');
+  const { applyPlayMode } = await import('../../core/src/animate.ts');
   renderOne = async (source, options) => {
     try {
       const r = await renderNode(source, options);
-      return { ok: true, ...r };
+      // DESIGN 8.4: the product default is `play: 'in-view'` (see
+      // `geekchart/server.ts`), but the review gallery and gate still want
+      // every chart looping so a reviewer can watch it run on repeat — pass
+      // `'loop'` explicitly rather than pick up whatever the default becomes
+      // next. `applyPlayMode('loop', ...)` is a no-op; this is just saying so.
+      const played = applyPlayMode({ svg: r.svg, css: r.css }, 'loop');
+      return { ok: true, ...r, svg: played.svg, css: played.css };
     } catch (err) {
       if (err instanceof ChartError) return { ok: false, error: err.detail };
       return { ok: false, error: { message: err instanceof Error ? err.message : String(err) } };

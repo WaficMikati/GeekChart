@@ -16,6 +16,8 @@ export interface RenderRequest {
   subtitle?: string;
   webFonts?: boolean;
   interactive?: boolean;
+  /** DESIGN 8.4: loop forever, play once, or once on scroll into view. */
+  play?: 'loop' | 'once' | 'in-view';
 }
 
 export type RenderReply =

@@ -143,3 +143,39 @@ test('warm accepts an async iterable of sources', async () => {
   assert.deepEqual(result, { rendered: 4, cached: 0, failed: 0 });
 });
 
+// DESIGN 8.4: charts play once, on scroll into view, instead of looping.
+test('defaults to play: "in-view" — paused until geekchart/observe runs', async () => {
+  const result = await renderToSvg(flow, { cache: false, scene: 'geeks' });
+  assert.match(result.svg, /data-gc-play="in-view"/);
+  assert.doesNotMatch(result.css, /\binfinite\b/, 'nothing may still be looping by default');
+  assert.match(
+    result.css,
+    /\[data-gc-play="in-view"\]:not\(\[data-gc-playing\]\) \* \{ animation-play-state: paused; \}/,
+  );
+});
+
+test('play: "once" plays immediately and holds, with no pause rule', async () => {
+  const result = await renderToSvg(flow, { cache: false, scene: 'geeks', play: 'once' });
+  assert.match(result.svg, /data-gc-play="once"/);
+  assert.doesNotMatch(result.css, /\binfinite\b/);
+  assert.doesNotMatch(result.css, /animation-play-state: paused/);
+});
+
+test('play: "loop" is opt-in and matches the old, always-on behaviour', async () => {
+  const result = await renderToSvg(flow, { cache: false, scene: 'geeks', play: 'loop' });
+  assert.doesNotMatch(result.svg, /data-gc-play/);
+  assert.match(result.css, /\binfinite\b/, 'the flowchart timeline still loops');
+});
+
+test('an explicit play: "in-view" hits the same cache entry as the default', async () => {
+  const store = new Map<string, RenderToSvgResult>();
+  const cache = {
+    get: (key: string) => store.get(key),
+    set: (key: string, value: RenderToSvgResult) => void store.set(key, value),
+  };
+  const implicit = await renderToSvg(flow, { cache, scene: 'geeks' });
+  const explicit = await renderToSvg(flow, { cache, scene: 'geeks', play: 'in-view' });
+  assert.equal(store.size, 1, 'the default and its explicit spelling share one cache key');
+  assert.equal(explicit, implicit);
+});
+

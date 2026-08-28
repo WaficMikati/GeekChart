@@ -2,6 +2,18 @@ export type ThemeName = 'light' | 'dark';
 
 export type PresetName = 'cascade' | 'reveal' | 'flow' | 'spotlight' | 'none';
 
+/**
+ * How the finished animation behaves once it has run.
+ *
+ * `'loop'` is the old, always-on behaviour (DESIGN 8.4 before 2026-08-28):
+ * every element's timeline repeats forever. `'once'` plays the whole build —
+ * including the accent's one pass along the primary path — and then holds the
+ * finished frame; nothing restarts. `'in-view'` is the same single pass, but
+ * held paused until the chart is scrolled into view (see
+ * `packages/geekchart/src/observe.ts`'s `playInView`).
+ */
+export type PlayMode = 'loop' | 'once' | 'in-view';
+
 export interface AnimationOptions {
   preset: PresetName;
   /** Seconds before the first element moves. */
@@ -14,6 +26,8 @@ export interface AnimationOptions {
   loop: boolean;
   /** Respect `prefers-reduced-motion` by showing the final frame instantly. */
   respectReducedMotion: boolean;
+  /** DESIGN 8.4: loop forever, play once, or once on scroll into view. */
+  play: PlayMode;
 }
 
 export interface RenderOptions {
@@ -31,6 +45,9 @@ export interface RenderOptions {
   title?: string;
   /** Optional sub-heading. */
   subtitle?: string;
+  /** Convenience for `animation.play` — set directly on the request rather
+   *  than nested, folded into `animation` before the bake. */
+  play?: PlayMode;
 }
 
 export interface RepairNote {

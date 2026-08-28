@@ -2,6 +2,7 @@
 
 import type { Aspect, FontOptions, SceneName } from './types.ts';
 import { useEffect, useId, useRef, useState, type CSSProperties, type JSX } from 'react';
+import { playInView } from './observe.ts';
 
 /**
  * A chart from mermaid source, at runtime.
@@ -29,6 +30,14 @@ export interface GeekchartProps {
   scene?: SceneName;
   /** Set false to draw the finished diagram with no animation. */
   motion?: boolean;
+  /**
+   * DESIGN 8.4: `'loop'` repeats the build forever. `'once'` plays it once
+   * and holds the finished frame. `'in-view'` (the default) is the same
+   * single pass, held paused until this component's own root is scrolled
+   * 40% into view — see `geekchart/observe`'s `playInView`, which this
+   * component calls on itself.
+   */
+  play?: 'loop' | 'once' | 'in-view';
   /** Pad the diagram into a fixed frame instead of its own bounds. */
   aspect?: Aspect;
   /**
@@ -75,6 +84,7 @@ export function Geekchart({
   source,
   scene = 'manim',
   motion = true,
+  play = 'in-view',
   aspect,
   fonts = 'inherit',
   className,
@@ -90,6 +100,7 @@ export function Geekchart({
   // Kept in a ref so a stale render cannot overwrite a newer one when two
   // sources are edited in quick succession.
   const token = useRef(0);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const mine = ++token.current;
@@ -101,11 +112,15 @@ export function Geekchart({
         // A static import would put roughly a megabyte of parser and layout
         // engine into the entry bundle of every page that imports anything from
         // this package.
-        const { render, scopeCss } = await import('@geekchart/core');
+        const { render, scopeCss, applyPlayMode } = await import('@geekchart/core');
         const result = await render(source, { scene, motion, aspect, fonts });
         if (cancelled || mine !== token.current) return;
+        // DESIGN 8.4: `render()` always draws a looping build (see
+        // `@geekchart/core`'s `animate.ts` for why that can't default to
+        // anything else internally); applied here, once, on the result.
+        const played = applyPlayMode({ svg: result.svg, css: result.css }, play);
         setDrawn({
-          markup: `<style>${scopeCss(result.css, id)}</style>${result.svg}`,
+          markup: `<style>${scopeCss(played.css, id)}</style>${played.svg}`,
           summary: result.summary,
         });
       } catch (err) {
@@ -120,7 +135,15 @@ export function Geekchart({
     };
     // `onError` is deliberately not a dependency: an inline callback would
     // otherwise re-run the whole render on every parent render.
-  }, [source, scene, motion, aspect, fonts, id]);
+  }, [source, scene, motion, play, aspect, fonts, id]);
+
+  // DESIGN 8.4: `play: 'in-view'` ships paused (see `applyPlayMode` above) —
+  // this is the one call that ever unpauses it. Runs again whenever a new
+  // chart replaces the markup, since a fresh `<svg>` starts paused too.
+  useEffect(() => {
+    if (!drawn || play !== 'in-view' || !rootRef.current) return;
+    return playInView(rootRef.current);
+  }, [drawn, play]);
 
   if (!drawn) {
     // Reserves the chart's footprint before the parser chunk has even arrived,
@@ -139,6 +162,7 @@ export function Geekchart({
 
   return (
     <div
+      ref={rootRef}
       id={id}
       className={className}
       role="img"

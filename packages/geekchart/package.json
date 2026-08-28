@@ -25,6 +25,10 @@
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
     },
+    "./observe": {
+      "types": "./dist/observe.d.ts",
+      "default": "./dist/observe.js"
+    },
     "./cli": {
       "default": "./dist/cli.js"
     },

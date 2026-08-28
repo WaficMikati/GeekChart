@@ -13,6 +13,6 @@
     "outDir": "dist/.decl-tmp",
     "rootDir": ".."
   },
-  "files": ["src/index.ts", "src/server.ts"],
+  "files": ["src/index.ts", "src/server.ts", "src/observe.ts"],
   "include": []
 }

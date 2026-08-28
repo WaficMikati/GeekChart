@@ -232,6 +232,23 @@ const cliJsPath = join(dist, 'cli.js');
 writeFileSync(cliJsPath, `#!/usr/bin/env node\n${readFileSync(cliJsPath, 'utf8')}`);
 chmodSync(cliJsPath, 0o755);
 
+// `observe.ts` (DESIGN 8.4's `playInView`) is its own tiny, dependency-free
+// entry, built separately rather than folded into the client or node builds
+// above: it has to run in a plain `<script type="module">` on a page with no
+// bundler and no other JavaScript at all, so nothing here may pull React,
+// `@geekchart/core`, or any other import into it.
+await build({
+  entryPoints: [join(here, 'src', 'observe.ts')],
+  outfile: join(dist, 'observe.js'),
+  bundle: true,
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2022',
+  minify: true,
+  legalComments: 'none',
+  logLevel: 'error',
+});
+
 // Types, generated separately: esbuild only transpiles, it never checks or
 // emits declarations. tsc's own rootDir/outDir rules mean this lands nested
 // (see tsconfig.build.json) with a few unreferenced extras alongside it —
@@ -247,7 +264,7 @@ execFileSync(
   { stdio: 'inherit' },
 );
 const declSrc = join(declTmp, 'geekchart', 'src');
-for (const file of ['index.d.ts', 'Geekchart.d.ts', 'types.d.ts', 'server.d.ts']) {
+for (const file of ['index.d.ts', 'Geekchart.d.ts', 'types.d.ts', 'server.d.ts', 'observe.d.ts']) {
   const text = readFileSync(join(declSrc, file), 'utf8')
     // `allowImportingTsExtensions` lets the source write `./Geekchart.tsx`,
     // but tsc's declaration emitter (unlike its JS emitter) writes that

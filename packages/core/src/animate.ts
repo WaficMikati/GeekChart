@@ -1,7 +1,9 @@
-import type { AnimationOptions, Analysis, Element } from './types.ts';
+import type { AnimationOptions, Analysis, Element, PlayMode } from './types.ts';
 import { paletteFor } from './theme.ts';
 import type { ThemeName } from './types.ts';
 import { hsl } from './tokens.ts';
+
+export type { PlayMode };
 
 export const defaultAnimation: AnimationOptions = {
   preset: 'cascade',
@@ -10,6 +12,7 @@ export const defaultAnimation: AnimationOptions = {
   duration: 0.62,
   loop: false,
   respectReducedMotion: true,
+  play: 'loop',
 };
 
 /**
@@ -194,6 +197,10 @@ function animationCss(
   const ease = 'cubic-bezier(.22,.86,.32,1)';
   const cycle = (waves * 0.45 + 2.2).toFixed(2);
   const spotlightWindow = (100 / Number(cycle)) * 0.5; // ~0.5s of pulse per cycle
+  // DESIGN 8.4 (rev. 2026-08-28): every other rule in this file already runs
+  // once (fill-mode `both`, no iteration-count — the default is already 1).
+  // Only the two decorations below actually loop, and only they need to stop.
+  const once = o.play !== 'loop';
 
   const motion = `
 /* No \`will-change\` here. Promoting these groups to their own compositor layer
@@ -227,7 +234,7 @@ ${s} .gc-marker { animation: gc-fade ${(o.duration * 0.5).toFixed(2)}s ${ease} v
 ${s} .gc-flow { fill: none; stroke: ${hsl(p.primary)}; stroke-width: 3px; stroke-linecap: round;
   opacity: .9; pointer-events: none;
   stroke-dasharray: 14px var(--gc-len) !important;
-  animation: gc-travel 2.6s linear var(--gc-t, 0s) infinite;
+  animation: gc-travel 2.6s linear var(--gc-t, 0s) ${once ? '1 forwards' : 'infinite'};
   filter: drop-shadow(0 0 4px ${hsl(p.primary, 0.55)}); }
 @keyframes gc-travel {
   from { stroke-dashoffset: var(--gc-len); opacity: 0; }
@@ -244,8 +251,8 @@ ${s} .gc-flow { fill: none; stroke: ${hsl(p.primary)}; stroke-width: 3px; stroke
 ${s} .gc-node { animation-name: gc-rise, gc-pulse;
   animation-duration: ${o.duration}s, ${cycle}s;
   animation-delay: var(--gc-t, 0s), calc(${arrival.toFixed(2)}s + var(--gc-wave, 0) * .45s);
-  animation-iteration-count: 1, infinite;
-  animation-fill-mode: both, none;
+  animation-iteration-count: 1, ${once ? '1' : 'infinite'};
+  animation-fill-mode: both, ${once ? 'forwards' : 'none'};
   animation-timing-function: ${ease}, ease-in-out; }
 @keyframes gc-pulse {
   0%, ${spotlightWindow.toFixed(2)}% { scale: 1; }
@@ -259,4 +266,71 @@ ${s} .gc-node { animation-name: gc-rise, gc-pulse;
   return o.respectReducedMotion
     ? `@media (prefers-reduced-motion: no-preference) {\n${body}\n}\n`
     : body;
+}
+
+/**
+ * DESIGN 8.4: stop a finished chart's motion from restarting, for a family
+ * this file did not itself bake.
+ *
+ * `bake()` above only ever draws the generic/legacy chart types (`render.ts`'s
+ * mermaid-restyle path) — every native family (the flowchart timeline in
+ * `motion.ts`, and the sankey/treemap/kanban, quadrant/radar/xy,
+ * timeline/gantt/journey, pie/mindmap and git-graph families that copy its
+ * shape) schedules its whole build as one repeating keyframe per element:
+ * `<selector>{animation:<name> <cycle>s <ease> infinite}`, with no fill-mode
+ * to fall back on. Those files are called from `flow.ts`, which has no
+ * option to ask for anything but the loop — plumbing one through would mean
+ * editing `flow.ts` and the six family files it drives, which sit outside
+ * this change (see `AGENTS.md`'s repo map: `flow.ts` is owned elsewhere).
+ * Applying the same rewrite `bake()` does at the source, once, to the
+ * *finished* stylesheet reaches every one of them for free, because they all
+ * emit that identical shape: every such shorthand's trailing `infinite`
+ * becomes `1 forwards`, holding each track's own final keyframe instead of
+ * snapping back to frame zero the instant the single pass ends.
+ *
+ * `'in-view'` additionally marks the `<svg>` with `data-gc-play="in-view"`
+ * and pauses everything under it until a host calls
+ * `geekchart/observe`'s `playInView()`, which flips on the
+ * `data-gc-playing` attribute the first time the chart is 40% on screen.
+ * There is no way to hide that requirement from a host that never runs any
+ * script: a `<noscript>` reader gets the finished frame only if their OS
+ * also asks for reduced motion (the `@media` rule below, and the fact that
+ * every animation this renderer emits already sits behind
+ * `prefers-reduced-motion: no-preference` — see `motion.ts`'s file
+ * comment); with motion turned on and no script, the chart stays paused at
+ * frame zero. Callers that ship `renderToSvg`/`renderToHtml` output to a
+ * page with no JavaScript at all must pass `play: 'once'` instead.
+ */
+/**
+ * The extra rule an `'in-view'` chart's own stylesheet needs: paused until a
+ * host flips on `data-gc-playing` (`geekchart/observe`'s `playInView()`), and
+ * a `prefers-reduced-motion: reduce` insurance policy that holds even if some
+ * future rule ever escapes the `no-preference` gate every animation in this
+ * renderer already sits behind.
+ */
+export function playModeCss(play: PlayMode): string {
+  if (play !== 'in-view') return '';
+  return (
+    `\n[data-gc-play="in-view"]:not([data-gc-playing]) * { animation-play-state: paused; }\n` +
+    `@media (prefers-reduced-motion: reduce) {\n` +
+    `  [data-gc-play] * { animation-duration: 0s !important; animation-delay: 0s !important; }\n}\n`
+  );
+}
+
+export function applyPlayMode(
+  result: { svg: string; css: string },
+  play: PlayMode,
+): { svg: string; css: string } {
+  if (play === 'loop') return result;
+  // Only this renderer's own animations — every one it emits names a
+  // `gc-`-prefixed keyframe (`gc-travel`, `gc-tN`, `gc-cN`, ...; see
+  // `scope.ts`'s note on that prefix). The legacy render path also embeds
+  // mermaid's *own* CSS verbatim, which ships an unrelated, never-applied
+  // `dash`/`edge-animation-*` pair that also loops forever — narrowing the
+  // match to `gc-` names leaves that alone.
+  const held = result.css.replace(/(animation:\s*gc-[\w-]*[^;{}]*?)\binfinite\b/g, '$1 1 forwards');
+  const svg = result.svg.replace(/^(<svg\b[^>]*?)(\s*\/?>)/, (whole, head: string, close: string) =>
+    /\sdata-gc-play=/.test(head) ? whole : `${head} data-gc-play="${play}"${close}`,
+  );
+  return { svg, css: held + playModeCss(play) };
 }
