@@ -4,6 +4,19 @@
   "type": "module",
   "description": "Paste a mermaid chart, get an animated one in the 4geeks look — a React component, a server renderer, and a CLI.",
   "license": "MIT",
+  "author": "Wafic Mikati <wrmikati@4geeks.com>",
+  "keywords": [
+    "mermaid",
+    "diagram",
+    "flowchart",
+    "sequence-diagram",
+    "svg",
+    "animation",
+    "animated-svg",
+    "chart",
+    "react",
+    "ssr"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/WaficMikati/GeekChart.git",
@@ -39,6 +52,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": [
     "*.css"
   ],
