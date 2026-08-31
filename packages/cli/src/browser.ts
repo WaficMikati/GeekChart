@@ -41,8 +41,12 @@ export interface AnyRequest {
   /** DESIGN 1.1/1.5: the width, in CSS px, this chart will actually be shown at. */
   display?: number;
   /** DESIGN 8.6: one multiplier on every duration and delay — 0.5 half
-   *  speed, 2 double, 1 the default. Clamped to 0.25-4. */
+   *  speed, 2 double, 1 the default. Clamped to 0.25-4. `duration` wins when
+   *  both are given. */
   speed?: number;
+  /** DESIGN 8.6: play the build in about this many seconds — the writer-
+   *  facing form of `speed`, derived from the chart's own natural cycle. */
+  duration?: number;
   aspect?: 'auto' | '16:9' | '1:1' | '4:5' | '9:16';
   fonts?: 'inherit' | { display?: string; label?: string; mono?: string; measureWith?: string };
   palette?: {

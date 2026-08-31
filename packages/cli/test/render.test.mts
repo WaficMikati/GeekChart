@@ -234,22 +234,24 @@ describe('DESIGN 8.4: a chart plays once instead of looping', () => {
   });
 });
 
-describe('DESIGN 8.6: speed stretches or hurries the whole build uniformly', () => {
-  // Every `animation`, `animation-duration` and `animation-delay` bare time
-  // value in the stylesheet, in document order — the same three declarations
-  // `applySpeed` rewrites, so the same source rendered at two speeds should
-  // produce the same count, in the same order, each scaled by the same ratio.
-  const TIME = /(-?\d*\.?\d+)(ms|s)\b/g;
-  function timeValues(css: string): number[] {
-    const out: number[] = [];
-    for (const decl of css.matchAll(/\b(?:animation(?:-duration|-delay)?)\s*:\s*([^;{}]+)/g)) {
-      for (const t of decl[1]!.matchAll(TIME)) {
-        out.push(parseFloat(t[1]!) * (t[2] === 'ms' ? 0.001 : 1));
-      }
+// Every `animation`, `animation-duration` and `animation-delay` bare time
+// value in a stylesheet, in document order — the same three declarations
+// `applySpeed` rewrites, so the same source rendered at two speeds (or one
+// speed and one equivalent duration) should produce the same count, in the
+// same order, each scaled by the same ratio. Shared by the speed and
+// duration describes below.
+const TIME = /(-?\d*\.?\d+)(ms|s)\b/g;
+function timeValues(css: string): number[] {
+  const out: number[] = [];
+  for (const decl of css.matchAll(/\b(?:animation(?:-duration|-delay)?)\s*:\s*([^;{}]+)/g)) {
+    for (const t of decl[1]!.matchAll(TIME)) {
+      out.push(parseFloat(t[1]!) * (t[2] === 'ms' ? 0.001 : 1));
     }
-    return out;
   }
+  return out;
+}
 
+describe('DESIGN 8.6: speed stretches or hurries the whole build uniformly', () => {
   test('speed: 1 (the default) carries no data-gc-speed attribute', async () => {
     const reply = await renderAnyCached(source('flow.mmd'), { scene: 'geeks' });
     assert.equal(reply.ok, true);
@@ -293,6 +295,74 @@ describe('DESIGN 8.6: speed stretches or hurries the whole build uniformly', () 
     assert.equal(tooSlow.ok, true);
     if (!tooSlow.ok) return;
     assert.ok(tooSlow.svg.includes('data-gc-speed="0.25"'), 'clamped to the floor');
+  });
+});
+
+describe('DESIGN 8.6: duration derives the speed multiplier from the natural cycle', () => {
+  test('duration at 2x the natural cycle doubles every time value and reports that cycle', async () => {
+    const base = await renderAnyCached(source('flow.mmd'), { scene: 'geeks' });
+    assert.equal(base.ok, true);
+    if (!base.ok) return;
+
+    const target = base.cycle * 2;
+    const doubled = await renderAnyCached(source('flow.mmd'), { scene: 'geeks', duration: target });
+    assert.equal(doubled.ok, true);
+    if (!doubled.ok) return;
+
+    assert.ok(doubled.svg.includes('data-gc-speed="0.5"'), 'half speed doubles a 2x-cycle chart');
+
+    const before = timeValues(base.css);
+    const after = timeValues(doubled.css);
+    assert.ok(before.length > 0, 'found timed declarations to compare');
+    assert.equal(after.length, before.length, 'same declarations, same order, in both stylesheets');
+    before.forEach((value, i) => {
+      assert.ok(
+        Math.abs(after[i]! - value * 2) <= 0.002,
+        `declaration ${i}: ${value}s at the natural cycle, ${after[i]}s at duration (expected ~${value * 2}s)`,
+      );
+    });
+
+    assert.ok(
+      Math.abs(doubled.cycle - target) <= 0.05,
+      `requested a ${target}s duration, got a ${doubled.cycle}s cycle`,
+    );
+  });
+
+  test('a duration under natural/4 holds at the 4x speed ceiling', async () => {
+    const base = await renderAnyCached(source('flow.mmd'), { scene: 'geeks' });
+    assert.equal(base.ok, true);
+    if (!base.ok) return;
+
+    const tooShort = base.cycle / 8; // would ask for an 8x multiplier
+    const clamped = await renderAnyCached(source('flow.mmd'), { scene: 'geeks', duration: tooShort });
+    assert.equal(clamped.ok, true);
+    if (!clamped.ok) return;
+
+    assert.ok(clamped.svg.includes('data-gc-speed="4"'), 'clamped to the 8.6 ceiling, not the raw ratio');
+    assert.ok(
+      Math.abs(clamped.cycle - base.cycle / 4) <= 0.002,
+      `clamped to 4x: expected a ${base.cycle / 4}s cycle, got ${clamped.cycle}s`,
+    );
+  });
+
+  test('duration wins over speed when both are given', async () => {
+    const base = await renderAnyCached(source('flow.mmd'), { scene: 'geeks' });
+    assert.equal(base.ok, true);
+    if (!base.ok) return;
+
+    const target = base.cycle * 2;
+    const durationOnly = await renderAnyCached(source('flow.mmd'), { scene: 'geeks', duration: target });
+    const both = await renderAnyCached(source('flow.mmd'), {
+      scene: 'geeks',
+      duration: target,
+      speed: 4,
+    });
+    assert.equal(durationOnly.ok, true);
+    assert.equal(both.ok, true);
+    if (!durationOnly.ok || !both.ok) return;
+
+    assert.ok(both.svg.includes('data-gc-speed="0.5"'), 'the requested duration, not the given speed, wins');
+    assert.equal(both.css, durationOnly.css, 'ignoring speed produces the exact same render as duration alone');
   });
 });
 

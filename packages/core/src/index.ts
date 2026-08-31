@@ -59,6 +59,7 @@ export {
   applySpeed,
   clampSpeed,
   scaleSpeedCss,
+  speedForDuration,
   SPEED_MIN,
   SPEED_MAX,
 } from './animate.ts';

@@ -32,7 +32,13 @@ Options
       --speed <n>        stretch or hurry the whole build by one multiplier —
                          0.5 plays at half speed, 2 at double, 1 is the
                          designed timing (default). Clamped to 0.25-4; order,
-                         easing and lag ratios never change
+                         easing and lag ratios never change. If --duration is
+                         also given, --duration wins
+      --duration <s>     play the build in about this many seconds instead of
+                         naming a multiplier — the chart's own natural length
+                         derives the 8.6 speed multiplier, clamped to 0.25-4x,
+                         so this is honoured exactly when the clamp allows and
+                         as closely as it allows otherwise
       --width <px>       frame width            (default: 1400)
       --height <px>      frame height           (default: 800)
       --aspect <ratio>   auto | 16:9 | 1:1 | 4:5 | 9:16   (default: auto)
@@ -99,6 +105,7 @@ export async function main(argv: string[]): Promise<void> {
         // advertises has to be declared under its literal name.
         'no-motion': { type: 'boolean', default: false },
         speed: { type: 'string' },
+        duration: { type: 'string' },
         aspect: { type: 'string', default: 'auto' },
         palette: { type: 'string' },
         'color-bg': { type: 'string' },
@@ -161,6 +168,19 @@ export async function main(argv: string[]): Promise<void> {
     if (values.speed === undefined) return undefined;
     const n = Number(values.speed);
     if (!Number.isFinite(n)) fail(`--speed must be a number, got "${values.speed}"`);
+    return n;
+  })();
+
+  // DESIGN 8.6: seconds, not a multiplier — the renderer derives the
+  // multiplier from the chart's own natural cycle. `0` or negative is a
+  // usage error (there is no such duration to target); the resulting
+  // multiplier still clamps to 0.25-4 like any other speed.
+  const duration = ((): number | undefined => {
+    if (values.duration === undefined) return undefined;
+    const n = Number(values.duration);
+    if (!Number.isFinite(n) || n <= 0) {
+      fail(`--duration must be a number greater than 0, got "${values.duration}"`);
+    }
     return n;
   })();
 
@@ -276,6 +296,7 @@ export async function main(argv: string[]): Promise<void> {
     height,
     ...(typeof display === 'number' ? { display } : {}),
     ...(speed !== undefined ? { speed } : {}),
+    ...(duration !== undefined ? { duration } : {}),
   };
 
   // `renderNode`'s thrown `ChartError` is mapped to the same `{ ok: false,

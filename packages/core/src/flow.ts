@@ -284,8 +284,19 @@ export interface FlowOptions {
    * timing. Clamped to 0.25–4. Order, easing and lag ratios never change;
    * see `animate.ts`'s `applySpeed`, applied once here, after each family's
    * own CSS and cycle are final and before the standalone page embeds them.
+   * If `duration` is also given, `duration` wins and this is ignored.
    */
   speed?: number;
+  /**
+   * DESIGN 8.6: the writer-facing form of `speed` — "play the build in about
+   * this many seconds" instead of a multiplier. `chart.ts`'s `render()` is
+   * the one place this is resolved: it renders once to learn the chart's own
+   * natural cycle, derives the 8.6 multiplier from it (`animate.ts`'s
+   * `speedForDuration`, same 0.25–4 clamp), and renders again at that speed —
+   * so `duration` is honoured exactly when the clamp allows, and as closely
+   * as the clamp allows otherwise. Wins over `speed` when both are given.
+   */
+  duration?: number;
 }
 
 /**

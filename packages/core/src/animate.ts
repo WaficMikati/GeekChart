@@ -331,6 +331,22 @@ export function clampSpeed(speed: number | undefined): number {
   return Math.min(SPEED_MAX, Math.max(SPEED_MIN, speed));
 }
 
+/**
+ * DESIGN 8.6: `duration` is the writer-facing form of the same multiplier —
+ * "play this build in about N seconds" instead of "play it at 2x". A chart's
+ * own natural length (`cycle`, at speed 1) is only known after a render, so
+ * the caller (`chart.ts`'s `render()`) renders once at speed 1, reads that
+ * `cycle`, and turns it into the multiplier `applySpeed` already knows how to
+ * apply: the ratio of natural length to requested length, clamped to the same
+ * 0.25–4 range — honoured exactly when the clamp allows it, and as closely as
+ * the clamp allows otherwise. A `cycle` of 0 (a static chart, or one rendered
+ * with `motion: false`) has no length to target, so this returns 1 unchanged.
+ */
+export function speedForDuration(naturalCycle: number, duration: number): number {
+  if (!(naturalCycle > 0) || !(duration > 0)) return 1;
+  return clampSpeed(naturalCycle / duration);
+}
+
 /** A bare CSS time value: `1.24s`, `.45s`, `0s`, `140ms`. */
 const TIME_TOKEN = /(-?\d*\.?\d+)(ms|s)\b/g;
 

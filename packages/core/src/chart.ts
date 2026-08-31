@@ -11,6 +11,7 @@ import {
   type FlowOptions,
 } from './flow.ts';
 import { ChartError } from './chart-error.ts';
+import { speedForDuration } from './animate.ts';
 import type { RenderInput } from './render.ts';
 import { svgDocument } from './export.ts';
 import type { RepairNote } from './types.ts';
@@ -143,6 +144,20 @@ export function isFlowchart(source: string): boolean {
 }
 
 export async function render(source: string, options: RenderOptions = {}): Promise<RenderResult> {
+  // DESIGN 8.6: `duration` derives the speed multiplier from the chart's own
+  // natural cycle, which is only known after a render — so this renders once
+  // at speed 1 (ignoring any `speed`, since `duration` wins when both are
+  // given) to learn `cycle`, then renders again at the derived multiplier.
+  // The second render goes through the exact same dispatch below, so `svg`,
+  // `css`, `html` and `svgFile` all come out consistent with each other, the
+  // same way any other `speed` request does.
+  if (options.duration !== undefined) {
+    const { duration } = options;
+    const natural = await render(source, { ...options, duration: undefined, speed: undefined });
+    const factor = speedForDuration(natural.cycle, duration);
+    return factor === 1 ? natural : render(source, { ...options, duration: undefined, speed: factor });
+  }
+
   const { source: cleaned, notes } = repair(source);
   if (!cleaned.trim()) {
     throw new ChartError({ message: 'Nothing to draw — the diagram is empty.' });

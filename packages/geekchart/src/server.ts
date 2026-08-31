@@ -91,9 +91,19 @@ export interface RenderRequest {
    * plays at half speed, `2` at double, `1` (the default) is the designed
    * timing. Clamped to 0.25–4; nothing else about the motion changes (order,
    * easing and lag ratios all stay put). The svg carries `data-gc-speed`
-   * whenever this is not 1.
+   * whenever this is not 1. If `duration` is also given, `duration` wins and
+   * this is ignored.
    */
   speed?: number;
+  /**
+   * DESIGN 8.6: the writer-facing form of `speed` — how many seconds the
+   * build should take, rather than a multiplier. The chart's own natural
+   * length is only known after a render, so `@geekchart/core`'s `render()`
+   * renders once to learn it, derives the 8.6 multiplier (same 0.25–4
+   * clamp), and renders again at that speed. Wins over `speed` when both are
+   * given.
+   */
+  duration?: number;
 }
 
 /**
@@ -287,10 +297,18 @@ function clampSpeed(speed: number | undefined): number {
  * number that clamps to what another call already named) hash to the same
  * cache key — and so an out-of-range `speed` is never cached under its own,
  * never-reused key.
+ *
+ * DESIGN 8.6: `duration` wins over `speed` when both are given (`@geekchart/
+ * core`'s `render()` ignores `speed` in that case) — dropping `speed`
+ * entirely from the key here, rather than just leaving it for `render()` to
+ * ignore, means two calls that only differ in a `speed` that will not be
+ * honoured still share one cache entry instead of rendering twice.
  */
 function stripCache(options: RenderToSvgOptions): RenderRequest {
-  const { cache: _cache, play, speed, ...rest } = options;
-  return { ...rest, play: play ?? 'in-view', speed: clampSpeed(speed) };
+  const { cache: _cache, play, speed, duration, ...rest } = options;
+  return duration !== undefined
+    ? { ...rest, play: play ?? 'in-view', duration }
+    : { ...rest, play: play ?? 'in-view', speed: clampSpeed(speed) };
 }
 
 /** `RenderRequest` with `display` narrowed to what `@geekchart/core` itself

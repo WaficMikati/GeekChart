@@ -41,9 +41,16 @@ export interface GeekchartProps {
   /**
    * DESIGN 8.6: stretch or hurry the whole build by one multiplier — `0.5`
    * plays at half speed, `2` at double, `1` (the default) is the designed
-   * timing. Clamped to 0.25–4; order, easing and lag ratios never change.
+   * timing. Clamped to 0.25–4; order, easing and lag ratios never change. If
+   * `duration` is also given, `duration` wins and this is ignored.
    */
   speed?: number;
+  /**
+   * DESIGN 8.6: play the build in about this many seconds instead of naming
+   * a multiplier — `render()` derives the 8.6 speed from the chart's own
+   * natural cycle (same 0.25–4 clamp). Wins over `speed` when both are given.
+   */
+  duration?: number;
   /** Pad the diagram into a fixed frame instead of its own bounds. */
   aspect?: Aspect;
   /**
@@ -105,6 +112,7 @@ export function Geekchart({
   motion = true,
   play = 'in-view',
   speed,
+  duration,
   aspect,
   fonts = 'inherit',
   className,
@@ -135,7 +143,7 @@ export function Geekchart({
         // engine into the entry bundle of every page that imports anything from
         // this package.
         const { render, scopeCss, applyPlayMode } = await import('@geekchart/core');
-        const result = await render(source, { scene, motion, speed, aspect, fonts, display });
+        const result = await render(source, { scene, motion, speed, duration, aspect, fonts, display });
         if (cancelled || mine !== token.current) return;
         // DESIGN 8.4: `render()` always draws a looping build (see
         // `@geekchart/core`'s `animate.ts` for why that can't default to
@@ -158,7 +166,7 @@ export function Geekchart({
     };
     // `onError`/`onRender` are deliberately not dependencies: an inline
     // callback would otherwise re-run the whole render on every parent render.
-  }, [source, scene, motion, play, speed, aspect, fonts, display, id]);
+  }, [source, scene, motion, play, speed, duration, aspect, fonts, display, id]);
 
   // DESIGN 8.4: `play: 'in-view'` ships paused (see `applyPlayMode` above) —
   // this is the one call that ever unpauses it. Runs again whenever a new

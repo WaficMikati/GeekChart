@@ -298,6 +298,39 @@ test('an out-of-range speed clamps, and clamped requests share a cache entry', a
   assert.match(tooSlow.svg, /data-gc-speed="0\.25"/);
 });
 
+// DESIGN 8.6: `duration` is the writer-facing form of `speed` — seconds
+// instead of a multiplier, derived from the chart's own natural cycle.
+test('duration is part of the cache key', async () => {
+  const store = new Map<string, RenderToSvgResult>();
+  const cache = {
+    get: (key: string) => store.get(key),
+    set: (key: string, value: RenderToSvgResult) => void store.set(key, value),
+  };
+  const natural = await renderToSvg(flow, { cache, scene: 'geeks' });
+  await renderToSvg(flow, { cache, scene: 'geeks', duration: natural.cycle * 2 });
+  assert.equal(store.size, 2, 'a different duration misses the cache');
+});
+
+test('duration beats speed when both are given', async () => {
+  const store = new Map<string, RenderToSvgResult>();
+  const cache = {
+    get: (key: string) => store.get(key),
+    set: (key: string, value: RenderToSvgResult) => void store.set(key, value),
+  };
+  const natural = await renderToSvg(flow, { cache, scene: 'geeks' });
+  const target = natural.cycle * 2;
+
+  const durationOnly = await renderToSvg(flow, { cache, scene: 'geeks', duration: target });
+  const both = await renderToSvg(flow, { cache, scene: 'geeks', duration: target, speed: 4 });
+
+  assert.match(durationOnly.svg, /data-gc-speed="0\.5"/, 'a 2x-cycle duration derives half speed');
+  assert.equal(both, durationOnly, 'the given speed is ignored, so the two share one cache entry');
+
+  // A different `speed` alongside the *same* duration must not fork the
+  // cache: `speed` is dropped from the key entirely once `duration` wins.
+  assert.equal(store.size, 2, 'the natural render and the duration render — speed=4 reused the latter');
+});
+
 test('DESIGN 1.7: a phone layout taller than two screens carries a warning', async () => {
   const src = readFileSync(join(here, '..', '..', '..', 'fixtures', 'blog', 'python-or-java.mmd'), 'utf8');
   const tall = await renderToSvg(src, { cache: false, display: 358 });

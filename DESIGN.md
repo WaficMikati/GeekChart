@@ -312,7 +312,10 @@ most **three** of these (name, caption, label); the title block adds its two:
   the motion changes. The svg carries `data-gc-speed` when it is not 1. Gate:
   `8.6-speed` — every animation-duration and animation-delay in the
   stylesheet equals the design value × the multiplier (±1 ms), and the
-  multiplier is inside the range. (Added 2026-08-28.)
+  multiplier is inside the range. (Added 2026-08-28.) `duration` (seconds) is
+  the writer-facing form: name how long the build should take and the
+  multiplier is derived from that chart's own natural cycle, honouring the
+  same 0.25–4 clamp; `duration` wins if both are given. (Added 2026-08-28.)
 
 ## 9. Don'ts (the amateur tells)
 
