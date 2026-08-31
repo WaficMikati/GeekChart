@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
-[Live gallery](https://waficmikati.github.io/GeekChart/) · [Benchmarks](https://waficmikati.github.io/GeekChart/benchmarks/) · [Package docs](packages/geekchart/README.md) · [Design spec](DESIGN.md) · [Contributing](CONTRIBUTING.md)
+[Live gallery](https://breatheco-de.github.io/geekchart/) · [Benchmarks](https://breatheco-de.github.io/geekchart/benchmarks/) · [Package docs](packages/geekchart/README.md) · [Design spec](DESIGN.md) · [Contributing](CONTRIBUTING.md)
 
 One renderer
 draws every diagram type by hand — flowcharts, state, class and ER diagrams,

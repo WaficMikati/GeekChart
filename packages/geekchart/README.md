@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
-[Live gallery](https://waficmikati.github.io/GeekChart/) · [Benchmarks](https://waficmikati.github.io/GeekChart/benchmarks/) · [Install](#install) · [React component](#the-react-component--a-diagram-edited-without-a-deploy) · [Server renderer](#the-server-renderer--content-sites) · [CLI](#the-cli--zero-js-output)
+[Live gallery](https://breatheco-de.github.io/geekchart/) · [Benchmarks](https://breatheco-de.github.io/geekchart/benchmarks/) · [Install](#install) · [React component](#the-react-component--a-diagram-edited-without-a-deploy) · [Server renderer](#the-server-renderer--content-sites) · [CLI](#the-cli--zero-js-output)
 
 Flowcharts,
 state/class/ER diagrams, sequence diagrams, gantt/timeline/journey, quadrant/
