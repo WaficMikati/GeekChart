@@ -44,5 +44,12 @@ jobs:
       - name: Render the gallery and run the design gate (Node engine)
         run: pnpm gallery --engine=node && pnpm gate --engine=node
 
+      - name: Audit the packed tarball as a consumer would install it
+        run: |
+          pnpm --filter geekchart exec npm pack --pack-destination /tmp
+          mkdir /tmp/audit && cd /tmp/audit && npm init -y >/dev/null
+          npm install --no-fund /tmp/geekchart-*.tgz
+          npm audit --audit-level=moderate
+
       - name: Test
         run: pnpm test
