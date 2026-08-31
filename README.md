@@ -1,6 +1,15 @@
 # Geekchart
 
-Paste a mermaid diagram, get an animated, on-brand SVG chart. One renderer
+**Paste a mermaid diagram, get an animated, on-brand SVG chart.**
+
+[![npm](https://img.shields.io/npm/v/geekchart.svg)](https://www.npmjs.com/package/geekchart)
+[![Downloads/week](https://img.shields.io/npm/dw/geekchart.svg)](https://www.npmjs.com/package/geekchart)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+
+[Live gallery](https://waficmikati.github.io/GeekChart/) · [Benchmarks](https://waficmikati.github.io/GeekChart/benchmarks/) · [Package docs](packages/geekchart/README.md) · [Design spec](DESIGN.md) · [Contributing](CONTRIBUTING.md)
+
+One renderer
 draws every diagram type by hand — flowcharts, state, class and ER diagrams,
 sequence diagrams, gantt / timeline / journey, quadrant / radar / xy, sankey /
 treemap / kanban, pie / mindmap / git graph — against a written design spec,
@@ -53,3 +62,13 @@ change that breaks the look fails the build before anyone sees it.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the change loop, and how to
 add a chart type or a `DESIGN.md` rule. [AGENTS.md](AGENTS.md) has the fuller
 map of the codebase. MIT licensed.
+
+## Contributors
+
+GeekChart was created and is maintained by [Wafic Mikati](https://github.com/WaficMikati)
+at [4Geeks Academy](https://4geeksacademy.com/us/coding-bootcamp). Find out more
+about our [Full Stack Developer Course](https://4geeksacademy.com/us/coding-bootcamps/part-time-full-stack-developer),
+and [Data Science Bootcamp](https://4geeksacademy.com/us/coding-bootcamps/datascience-machine-learning).
+
+You can find other projects and resources like this at the
+[school github page](https://github.com/4geeksacademy/).

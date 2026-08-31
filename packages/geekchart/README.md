@@ -1,6 +1,15 @@
 # geekchart
 
-Paste a mermaid diagram, get back an animated, on-brand SVG chart — flowcharts,
+**Paste a mermaid diagram, get back an animated, on-brand SVG chart.**
+
+[![npm](https://img.shields.io/npm/v/geekchart.svg)](https://www.npmjs.com/package/geekchart)
+[![Downloads/week](https://img.shields.io/npm/dw/geekchart.svg)](https://www.npmjs.com/package/geekchart)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+
+[Live gallery](https://waficmikati.github.io/GeekChart/) · [Benchmarks](https://waficmikati.github.io/GeekChart/benchmarks/) · [Install](#install) · [React component](#the-react-component--a-diagram-edited-without-a-deploy) · [Server renderer](#the-server-renderer--content-sites) · [CLI](#the-cli--zero-js-output)
+
+Flowcharts,
 state/class/ER diagrams, sequence diagrams, gantt/timeline/journey, quadrant/
 radar/xy, sankey/treemap/kanban, plus pie/mindmap/gitgraph. One renderer draws
 all of it (`@geekchart/core`, running mermaid's own parser and ELK's layout
@@ -227,3 +236,13 @@ above is doing. `DESIGN.md` in the repository is the full specification this
 output is measured against, and `pnpm gate` is the tool that measures it: it
 renders every fixture and reports pass/fail against the spec's numeric rules,
 not by eye.
+
+## Contributors
+
+GeekChart was created and is maintained by [Wafic Mikati](https://github.com/WaficMikati)
+at [4Geeks Academy](https://4geeksacademy.com/us/coding-bootcamp). Find out more
+about our [Full Stack Developer Course](https://4geeksacademy.com/us/coding-bootcamps/part-time-full-stack-developer),
+and [Data Science Bootcamp](https://4geeksacademy.com/us/coding-bootcamps/datascience-machine-learning).
+
+You can find other projects and resources like this at the
+[school github page](https://github.com/4geeksacademy/).
