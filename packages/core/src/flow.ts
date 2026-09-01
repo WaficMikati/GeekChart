@@ -724,7 +724,21 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   // own `data-display` check is what says so is a WARN, not a silent fix.
   const packedSpan = drawing.extent.width + scene.canvas.margin * 2;
   const displayMet = !options.display || packedSpan <= scene.canvas.width;
-  const fitAgainst = displayMet ? scene.canvas : baseScene.canvas;
+  // DESIGN 1.4 is why `baseScene.canvas` still carries a finite `maxAspect`
+  // here — it exists so an *undeclared*-display chart goes wide rather than
+  // tall when it has room to spare either way. This chart never got that
+  // choice: 1.4 itself says it does not apply "under a declared display",
+  // so layout above skipped it and let 1.6's own packing run a wide row
+  // into a column instead — the whole reason this one came out taller than
+  // the plain default in the first place. Falling back to `baseScene.canvas`
+  // unmodified for framing re-imposes the very cap layout was told to skip,
+  // which does not make the chart shorter, only clips whatever does not fit
+  // under 1.4× the 480-floor width (buzz-one-log.mmd's four sources over
+  // four leaves at 358: packing landed at 480×896, framed at 480×672 —
+  // HONEY and AUDIT/CODE both drawn past the edge of a canvas that never
+  // grew to hold them). Given the same `Infinity` override `scene.canvas`
+  // already gets below for exactly this reason.
+  const fitAgainst = displayMet ? scene.canvas : { ...baseScene.canvas, maxAspect: Infinity };
   const framed = {
     ...drawing,
     svg: fitToCanvas(drawing.svg, fitAgainst, drawing.extent, scene.canvas.width),

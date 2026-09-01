@@ -56,6 +56,9 @@ const GROUPS = [
       ['python-or-java', 'Python or Java?', 'flowchart'],
       ['python-or-java-short', 'Python or Java? (short)', 'flowchart'],
       ['regex-engine', 'Regex engine', 'stateDiagram-v2'],
+      ['buzz-context-loop', 'Buzz context loop', 'flowchart'],
+      ['buzz-context-loop-6', 'Buzz context loop (6)', 'flowchart'],
+      ['buzz-one-log', 'Buzz one log', 'flowchart'],
     ],
   },
   {

@@ -1,0 +1,18 @@
+flowchart TB
+  YOU["You<br/>keypair · channels · history"]
+  TEAM["Teammate<br/>keypair · channels · history"]
+  FIZZ["Fizz · agent<br/>runs on Claude Code"]
+  HONEY["Honey · agent<br/>runs on Codex"]
+  LOG["One signed event log<br/>a Nostr relay you can self-host"]
+  CHAT["Channels · threads · DMs"]
+  CODE["Repositories · PRs"]
+  FLOW["YAML workflows"]
+  AUDIT["Search · audit trail"]
+  YOU --> LOG
+  TEAM --> LOG
+  FIZZ --> LOG
+  HONEY --> LOG
+  LOG --> CHAT
+  LOG --> CODE
+  LOG --> FLOW
+  LOG --> AUDIT

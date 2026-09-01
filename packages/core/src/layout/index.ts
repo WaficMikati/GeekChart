@@ -1,4 +1,4 @@
-import type { Graph, GraphNode } from '../graph.ts';
+import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
 import { clusterHeadroom, type Scene } from '../scene.ts';
 import { tipReach } from '../tips.ts';
 import { BOX_SIZES, CLEARANCE, GRID } from '../tokens.ts';
@@ -16,6 +16,7 @@ import {
   type Measurer,
   type Metrics,
 } from './measure.ts';
+import { detectRing, layoutRing, layoutRingColumn, ringWidth, wrapLabelLines } from './ring.ts';
 import { identifySatellites, placeSatellites } from './satellites.ts';
 import { expandFan, findFans, planFan, type FanPlan } from './stack.ts';
 import { wrapSiblings, type WrappedRow } from './wrap.ts';
@@ -70,6 +71,12 @@ export async function layout(
 ): Promise<LayoutResult> {
   const measurer = resolveMeasurer(measureWith);
   const flow = graph.direction === 'LR' || graph.direction === 'RL' ? 'horizontal' : 'vertical';
+
+  // DESIGN 1.8: detected once, up front, purely from graph structure (sizes
+  // aren't set yet) — used below both to pick a box width that actually
+  // fits the ring at a declared display and, once sizing is done, to place
+  // the nodes directly instead of handing the graph to ELK.
+  const ringOrder = detectRing(graph);
 
   // Shapes that solve their own geometry from the label (a diamond, a note)
   // are never wrapped here — DESIGN 2.2's fixed-box list is about the shared
@@ -261,6 +268,112 @@ export async function layout(
     const fitted = fitShape(item, base, scene, flow);
     item.node.width = roundUp(fitted.width);
     item.node.height = roundUp(fitted.height);
+  }
+
+  // DESIGN 1.8: placed directly, on real sizes, instead of handed to ELK —
+  // a ring has nothing for a layered engine to decide (every node has
+  // exactly one forward edge in and one out) and its own cycle-breaking is
+  // exactly what folded a short LR ring into reading-order rows in the
+  // first place. The two-row grid (DESIGN 1.8's main case) runs whenever it
+  // fits; the column fallback below is what runs when it does not, rather
+  // than falling through to the ordinary ELK/fold pipeline — that pipeline's
+  // own generic loop-back heuristics pick a retry's arrival face from
+  // whichever *other* forward edge already uses it (DESIGN 6.2), which for
+  // a ring's own closing edge is nothing, and its "which side" tie-break
+  // (`route/loops.ts`) has no reason to prefer the right corridor DESIGN
+  // 1.8 specifically asks for.
+  if (ringOrder) {
+    // DESIGN 1.8: every edge here is an ordinary member of the ring, closing
+    // edge included — the parser's own cycle detector (`markBackEdges`)
+    // flags whichever edge happens to close the cycle as a "backward" retry,
+    // which is right for an arbitrary graph but wrong for a ring's own
+    // deterministic return: it draws, routes and animates exactly like
+    // every other edge here, one bend at most, never the go-around DESIGN
+    // 6.7's loop-back describes (the one exception, the column fallback
+    // below, still gets `ring` for the same reason — only its own edge into
+    // the corridor, `ringLoop`, is drawn differently).
+    for (const edge of graph.edges) {
+      edge.ring = true;
+      edge.backward = false;
+    }
+    const room = scene.canvas.width - scene.canvas.margin * 2;
+    // Set only for the column fallback — `extentOf` (below) reads node and
+    // cluster boxes alone, which never learns about a corridor no node sits
+    // in, so this is threaded past it explicitly.
+    let corridorWidth = 0;
+    if (!packToDisplay || ringWidth(ringOrder.length, baseWidth) <= room) {
+      // DESIGN 6.9: the plain sibling gutter (`scene.gapNode`) is sized for
+      // an unlabelled column gap; a ring edge almost always carries one
+      // ("you ask for a dashboard" between two of buzz-context-loop-6.mmd's
+      // three columns), and the gate's own 2.7-style growth only widens the
+      // *declared display* axis — never run for an undeclared-display ring,
+      // which is exactly where this showed up. Sized to the widest ring
+      // edge label up front instead, so every column gap already has room.
+      // A 2-column ring (4 nodes) already reaches a wide-enough gap through
+      // that growth alone in every fixture measured so far; a 3-column ring
+      // (6) has two column gaps competing for the same growth budget and
+      // needs the head start.
+      const widestLabel =
+        ringOrder.length > 4
+          ? Math.max(
+              0,
+              ...graph.edges.filter((e) => ringOrder.includes(e.from)).map((e) => e.labelWidth ?? 0),
+            )
+          : 0;
+      const ringGutter = widestLabel
+        ? Math.max(scene.gapNode, Math.ceil((widestLabel + 48) / GRID) * GRID)
+        : scene.gapNode;
+      layoutRing(graph, ringOrder, ringGutter);
+    } else {
+      // DESIGN 1.8: "on a display too narrow for two columns the ring
+      // becomes a column with the return edge up a right corridor" — the
+      // box-width drop above already tried every size 2.2 allows for the
+      // two-row grid, so this only runs once none of them fit.
+      const last = graph.edges.find((e) => e.from === ringOrder[ringOrder.length - 1]);
+      if (last) last.ringLoop = true;
+      // DESIGN 6.9: every consecutive pair in the column usually carries its
+      // own label — the plain sibling gutter (`scene.gapNode`) is sized for
+      // an unlabelled row and leaves only a couple of units past a labelled
+      // one, so this reserves an edge label's own height plus 8 clear on
+      // each side up front rather than leaning on 2.7's own growth (which
+      // grows the *display-declared* width axis, not a plain column's own
+      // row gaps, and left one gap here at its unlabelled floor).
+      const columnGutter = Math.max(
+        scene.gapNode,
+        Math.ceil((scene.edgeLabelSize * 2 + CLEARANCE.node * 2) / GRID) * GRID,
+      );
+      const columnLayout = layoutRingColumn(graph, ringOrder, columnGutter);
+      corridorWidth = columnLayout.width;
+      // DESIGN 1.8/2.2: the return label straddles the corridor (`draw.ts`
+      // centres it there) — wrapped, not widened, when even that shared
+      // centre cannot keep both halves under the declared display's own
+      // room (buzz-context-loop.mmd's "posts into the channel", 183 wide,
+      // over twice what half of a 358 column leaves past the corridor).
+      if (last?.label) {
+        const halfRoom = room - columnLayout.corridorX;
+        const maxLineWidth = 2 * halfRoom - 12;
+        const upper = scene.edgeLabelUpper;
+        const wrapMeasurer = resolveMeasurer(measureWith);
+        const measureLine = (s: string) =>
+          wrapMeasurer.measure(
+            upper ? s.toUpperCase() : s,
+            scene.edgeLabelFont,
+            scene.edgeLabelSize,
+            scene.edgeLabelTracking,
+          );
+        if (maxLineWidth > 0 && (last.labelWidth ?? 0) + 12 > 2 * halfRoom) {
+          const lines = wrapLabelLines(last.label, measureLine, maxLineWidth);
+          if (lines.length > 1) {
+            last.labelLines = lines;
+            last.labelWidth = Math.max(...lines.map(measureLine));
+          }
+        }
+        wrapMeasurer.done();
+      }
+    }
+    square(graph, scene);
+    const bounds = extentOf(graph);
+    return { width: Math.max(bounds.width, corridorWidth), height: bounds.height };
   }
 
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -694,6 +807,147 @@ export async function layout(
       if (edge.to !== realId || edge.bus || edge.backward) continue;
       edge.bus = true;
       edge.wrapTrunkX = corridorX;
+    }
+  }
+
+  // DESIGN 6.13 (extends 1.6): a forward source whose straight-ish path to
+  // its target would run through a box display-width wrapping placed
+  // between them — a sibling wrapped into an earlier row, not anything the
+  // edge itself connects to — gets the same bus DESIGN 1.6's own
+  // sibling-wrap edge draws, mirrored: `to` is the one shared target here
+  // instead of `from`, so every qualifying source shares the identical
+  // corridor and the whole group reads as one trunk merging into the
+  // target's top centre (DESIGN 6.3's fan-in single arrowhead) rather than
+  // each source finding its own lane. Detected purely geometrically — any
+  // other placed node's box crossing the straight span between a source's
+  // own bottom face and the target's own top face — so it also catches the
+  // fault wherever else display wrapping might produce it, not only the
+  // wrapped fan-in this was written for (buzz-one-log.mmd's four sources
+  // into LOG, wrapped 2×2 at a 612px display). Scoped to a genuine fan-in —
+  // a target with two or more forward sources — so an ordinary single-
+  // source edge that merely bends past a neighbour (subgraphs.mmd's
+  // C→E, 4geeks-journey.mmd's B→D) is left to `route/plan.ts`'s own
+  // per-edge search, which already routes those cleanly; this module only
+  // owns the shape a lone edge's search cannot, several sources converging
+  // on one trunk.
+  const forwardInCount = new Map<string, number>();
+  for (const edge of graph.edges) {
+    if (edge.backward || edge.from === edge.to) continue;
+    forwardInCount.set(edge.to, (forwardInCount.get(edge.to) ?? 0) + 1);
+  }
+  const fanInEdges = graph.edges.filter((edge) => {
+    if (edge.backward || edge.bus || edge.from === edge.to) return false;
+    if ((forwardInCount.get(edge.to) ?? 0) < 2) return false;
+    const from = byId.get(edge.from);
+    const to = byId.get(edge.to);
+    if (!from || !to) return false;
+    if (
+      from.x === undefined ||
+      from.y === undefined ||
+      from.width === undefined ||
+      from.height === undefined ||
+      to.x === undefined ||
+      to.y === undefined ||
+      to.width === undefined
+    )
+      return false;
+    const fromCx = from.x + from.width / 2;
+    const toCx = to.x + to.width / 2;
+    const yLo = Math.min(from.y + from.height, to.y);
+    const yHi = Math.max(from.y + from.height, to.y);
+    const xLo = Math.min(fromCx, toCx);
+    const xHi = Math.max(fromCx, toCx);
+    return graph.nodes.some((n) => {
+      if (n.id === edge.from || n.id === edge.to) return false;
+      if (n.x === undefined || n.y === undefined || n.width === undefined || n.height === undefined)
+        return false;
+      return n.x < xHi && n.x + n.width > xLo && n.y < yHi && n.y + n.height > yLo;
+    });
+  });
+  // A lone remaining source into a bus target joins it too, for the same
+  // reason DESIGN 6.3's single-arrowhead trunk only reads as one trunk when
+  // every branch actually merges into it: left on the ordinary per-edge
+  // search *by itself*, it never learns the other sources are converging on
+  // the target's exact centre and picks its own straight-line midpoint
+  // instead — crossing the very trunk it should have joined
+  // (buzz-one-log.mmd's FIZZ→LOG at 358, the one source not blocked by
+  // another row, aimed at the overlap of its own and LOG's face instead of
+  // LOG's true centre). Two or more remaining sources are left alone —
+  // `route/plan.ts`'s own arrivals-merge already centres a *group* of
+  // ordinary edges on each other correctly (buzz-one-log.mmd's TEAM and
+  // FIZZ at 612, both still ordinary edges) — pulling every one of them
+  // through the corridor regardless is what recreated a centering conflict
+  // this bus exists to avoid.
+  const busTargets = new Set(fanInEdges.map((e) => e.to));
+  const fanInByTarget = new Map<string, GraphEdge[]>();
+  for (const edge of fanInEdges) {
+    fanInByTarget.set(edge.to, [...(fanInByTarget.get(edge.to) ?? []), edge]);
+  }
+  for (const targetId of busTargets) {
+    const remaining = graph.edges.filter(
+      (edge) =>
+        !edge.backward &&
+        !edge.bus &&
+        edge.from !== edge.to &&
+        edge.to === targetId &&
+        !fanInByTarget.get(targetId)!.includes(edge),
+    );
+    if (remaining.length === 1) {
+      fanInByTarget.set(targetId, [...fanInByTarget.get(targetId)!, remaining[0]!]);
+    }
+  }
+  for (const [targetId, edgesIn] of fanInByTarget) {
+    const target = byId.get(targetId);
+    if (!target || target.x === undefined || target.y === undefined || target.width === undefined)
+      continue;
+    // One corridor, clear of every node whose own row falls between the
+    // topmost source involved and the target — not just the sources
+    // themselves, so a chart with something else in that span still clears
+    // it — rounded up to the grid (DESIGN 2.1).
+    const spanTop = Math.min(...edgesIn.map((e) => byId.get(e.from)!.y!));
+    let corridorX = target.x + target.width + 24;
+    for (const n of graph.nodes) {
+      if (n.x === undefined || n.y === undefined || n.width === undefined || n.height === undefined)
+        continue;
+      if (n.y >= target.y || n.y + n.height <= spanTop) continue;
+      corridorX = Math.max(corridorX, n.x + n.width + 24);
+    }
+    corridorX = Math.ceil(corridorX / GRID) * GRID;
+    for (const edge of edgesIn) {
+      edge.bus = true;
+      edge.wrapTrunkX = corridorX - target.x;
+    }
+  }
+
+  // DESIGN 6.12: a plain node fanning into 3+ forward children that all land
+  // on one shared row directly below it — already a fine layout, nothing for
+  // 1.5's stacking to fix — still sends each child's edge through
+  // `route/plan.ts`'s ordinary per-edge search, which centres every one of
+  // them on the very same wall-bounded channel and then has to force them 16
+  // apart to keep DESIGN 6.4's clearance, landing every single one off its
+  // own true centre (DESIGN 6.1). Read back only now that `square()` (above)
+  // has settled every position for good, so this sees exactly what the
+  // gate will measure, not a candidate layout that could still move.
+  const rowFanChildren = new Map<string, GraphNode[]>();
+  for (const edge of graph.edges) {
+    if (edge.backward || edge.bus || edge.from === edge.to) continue;
+    const child = byId.get(edge.to);
+    if (!child) continue;
+    rowFanChildren.set(edge.from, [...(rowFanChildren.get(edge.from) ?? []), child]);
+  }
+  for (const [parentId, children] of rowFanChildren) {
+    if (children.length < 3) continue;
+    const parent = byId.get(parentId);
+    if (!parent || parent.x === undefined || parent.y === undefined) continue;
+    if (children.some((c) => c.x === undefined || c.y === undefined)) continue;
+    const y0 = children[0]!.y!;
+    if (!children.every((c) => Math.abs(c.y! - y0) < 1)) continue;
+    const childIds = new Set(children.map((c) => c.id));
+    for (const edge of graph.edges) {
+      if (edge.from === parentId && childIds.has(edge.to) && !edge.backward) {
+        edge.bus = true;
+        edge.rowBus = true;
+      }
     }
   }
 

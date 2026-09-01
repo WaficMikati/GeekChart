@@ -133,6 +133,14 @@ export interface GraphEdge {
   labelEnd?: string;
   /** Measured label width, filled in by layout so drawing need not guess. */
   labelWidth?: number;
+  /**
+   * DESIGN 1.8/2.2: a ring's return label, wrapped into as many lines as it
+   * takes to fit beside the column form's corridor — the same "wrap rather
+   * than widen" 2.2 already uses for a node whose label won't fit its box,
+   * extended to the one edge label a display cap can force this wide.
+   * `labelWidth` above becomes the widest of these lines once set.
+   */
+  labelLines?: string[];
   /** True when the edge points backwards against the flow — a loop or retry. */
   backward?: boolean;
   /**
@@ -158,6 +166,42 @@ export interface GraphEdge {
    * coordinate — see `wrapSiblings`'s own doc comment for why.
    */
   wrapTrunkX?: number;
+  /**
+   * DESIGN 6.12: set for a node's forward edge into one of 3+ children that
+   * all land on one shared row directly below it, undisturbed by 1.5's own
+   * stacking (that one collapses a fan into a column; this one leaves an
+   * already-fine row exactly where it is). Read by `draw.ts` to route a
+   * straight trunk from the parent's own bottom centre down to the row's
+   * true mid-line, then one bend into the child's own top face — the row's
+   * cousin of 1.5's leaf-stack trunk, drawn instead of `route/plan.ts`'s
+   * ordinary search so every branch shares the same trunk (DESIGN 6.8's
+   * "fan bus from one point") and lands exactly centred in its channel
+   * (DESIGN 6.1), which forcing three-plus independently searched Z's 16
+   * apart cannot do when they all want the same centre line
+   * (buzz-one-log.mmd's LOG, fanning into four same-row leaves).
+   */
+  rowBus?: boolean;
+  /**
+   * DESIGN 1.8: set for every edge of a detected ring. `layout/ring.ts`
+   * places the nodes directly (no ELK); `draw.ts` reads this to route each
+   * edge as the plain straight run or single bend the shape guarantees —
+   * same-row neighbours face each other directly, a node above its column
+   * mate is a straight vertical — rather than handing it to `route/plan.ts`,
+   * whose backward-edge heuristics (DESIGN 6.2's "same face forward traffic
+   * already uses") assume an arbitrary retry, not a ring's own return edge,
+   * and picked the wrong face for it.
+   */
+  ring?: boolean;
+  /**
+   * DESIGN 1.8's own narrow-display fallback: set only on a ring's closing
+   * edge when the ring is laid out as a single column (`layout/ring.ts`'s
+   * `layoutRingColumn`, used when even the narrowest box size cannot fit
+   * `layoutRing`'s own two-row grid under a declared display). Every other
+   * edge in that column is a plain straight vertical, already covered by
+   * `ring`'s own same-column case; this is the one edge that instead goes
+   * around the column via a corridor to its right (DESIGN 6.7).
+   */
+  ringLoop?: boolean;
 }
 
 export interface GraphCluster {

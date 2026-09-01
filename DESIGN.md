@@ -98,6 +98,16 @@ and the check that enforces it cannot drift apart.
   writer "this is N screens tall on a phone" while there is still time to
   split it. Guidance: more than about six boxes becomes a scroll; prefer two
   short charts over one long one. (Added 2026-08-28.)
+- **1.8** **Rings.** A chain whose last node's only forward edge returns to
+  its first is laid out as a ring, clockwise: the first half of the nodes
+  left→right on the top row, the rest right→left on the bottom row, columns
+  aligned; every edge is one straight run or one bend (top-right corner
+  down, bottom-left corner up), labels on their own runs. A ring of 4 is a
+  2×2; of 6 a 3×3 top/bottom. On a display too narrow for two columns the
+  ring becomes a column with the return edge up a right corridor (the
+  loop-back rules, 6.7). (Added 2026-09-01: a four-node LR cycle folded into
+  reading-order rows instead — A B / C D — so C→D ran the wrong way and
+  D→A doubled back through the middle; see buzz-context-loop.mmd.)
 
 ## 2. Grid and sizing
 
@@ -274,6 +284,32 @@ most **three** of these (name, caption, label); the title block adds its two:
   onto whatever nearby edge had space instead. Revised the same day from 4:
   a label legitimately sitting *beside* its line, not on it, is still on
   its own edge.)
+
+- **6.12** A node with **three or more** forward edges whose targets all land
+  on one shared row directly below it draws as a bus: the trunk leaves the
+  parent's own bottom centre (6.4's fan-from-one-point — every branch shares
+  it, so this earns no exception 6.2 doesn't already allow) straight down to
+  the row's own true mid-line, then one bend into each child's own top face
+  at its centre. This is 1.5's leaf-stack trunk's row-shaped cousin: the row
+  itself is already fine (nothing here restacks it into a column), but each
+  child's edge, routed independently by the ordinary search, wants the
+  identical wall-bounded centre line — the same gap between the parent's row
+  and the children's — so 6.4's mandatory 16-apart clearance forces every one
+  of three or more of them off it, which no per-edge search can avoid.
+  (Added 2026-09-01: buzz-one-log.mmd's LOG, fanning to four same-row leaves,
+  had two of its four Z edges pulled 8 off true centre apiece to keep them
+  16 apart — passing 6.4 only by failing 6.1.)
+
+- **6.13** DESIGN 1.6's own sibling-wrap bus, mirrored: a forward source
+  whose straight-ish path to its target would run through a sibling that
+  display-width wrapping placed in an earlier row draws as a bus too — drop
+  from the source's own bottom face into its row's own gap, into a shared
+  corridor clear of every wrapped row, down, and into the target's top face
+  at its centre — merging every such source into one trunk with the single
+  arrowhead DESIGN 6.3 already asks for at a fan-in. (Added 2026-09-01:
+  buzz-one-log.mmd's four sources into LOG, wrapped 2×2 at a 612px display —
+  two of the four cut straight through the other wrapped row on the way
+  down, 6.1's own "16 clearance from a foreign node.")
 
 ## 7. Composition
 

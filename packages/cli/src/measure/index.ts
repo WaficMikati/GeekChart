@@ -15,6 +15,7 @@ import {
   orphanColumns,
   evenWhitespace,
   phoneHeight,
+  ringLayout,
   native,
 } from './canvas.ts';
 import {
@@ -62,6 +63,7 @@ export const ALL_CHECKS: Check[] = [
   native,
   canvasWidth,
   aspect,
+  ringLayout,
   minLegible,
   typeSizes,
   rotation,

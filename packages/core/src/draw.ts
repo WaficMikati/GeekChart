@@ -305,7 +305,14 @@ function attemptDraw(
     const from = boxOf(edge.from);
     const to = boxOf(edge.to);
     let behind = false;
-    if (from && to) {
+    // DESIGN 1.8: a ring's bottom row reads right→left on purpose — the
+    // clockwise loop, not a retry — so the same "steps back without moving
+    // to a later row" heuristic that catches an ordinary wrapped chain's
+    // return-to-column-0 would otherwise mark every one of those edges
+    // backward too, which sent buzz-context-loop.mmd's APP→DATA through the
+    // wrong arrival-side rule (DESIGN 6.2's retry heuristics expect a
+    // *shared* flow-in face this ring never has one node reads two ways).
+    if (from && to && !edge.ring) {
       const a = spanOf(from);
       const z = spanOf(to);
       // The target ends before the source begins along the flow…
@@ -342,13 +349,118 @@ function attemptDraw(
       .map((c) => ({ id: c.id, box: panels.get(c.id)!, holds: c.nodes })),
   ];
   const routes = planRoutes(
-    routed.filter((edge) => !edge.bus),
+    routed.filter((edge) => !edge.bus && !edge.ring),
     boxOf,
     (id) => shapes.get(id),
     flow,
     content,
     obstacles,
   );
+
+  // DESIGN 1.8: a ring's edges are drawn straight from the grid
+  // `layout/ring.ts` placed them on, never handed to `route/plan.ts` — its
+  // backward-edge heuristics pick a retry's arriving face from whichever
+  // *other* forward edge already reaches that node (DESIGN 6.2), which for
+  // a ring's own closing edge is nothing (every node has exactly one
+  // inbound edge, and it is the one being routed), so it fell back to the
+  // chart's plain flow-in default instead of the column the node actually
+  // sits in. Every ring edge connects either two same-row neighbours
+  // (straight, facing sides) or two same-column ones (straight, top/bottom
+  // faces) — the placement guarantees it — except a short bottom row's own
+  // last node on an odd-sized ring, one bend to reach column 0.
+  for (const edge of routed) {
+    if (!edge.ring) continue;
+    const from = boxOf(edge.from);
+    const to = boxOf(edge.to);
+    if (!from || !to) continue;
+    // DESIGN 1.8's own narrow-display fallback: the ring's closing edge, in
+    // a single column, goes right, up, and back in — the "right corridor"
+    // DESIGN 1.8 names and DESIGN 6.7's own clearance for it — rather than
+    // the plain straight/one-bend shape every other ring edge here has.
+    if (edge.ringLoop) {
+      const corridorX = from.x + from.width + 24;
+      const fromCx = from.x + from.width / 2;
+      const toCy = to.y + to.height / 2;
+      // Leaves `from`'s own bottom face, not its side: this edge usually
+      // carries the ring's own label, and the only stretch of this run
+      // clear of every node in the column — including `from` itself, DESIGN
+      // 6.9's 8 included — is past the column's own bottom, not alongside
+      // one node's own row (`layout/ring.ts`'s column stacks every node
+      // with barely a gutter's worth of clearance between rows). Dropping
+      // out the bottom first is what puts a stretch of this path down
+      // there for the label to actually sit on (DESIGN 6.11).
+      // 48, not DESIGN 6.7's bare 24: the label sits a little further up
+      // this same run from the bend (below), and needs both DESIGN 6.9's 8
+      // clear of `from` and enough of its own height clear of the bend
+      // itself (DESIGN 6.5's swallow check) at once — 24 alone leaves no y
+      // that satisfies both. Grows past 48 when the label itself has
+      // (DESIGN 1.8/2.2's wrap) — a taller, multi-line plate needs the same
+      // two clearances at once, just more room to keep them both in.
+      const dropWrapLines = Math.max(1, edge.labelLines?.length ?? 1);
+      const dropPlateHeight =
+        dropWrapLines > 1
+          ? scene.edgeLabelSize * 2 + (dropWrapLines - 1) * scene.edgeLabelSize * 1.3
+          : scene.edgeLabelSize * 2;
+      const dropDistance = Math.max(48, Math.ceil((dropPlateHeight + 12) / GRID) * GRID);
+      const dropY = from.y + from.height + dropDistance;
+      routes.set(edge.id, {
+        points: [
+          { x: fromCx, y: from.y + from.height },
+          { x: fromCx, y: dropY },
+          { x: corridorX, y: dropY },
+          { x: corridorX, y: toCy },
+          { x: to.x + to.width, y: toCy },
+        ],
+        startSide: 'bottom',
+        endSide: 'right',
+      });
+      continue;
+    }
+    const fromCx = from.x + from.width / 2;
+    const toCx = to.x + to.width / 2;
+    const fromCy = from.y + from.height / 2;
+    const toCy = to.y + to.height / 2;
+    const sameRow = Math.abs(fromCy - toCy) < 1;
+    const sameCol = Math.abs(fromCx - toCx) < 1;
+    let route: OrthoRoute;
+    if (sameRow) {
+      const leavingRight = fromCx < toCx;
+      route = {
+        points: [
+          { x: leavingRight ? from.x + from.width : from.x, y: fromCy },
+          { x: leavingRight ? to.x : to.x + to.width, y: toCy },
+        ],
+        startSide: leavingRight ? 'right' : 'left',
+        endSide: leavingRight ? 'left' : 'right',
+      };
+    } else if (sameCol) {
+      const leavingDown = fromCy < toCy;
+      route = {
+        points: [
+          { x: fromCx, y: leavingDown ? from.y + from.height : from.y },
+          { x: toCx, y: leavingDown ? to.y : to.y + to.height },
+        ],
+        startSide: leavingDown ? 'bottom' : 'top',
+        endSide: leavingDown ? 'top' : 'bottom',
+      };
+    } else {
+      // An odd-sized ring's short bottom row: one bend, down/up the source's
+      // own column to the row gap, then across to the target's column.
+      const leavingDown = fromCy < toCy;
+      const midY = leavingDown ? (from.y + from.height + to.y) / 2 : (to.y + to.height + from.y) / 2;
+      route = {
+        points: [
+          { x: fromCx, y: leavingDown ? from.y + from.height : from.y },
+          { x: fromCx, y: midY },
+          { x: toCx, y: midY },
+          { x: toCx, y: leavingDown ? to.y : to.y + to.height },
+        ],
+        startSide: leavingDown ? 'bottom' : 'top',
+        endSide: leavingDown ? 'top' : 'bottom',
+      };
+    }
+    routes.set(edge.id, route);
+  }
 
   // DESIGN 1.5: a stacked fan's parent→leaf edges are a bus, not a routed
   // edge — each leaf's own edge is the *whole* path from the parent's own
@@ -378,6 +490,37 @@ function attemptDraw(
     const from = boxOf(edge.from);
     const to = boxOf(edge.to);
     if (!from || !to) continue;
+
+    // DESIGN 6.12: a row bus (`layout/index.ts` marks every qualifying
+    // edge) leaves the parent's own bottom centre — every branch's shared
+    // point, 6.4's fan-bus exception — straight down to the shared row's
+    // true mid-line, then one bend into the child's own top face at its
+    // centre. Unlike the leaf-stack and wrap buses below, nothing here was
+    // repositioned to make room: the row was already exactly where it
+    // belongs, so the only job is to route the edge instead of handing it
+    // to `route/plan.ts`'s per-edge search, which centres every same-row
+    // sibling on this identical channel and then has to force them 16
+    // apart, landing every one of them off true centre.
+    if (edge.rowBus) {
+      const trunkX = from.x + from.width / 2;
+      const arriveX = to.x + to.width / 2;
+      const gapY = Math.round((from.y + from.height + to.y) / 2 / GRID) * GRID;
+      const points =
+        Math.abs(arriveX - trunkX) < 0.5
+          ? [
+              { x: trunkX, y: from.y + from.height },
+              { x: trunkX, y: to.y },
+            ]
+          : [
+              { x: trunkX, y: from.y + from.height },
+              { x: trunkX, y: gapY },
+              { x: arriveX, y: gapY },
+              { x: arriveX, y: to.y },
+            ];
+      routes.set(edge.id, { points, startSide: 'bottom', endSide: 'top' });
+      continue;
+    }
+
     const wrapped = edge.wrapTrunkX !== undefined;
     // `to.x` (its left edge), not `to.width` past it: where `to` is a node
     // inside a stacked fan, `to.width` is its own plain width, not the wider
@@ -440,7 +583,13 @@ function attemptDraw(
           const arrowStub = scene.edgeGap + scene.edgeStroke * scene.arrowLength;
           const trueCentre = (aboveBottom + to.y) / 2;
           const clearsRoundingFloor = to.y - 24 - arrowStub;
-          const gapY = Math.min(trueCentre, clearsRoundingFloor);
+          // DESIGN 6.1's own 16-unit clearance floor from `aboveBottom` —
+          // pulling the centre up to clear the rounding floor can walk it
+          // back under 16 from the wall above when the two rows this bus
+          // spans are close together (two wrapped rows 32–38 apart, DESIGN
+          // 1.6's own row gutter): a tight gap needs both floors honoured
+          // at once, not just the one nearer `to`.
+          const gapY = Math.max(aboveBottom + 16, Math.min(trueCentre, clearsRoundingFloor));
           // The edge leaves the parent the way its siblings' edges do — from
           // the bottom face's centre, so the wrap reads as one more branch
           // of the same trunk (6.4's shared start) — drops into the gap
@@ -461,6 +610,30 @@ function attemptDraw(
           const nextTop = belowParent.length
             ? Math.min(...belowParent.map((n) => n.y!))
             : fromBottom + GUTTER.panel;
+          // DESIGN 6.13: when `from` is the row directly above `to`, with
+          // nothing between them at all — `nextTop` finds `to` itself as
+          // the nearest wall below `from` — this run's own gap and the
+          // arrival run's gap (`gapY`, above) are the very same gap. A
+          // source this close has nothing to detour around, so it skips the
+          // corridor visit entirely: straight down to the shared arrival
+          // height, then straight in — the same two bends every other
+          // source's approach already ends on, joining that shared run
+          // instead of round-tripping out to the corridor and back through
+          // it (buzz-one-log.mmd's FIZZ, one row above LOG, at 358: the
+          // round trip both dipped under LOG's own top face and then ran
+          // parallel to itself closer than DESIGN 6.4 allows).
+          if (nextTop >= to.y - 0.5) {
+            return {
+              points: [
+                { x: startX, y: fromBottom },
+                { x: startX, y: gapY },
+                { x: arriveX, y: gapY },
+                { x: arriveX, y: to.y },
+              ],
+              startSide: 'bottom',
+              endSide: 'top',
+            };
+          }
           const firstGapY = Math.round((fromBottom + nextTop) / 2 / GRID) * GRID;
           return {
             points: [
@@ -654,7 +827,7 @@ function attemptDraw(
     endLabels.push(...cardinality(edge, tail.at, tail.dir, tip.at, tip.dir, scene));
 
     parts.push(
-      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus ? ' gc-bus' : ''}${edge.wrapTrunkX !== undefined ? ' gc-wrap' : ''}" data-id="${esc(edge.id)}" ` +
+      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus ? ' gc-bus' : ''}${edge.wrapTrunkX !== undefined ? ' gc-wrap' : ''}${edge.ringLoop ? ' gc-ring-loop' : ''}" data-id="${esc(edge.id)}" ` +
         `data-from="${esc(edge.from)}" data-to="${esc(edge.to)}" pathLength="1" d="${d}"/>`,
     );
     arrows.push(marks);
@@ -706,8 +879,50 @@ function attemptDraw(
       // genuine drawn path either way (DESIGN 6.11's "within 8 of some point
       // of its own path" holds exactly the same), just the width actually
       // worth centring a label this wide against.
+      // DESIGN 1.8: scored against the short run below the column, where
+      // this edge drops out of `from`'s bottom face before turning into the
+      // corridor — the one stretch of this path clear of every node in a
+      // column packed with barely a gutter between rows (nowhere beside any
+      // single node has room for a label this wide once DESIGN 6.9's 8 is
+      // kept on both sides of it, node above and node below at once). A
+      // label centred here, straddling the corridor, needs only half its
+      // own width of *extra* canvas past the column — reaching out from one
+      // node's own edge instead needs the label's *whole* width past it,
+      // which is what earlier pushed this same chart's canvas wide enough
+      // to fail DESIGN 3.1's own legibility floor.
+      const ringLoopPoints =
+        edge.ringLoop && line.length >= 3 && fromBox
+          ? (() => {
+              // A few units up the long vertical run from the bend, not on
+              // the bend itself — straddling it would cover most of the
+              // short horizontal run leading into it (DESIGN 6.5's own
+              // swallow check), where sitting a little further up the run
+              // past it (the run continues upward from here, toward `to`)
+              // covers only a sliver of a run hundreds of units long, and
+              // — unlike sitting *below* the bend, where this path does not
+              // reach at all — stays on the path DESIGN 6.11 keeps within 8 of.
+              // The offset itself scales with the plate's own height once
+              // wrapped to more than one line (DESIGN 1.8/2.2) — a fixed
+              // 2-grid offset sized for one line lets a taller, multi-line
+              // plate's own bottom edge sink back down onto the bend it was
+              // meant to clear.
+              const wrapLines = Math.max(1, edge.labelLines?.length ?? 1);
+              const plateHeight =
+                wrapLines > 1
+                  ? scene.edgeLabelSize * 2 + (wrapLines - 1) * scene.edgeLabelSize * 1.3
+                  : scene.edgeLabelSize * 2;
+              const clearOfBend = Math.max(GRID * 2, plateHeight / 2 + 4);
+              const dropY = line[1]!.y - clearOfBend;
+              const corridorX = line[2]!.x;
+              return [
+                { x: corridorX, y: dropY },
+                { x: corridorX, y: dropY },
+              ];
+            })()
+          : undefined;
       const ownPoints =
-        wrapped && line.length >= 4
+        ringLoopPoints ??
+        (wrapped && line.length >= 4
           ? (() => {
               const gapY = line[1]!.y;
               const corridorX = line[1]!.x;
@@ -730,7 +945,8 @@ function attemptDraw(
                 { x: arriveX, y: arriveTop },
               ];
             })()
-          : line;
+          : line);
+      const labelLines = edge.labelLines && edge.labelLines.length > 1 ? edge.labelLines : undefined;
       pendingLabels.push({
         id: edge.id,
         from: edge.from,
@@ -739,7 +955,9 @@ function attemptDraw(
         points: ownPoints,
         // 6 of knockout either side of the words, per DESIGN 6.5.
         width: (edge.labelWidth ?? edge.label.length * scene.edgeLabelSize * 0.62) + 12,
-        height: scene.edgeLabelSize * 2,
+        height: labelLines
+          ? scene.edgeLabelSize * 2 + (labelLines.length - 1) * scene.edgeLabelSize * 1.3
+          : scene.edgeLabelSize * 2,
         corridorY:
           !wrapped && !edge.backward && fromBox && toBox && toBox.y > fromBox.y
             ? toBox.y
@@ -748,6 +966,8 @@ function attemptDraw(
           !wrapped && !edge.backward && fromBox && toBox && toBox.x > fromBox.x
             ? toBox.x
             : undefined,
+        looseWidth: edge.ringLoop,
+        lines: labelLines,
       });
     }
   }
@@ -1020,6 +1240,18 @@ interface LabelRequest {
   // source in the same row (an ER relationship between two side-by-side
   // entities is the fixture that needs this one).
   corridorX?: number;
+  // DESIGN 1.8: set only for a ring's own closing edge in the column
+  // fallback. That shape is already past the declared display before this
+  // ever runs — the corridor alone (DESIGN 6.7's 24 clearance past a
+  // tightly packed column) can outgrow it — so the hard display-width wall
+  // below, tuned to stop an *otherwise-fitting* phone wrap from being
+  // blown out by one wide label, is not protecting anything this edge could
+  // have stayed under anyway.
+  looseWidth?: boolean;
+  // DESIGN 1.8/2.2: a ring's return label wrapped into more than one line
+  // (`layout/ring.ts`'s `wrapLabelLines`) — rendered as that many stacked
+  // `<text>` rows instead of the usual one.
+  lines?: string[];
 }
 
 interface Box {
@@ -1381,7 +1613,10 @@ function placeLabels(
       // 1.1): a label past it cannot be hugged, it can only force the frame
       // wider than the column — which is what a plate beside the phone
       // layout's corridor did, 120 units out, and cost the whole wrap.
-      if (box.x + box.width > scene.canvas.width - scene.canvas.margin * 2) return true;
+      // Waived only for `looseWidth` (DESIGN 1.8's own ring-loop label,
+      // already past the declared width by the corridor alone).
+      if (!request.looseWidth && box.x + box.width > scene.canvas.width - scene.canvas.margin * 2)
+        return true;
       for (const n of nodes) {
         if (tooClose(box, n, NODE_CLEAR)) return true;
       }
@@ -1623,11 +1858,20 @@ function placeLabels(
     taken.push(winner);
     const cx = winner.x + winner.width / 2;
     const cy = winner.y + winner.height / 2;
+    // DESIGN 1.8/2.2: a wrapped return label draws as that many stacked
+    // rows, each centred the same way the single-line case already is —
+    // never a taller single `<text>`, which SVG has no line-wrap for.
+    const lineHeight = scene.edgeLabelSize * 1.3;
+    const rows = request.lines ?? [request.text];
+    const firstBaseline = cy + scene.edgeLabelSize * 0.36 - ((rows.length - 1) * lineHeight) / 2;
+    const text = rows
+      .map((row, i) => `<text x="${round(cx)}" y="${round(firstBaseline + i * lineHeight)}">${esc(row)}</text>`)
+      .join('');
     out.push(
       `<g class="gc-edge-label" data-id="${esc(request.id)}">` +
         `<rect class="gc-plate" x="${round(winner.x)}" y="${round(winner.y)}" ` +
         `width="${round(winner.width)}" height="${round(winner.height)}" rx="3"/>` +
-        `<text x="${round(cx)}" y="${round(cy + scene.edgeLabelSize * 0.36)}">${esc(request.text)}</text>` +
+        text +
         `</g>`,
     );
   }

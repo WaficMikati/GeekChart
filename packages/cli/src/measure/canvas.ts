@@ -10,11 +10,13 @@ import {
   edgeMeta,
   nodeById,
   outline,
+  pathPoints,
   rect,
   texts,
   visible,
   type Check,
   type Ctx,
+  type Finding,
 } from './helpers.ts';
 
 function contentBBox(ctx: Ctx): { minX: number; minY: number; maxX: number; maxY: number } {
@@ -141,6 +143,139 @@ export const aspect: Check = {
     return h > w * CANVAS.maxAspect
       ? [{ severity: 'fail', message: `1.4 taller than ${CANVAS.maxAspect}×w (${h})` }]
       : [];
+  },
+};
+
+/**
+ * DESIGN 1.8: a ring — a single simple cycle covering every node, nothing
+ * else in the graph — lays out as two rows, columns aligned, every edge one
+ * straight run or one bend. Detected the same way the renderer does (purely
+ * from the edge list: as many edges as nodes, each node exactly one forward
+ * edge out, one cycle covering all of them), so this only ever measures a
+ * chart actually shaped this way.
+ */
+export const ringLayout: Check = {
+  id: '1.8-ring',
+  rule: '1.8',
+  run(svg, ctx) {
+    const ids = nodeById(ctx);
+    const n = ids.size;
+    if (n < 4) return [];
+    const meta = edgeMeta(ctx).filter((m) => m.from && m.to);
+    if (meta.length !== n) return [];
+    const next = new Map<string, string>();
+    for (const m of meta) {
+      if (m.from === m.to || next.has(m.from!)) return [];
+      next.set(m.from!, m.to!);
+    }
+    const start = meta[0]!.from!;
+    const order = [start];
+    const seen = new Set([start]);
+    let cur = start;
+    for (let i = 1; i < n; i++) {
+      const nxt = next.get(cur);
+      if (!nxt || seen.has(nxt)) return [];
+      order.push(nxt);
+      seen.add(nxt);
+      cur = nxt;
+    }
+    if (next.get(cur) !== start) return [];
+
+    // A ring, confirmed — measure the layout DESIGN 1.8 promises.
+    const centre = (id: string) => {
+      const r = rect(outline(ids.get(id)!));
+      return { id, x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 };
+    };
+    const withCentres = order.map(centre);
+    const band = (values: { id: string; v: number }[], tolerance: number) => {
+      const sorted = [...values].sort((a, b) => a.v - b.v);
+      const groups: { id: string; v: number }[][] = [];
+      let group: { id: string; v: number }[] = [];
+      for (const item of sorted) {
+        if (group.length && item.v - group[group.length - 1]!.v > tolerance) {
+          groups.push(group);
+          group = [];
+        }
+        group.push(item);
+      }
+      if (group.length) groups.push(group);
+      return groups;
+    };
+    const findings: Finding[] = [];
+    const colTolerance = RULES['1.8-ring']!.threshold! * ctx.unit;
+    const rowGroups = band(
+      withCentres.map((c) => ({ id: c.id, v: c.y })),
+      9 * ctx.unit,
+    );
+    const colGroups = band(
+      withCentres.map((c) => ({ id: c.id, v: c.x })),
+      Math.max(9 * ctx.unit, colTolerance),
+    );
+    // DESIGN 1.8's own second form: "on a display too narrow for two columns
+    // the ring becomes a column, with the return edge up a right corridor
+    // (the loop-back rules, 6.7)" — one column, every node its own row, and
+    // only the one edge closing the cycle earns 6.7's own wider bend
+    // allowance rather than the grid's "one bend".
+    const isColumn = colGroups.length === 1 && rowGroups.length === n;
+    const bendsOf = (e: SVGPathElement) => {
+      const pts = pathPoints(e.getAttribute('d'));
+      let bends = 0;
+      let prev: 'h' | 'v' | null = null;
+      for (let i = 1; i < pts.length; i++) {
+        const dx = pts[i]![0] - pts[i - 1]![0];
+        const dy = pts[i]![1] - pts[i - 1]![1];
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+        const dir: 'h' | 'v' = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+        if (prev && dir !== prev) bends++;
+        prev = dir;
+      }
+      return bends;
+    };
+    let overBent = 0;
+    const bentIds: string[] = [];
+    if (isColumn) {
+      const loopId = order[order.length - 1]!;
+      for (const m of meta) {
+        const threshold =
+          m.from === loopId
+            ? RULES['6.1-bends-loop']!.threshold!
+            : RULES['1.8-ring-bends']!.threshold!;
+        const bends = bendsOf(m.e);
+        if (bends > threshold) {
+          overBent++;
+          bentIds.push(`${m.e.dataset.id}:${bends}`);
+        }
+      }
+    } else {
+      if (rowGroups.length !== 2) {
+        findings.push({ severity: 'fail', message: `1.8 ring is ${rowGroups.length} rows, not 2` });
+      }
+      let misaligned = 0;
+      for (const col of colGroups) {
+        const xs = col.map((c) => c.v);
+        if (Math.max(...xs) - Math.min(...xs) > colTolerance) misaligned++;
+      }
+      if (misaligned) {
+        findings.push({
+          severity: 'fail',
+          message: `1.8 ${misaligned} ring columns not aligned within ${RULES['1.8-ring']!.threshold!}`,
+        });
+      }
+      for (const m of meta) {
+        const bends = bendsOf(m.e);
+        if (bends > RULES['1.8-ring-bends']!.threshold!) {
+          overBent++;
+          bentIds.push(`${m.e.dataset.id}:${bends}`);
+        }
+      }
+    }
+    if (overBent) {
+      findings.push({
+        severity: 'fail',
+        message: `1.8 ${overBent} ring edges with more than one bend (${bentIds.slice(0, 3).join(' ')})`,
+      });
+    }
+    return findings;
   },
 };
 

@@ -476,7 +476,15 @@ export const arrivalSide: Check = {
       // DESIGN 1.6's own wrap bus earns no such exception (`gc-wrap`, set
       // alongside `gc-bus` only for it): it arrives the ordinary way a
       // forward edge does, so it stays subject to this check like any other.
-      if (e.classList.contains('gc-bus') && !e.classList.contains('gc-wrap')) continue;
+      // DESIGN 1.8's own ring-loop (`gc-ring-loop`) is a genuine exception,
+      // the same as a loop-back: it deliberately arrives via a side corridor
+      // (DESIGN 6.7), never the plain flow-in face this check assumes —
+      // `layout/index.ts`'s own `1.8-ring` gate check covers its shape.
+      if (
+        (e.classList.contains('gc-bus') && !e.classList.contains('gc-wrap')) ||
+        e.classList.contains('gc-ring-loop')
+      )
+        continue;
       const { ra, rb, back, arrives, to } = g;
       const below = rb.top >= ra.bottom - 1;
       const above = rb.bottom <= ra.top + 1;
@@ -617,10 +625,12 @@ export const wrongSide: Check = {
     let n = 0;
     for (const e of edgeEls(ctx)) {
       // DESIGN 1.6's own wrap bus (`gc-wrap`) is not exempt here either —
-      // see the matching note on `arrivalSide`, above.
+      // see the matching note on `arrivalSide`, above. DESIGN 1.8's own
+      // ring-loop is, for the same reason it is there.
       if (
         e.classList.contains('gc-back') ||
-        (e.classList.contains('gc-bus') && !e.classList.contains('gc-wrap'))
+        (e.classList.contains('gc-bus') && !e.classList.contains('gc-wrap')) ||
+        e.classList.contains('gc-ring-loop')
       )
         continue;
       const { from: fromId, to: toId } = edgeFromTo(e);

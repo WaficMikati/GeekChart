@@ -1,0 +1,13 @@
+flowchart LR
+  CTX["Shared context<br/>every message signed into one log"]
+  AGENT["Agent teammate<br/>its own keypair · runs on Claude Code"]
+  WORK["Builds in a git worktree<br/>writes the code · opens the PR"]
+  SHIP["Ships it<br/>deploys · posts the live link"]
+  API["The app exposes an API<br/>your metrics, on request"]
+  CRON["Daily YAML workflow<br/>calls the API · posts the numbers"]
+  CTX -->|you ask for a dashboard| AGENT
+  AGENT -->|writes| WORK
+  WORK -->|deploys| SHIP
+  SHIP -->|serves| API
+  API -->|every morning| CRON
+  CRON -->|back into the channel| CTX

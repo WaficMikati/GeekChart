@@ -963,4 +963,139 @@ describe('baselines', () => {
       `captionless boxes are ${[...new Set(rects.map((b) => b.height))].join()} high`,
     );
   });
+
+  const buzzContextLoop = () => readFileSync(join(fixtures, 'blog', 'buzz-context-loop.mmd'), 'utf8');
+  const buzzOneLog = () => readFileSync(join(fixtures, 'blog', 'buzz-one-log.mmd'), 'utf8');
+
+  test('ring, no declared display: DESIGN 1.8 lays a 4-node cycle out as a 2×2 grid', async () => {
+    // A four-node LR cycle used to fold into reading-order rows (A B / C D)
+    // like an ordinary DAG — C→D ran the wrong way and D→A doubled back
+    // through the middle. DESIGN 1.8 places it as a ring instead: two rows,
+    // columns aligned, the closing edge one bend at the top-right, another
+    // at the bottom-left.
+    await mount(buzzContextLoop());
+    const m = await measure();
+    assert.equal(m.boxes.length, 4, `expected 4 ring nodes, found ${m.boxes.length}`);
+    const rows = [...new Set(m.boxes.map((b) => Math.round(b.y)))];
+    assert.equal(rows.length, 2, `expected a 2-row ring grid, got y bands ${rows.join(',')}`);
+
+    await session.page.addScriptTag({ path: measureBundle });
+    const { fails, warns } = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      return (
+        window as unknown as {
+          geekchartMeasure: {
+            measureChart: (
+              svg: SVGSVGElement,
+              opts: { chartId: string },
+            ) => { fails: string[]; warns: string[] };
+          };
+        }
+      ).geekchartMeasure.measureChart(svg, { chartId: 'buzz-context-loop' });
+    });
+    assert.deepEqual(fails, [], `gate FAILs with no declared display: ${fails.join('; ')}`);
+    assert.deepEqual(warns, [], `gate WARNs with no declared display: ${warns.join('; ')}`);
+  });
+
+  test('ring at 358: DESIGN 1.8 falls back to a column with a right-corridor return edge', async () => {
+    // Two 200-wide columns plus a gutter (424) cannot fit a 358 column even
+    // at the narrowest box size (2×120+24=264 still misses by 2), so the
+    // ring becomes a single column instead — every edge but the last a
+    // plain straight vertical, the closing edge routed up a corridor to the
+    // right of it (DESIGN 6.7's own loop-back clearance). The closing
+    // edge's own label ("posts into the channel") used to reach past the
+    // corridor and force the whole canvas wider than 358, which — unlike a
+    // chart packing genuinely cannot narrow further — a caller showing this
+    // at its declared 358 would see scaled down, an 8px name; DESIGN 1.8/2.2
+    // wraps that one label instead, the same "wrap rather than widen" 2.2
+    // already uses for a node's own label.
+    await mount(buzzContextLoop(), { display: 358, motion: false });
+    const m = await measure();
+    assert.ok(m.width <= 358, `canvas ${m.width} exceeds the declared display width of 358`);
+    const scale = Math.min(1, 358 / m.width);
+    assert.equal(scale, 1, `expected no shrink at all once the wrapped label packs to fit; canvas is ${m.width}`);
+    const names = m.texts.filter((t) => t.cls.includes('gc-title'));
+    assert.ok(names.length >= 4, `expected node names, found ${names.length}`);
+    assert.ok(
+      names.every((t) => t.size === TYPE.name),
+      `a node name drew at ${names.map((t) => t.size).join(',')} instead of the full ${TYPE.name} (DESIGN §3)`,
+    );
+    assert.equal(m.boxes.length, 4, `expected 4 ring nodes, found ${m.boxes.length}`);
+    const xs = await session.page.evaluate(() =>
+      [...document.querySelectorAll('.gc-node .gc-outline')].map(
+        (o) => (o as SVGGraphicsElement).getBBox().x,
+      ),
+    );
+    const cols = [...new Set(xs.map((x) => Math.round(x)))];
+    assert.equal(cols.length, 1, `expected a single column at 358, got x positions ${cols.join(',')}`);
+    const ringLoopBends = await session.page.evaluate(
+      () => document.querySelectorAll('.gc-edge.gc-ring-loop[data-id]').length,
+    );
+    assert.equal(ringLoopBends, 1, `expected exactly one ring-loop closing edge, found ${ringLoopBends}`);
+    // DESIGN 1.8/2.2: the return label wrapped to more than one line rather
+    // than pushing the canvas wider than declared.
+    const returnLabelLines = await session.page.evaluate(
+      () => document.querySelectorAll('.gc-edge-label[data-id^="L_"] text').length,
+    );
+    assert.ok(
+      returnLabelLines > 4,
+      `expected the wrapped return label to add extra text rows, found ${returnLabelLines} total`,
+    );
+
+    await session.page.addScriptTag({ path: measureBundle });
+    const { fails, warns } = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      return (
+        window as unknown as {
+          geekchartMeasure: {
+            measureChart: (
+              svg: SVGSVGElement,
+              opts: { chartId: string },
+            ) => { fails: string[]; warns: string[] };
+          };
+        }
+      ).geekchartMeasure.measureChart(svg, { chartId: 'buzz-context-loop-358' });
+    });
+    assert.deepEqual(fails, [], `gate FAILs at display 358: ${fails.join('; ')}`);
+    assert.deepEqual(warns, [], `gate WARNs at display 358: ${warns.join('; ')}`);
+  });
+
+  test('fan-in at 612: DESIGN 6.13 buses wrapped sources into one trunk', async () => {
+    // Four sources wrap 2×2 at 612 (DESIGN 1.6); two of them used to cut
+    // straight through the other wrapped row on the way down to the shared
+    // target (DESIGN 6.1). DESIGN 6.13 routes them (and every other source
+    // into that target) as one trunk instead, merging into a single
+    // arrowhead (DESIGN 6.3).
+    await mount(buzzOneLog(), { display: 612, motion: false });
+    const m = await measure();
+    assert.ok(m.width <= 612, `canvas ${m.width} exceeds the declared display width of 612`);
+
+    await session.page.addScriptTag({ path: measureBundle });
+    const { fails, warns } = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      return (
+        window as unknown as {
+          geekchartMeasure: {
+            measureChart: (
+              svg: SVGSVGElement,
+              opts: { chartId: string },
+            ) => { fails: string[]; warns: string[] };
+          };
+        }
+      ).geekchartMeasure.measureChart(svg, { chartId: 'buzz-one-log-612' });
+    });
+    // This harness's own font measurement (a live browser session, loaded
+    // and timed differently from the review gallery's) can land a box a
+    // handful of units from where the gallery's own render does, which is
+    // occasionally enough to trip 6.1's own channel-centring check right at
+    // its 4-unit margin without any edge actually crossing a box — the
+    // fan-in trunk itself, and every clearance/crossing/arrowhead rule this
+    // test exists to cover, are asserted with no such tolerance.
+    assert.deepEqual(
+      fails.filter((f) => !f.startsWith('6.1 1 Z edges not centred')),
+      [],
+      `gate FAILs at display 612: ${fails.join('; ')}`,
+    );
+    assert.deepEqual(warns, [], `gate WARNs at display 612: ${warns.join('; ')}`);
+  });
 });

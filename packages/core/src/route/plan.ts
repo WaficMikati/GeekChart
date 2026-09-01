@@ -220,6 +220,32 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
   }
   const defaultFlowIn: Side = flow === 'vertical' ? 'top' : 'left';
 
+  // DESIGN 6.8: "edges arriving on one side of a node merge into a single
+  // centred trunk with one arrowhead" — a promise the bucket passes above
+  // only keep once every such edge actually lands on the *same* side to
+  // begin with. Without this, a source whose straight shot at its target's
+  // default face costs a little more than usual (an obstacle in the way, a
+  // crowded corridor another sibling's edge is already using) can win the
+  // full every-side search below and land on a different face entirely —
+  // buzz-one-log.mmd's HONEY→LOG arrived on LOG's *left* face while YOU,
+  // TEAM and FIZZ all converged on its top, four arrowheads on two sides
+  // instead of one on one. A node with two or more forward, non-self
+  // inbound edges has its arriving side fixed the same way a loop-back's
+  // already is (below) — free to search for the cleanest route along that
+  // one face, never free to leave it for another.
+  // A panel already has its own arrival rule (DESIGN 2.6: inputs above it
+  // line up column for column) — several forward edges into one still count
+  // as a fan-in, but locking every one of them to whichever side the very
+  // first search happened to try is what a panel's own column alignment
+  // needs to stay free of (control-plane.mmd's CRM→OS gained a bend once
+  // every one of OS's four inputs had its side locked this way).
+  const clusterIds = new Set(obstacles.filter((o) => o.holds).map((o) => o.id));
+  const forwardInCount = new Map<string, number>();
+  for (const edge of edges) {
+    if (edge.backward || edge.from === edge.to || clusterIds.has(edge.to)) continue;
+    forwardInCount.set(edge.to, (forwardInCount.get(edge.to) ?? 0) + 1);
+  }
+
   for (const edge of edges) {
     const a = boxOf(edge.from);
     const b = boxOf(edge.to);
@@ -369,6 +395,41 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       if (m.end) m.item.endAlong = at;
       else m.item.startAlong = at;
     });
+  }
+
+  // DESIGN 6.8: the bucket pass above never sees a channel edge (a literal
+  // straight shot needs no fanning, so it is excluded above) — which means a
+  // fan-in whose nearest source happens to land in a dead-straight line never
+  // learns that its bent siblings are converging on the same face's centre
+  // (buzz-one-log.mmd's YOU→LOG stayed at YOU's own x while TEAM and FIZZ
+  // merged onto LOG's true centre). Rebuilt independently of the exclusion
+  // above, over every pending edge including channels, and only merges a
+  // face that is arrivals-only (nothing also departs from it) — exactly the
+  // condition the bucket pass already required before converging.
+  {
+    const arrivalsAt = new Map<string, Pending<T>[]>();
+    const departuresAt = new Map<string, Pending<T>[]>();
+    for (const item of pending) {
+      if (item.edge.from === item.edge.to) continue;
+      const sk = key(item.edge.from, item.startSide);
+      departuresAt.set(sk, [...(departuresAt.get(sk) ?? []), item]);
+      const ek = key(item.edge.to, item.endSide);
+      arrivalsAt.set(ek, [...(arrivalsAt.get(ek) ?? []), item]);
+    }
+    for (const [k, arrivals] of arrivalsAt) {
+      if (arrivals.length < 2 || (departuresAt.get(k) ?? []).length > 0) continue;
+      const nodeId = k.slice(0, k.lastIndexOf(':'));
+      // A panel's own inputs keep DESIGN 2.6's column-for-column alignment,
+      // never merged onto one shared point the way a plain node's fan-in is
+      // (control-plane.mmd's OS, with four inputs above it, is exactly this
+      // shape — collapsing them onto its face centre is what put a bend in
+      // CRM→OS, previously a single straight channel).
+      if (clusterIds.has(nodeId)) continue;
+      const box = boxOf(nodeId);
+      if (!box) continue;
+      const middle = faceMiddle(box, arrivals[0]!.endSide);
+      for (const item of arrivals) item.endAlong = middle;
+    }
   }
 
   // What each edge actually settled on, kept apart from `routes` until every
@@ -739,7 +800,13 @@ export function planRoutes<T extends { id: string; from: string; to: string; bac
       const sides: Side[] = ['left', 'right', 'top', 'bottom'];
       // A loop's arriving face is never up for renegotiation here — DESIGN
       // 6.2 already fixed it. Only the exit side gets to roam the full set.
-      const esSides: Side[] = item.loop ? [item.endSide] : sides;
+      // DESIGN 6.8: a forward edge into a node with two or more forward
+      // inbound edges is a join, not a lone arrival — its face is fixed the
+      // same way, so every source converges on the one side instead of the
+      // cost search scattering them across whichever faces look cheapest
+      // one edge at a time (see `forwardInCount`, above).
+      const isForwardJoin = !item.loop && (forwardInCount.get(item.edge.to) ?? 0) >= 2;
+      const esSides: Side[] = item.loop || isForwardJoin ? [item.endSide] : sides;
       for (const ss of sides) {
         for (const es of esSides) {
           if (ss === item.startSide && es === item.endSide) continue;

@@ -36,6 +36,14 @@ export const RULES: Record<string, Rule> = {
     threshold: CANVAS.maxAspect,
     token: 'CANVAS',
   },
+  '1.8-ring': {
+    title: 'A ring lays out as two rows, columns aligned within this many units',
+    threshold: 1,
+  },
+  '1.8-ring-bends': {
+    title: 'Bends allowed on a single ring edge',
+    threshold: 1,
+  },
   '2.1': {
     title: 'Positions, widths, heights and gutters sit on this grid',
     threshold: GRID,

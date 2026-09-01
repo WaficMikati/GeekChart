@@ -1,0 +1,9 @@
+flowchart LR
+  CTX["Shared context<br/>the channel's signed history"]
+  AGENT["Agent teammate<br/>Claude Code · Codex · Goose"]
+  APP["The app it ships<br/>repo · deploy · live link"]
+  DATA["Data it sends back<br/>a scheduled call to the API"]
+  CTX -->|you ask| AGENT
+  AGENT -->|builds| APP
+  APP -->|exposes| DATA
+  DATA -->|posts into the channel| CTX
