@@ -169,17 +169,36 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
   // other. A retry or loop-back sits outside this order entirely: it draws
   // once both its ends already exist, so it can never hold up the flow it
   // answers (DESIGN 6.7).
-  const nodeIndex = new Map(drawing.nodes.map((id, i) => [id, i]));
+  // DESIGN 8.7: a panel is not one of `drawing.nodes` — its own fixed fade
+  // is scheduled separately, just below — but a channel edge into or out of
+  // one (control-plane.mmd's four inputs into OS, and OS's own four
+  // outputs) is a perfectly ordinary edge that still needs a place in this
+  // walk. Left out of it entirely (as `drawing.nodes` alone would leave it),
+  // neither end of that edge is ever a valid `outEdges`/`waitingOn` key, so
+  // the edge is skipped below rather than scheduled — its own `edgeStart`
+  // stays unset, and the non-null assertion further down that reads it
+  // turns straight into `NaN`.
+  const allIds = [...drawing.nodes, ...drawing.clusters];
+  const nodeIndex = new Map(allIds.map((id, i) => [id, i]));
   const outEdges = new Map<string, DrawnEdge[]>();
   const waitingOn = new Map<string, number>(); // forward indegree
-  for (const id of drawing.nodes) {
+  for (const id of allIds) {
     outEdges.set(id, []);
     waitingOn.set(id, 0);
   }
   const loopEdges: DrawnEdge[] = [];
   for (const edge of drawing.edges) {
     if (!outEdges.has(edge.from) || !waitingOn.has(edge.to)) continue;
-    if (edge.backward) {
+    // DESIGN 8.7: a ring's own closing edge (`ringClose`) is `backward:
+    // false` — DESIGN 1.8 draws and routes it like any other ring edge —
+    // but a cycle still needs exactly one edge set aside here, the same way
+    // a genuine retry already is, or every node in it keeps a forward
+    // indegree of at least one and Kahn's walk below never finds a root to
+    // start from. Left unset, every ring edge's own start/arrive time stays
+    // undefined and the stops built from it (`Track.frames`, above) come
+    // out `NaN%` — invalid CSS a browser silently drops, so the edge never
+    // draws on at all.
+    if (edge.backward || edge.ringClose) {
       loopEdges.push(edge);
       continue;
     }
@@ -192,7 +211,7 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
   const edgeArrive = new Map<string, number>();
   const incoming = new Map<string, number[]>(); // node -> arrival times seen so far
 
-  const roots = drawing.nodes.filter((id) => (waitingOn.get(id) ?? 0) === 0);
+  const roots = allIds.filter((id) => (waitingOn.get(id) ?? 0) === 0);
   const queue: string[] = [];
   roots.forEach((id, i) => {
     nodeStart.set(id, lead + i * SIBLING_LAG);
@@ -234,10 +253,25 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
   // reachable via the back edges just set aside) never enters the queue above.
   // It still has to appear somewhere rather than sit at the very end of the
   // timeline undrawn until the loop that answers it fires.
-  const fallback = Math.max(lead, ...drawing.nodes.map((id) => nodeStart.get(id) ?? 0));
+  const fallback = Math.max(lead, ...allIds.map((id) => nodeStart.get(id) ?? 0));
   let strandedI = 0;
-  for (const id of drawing.nodes) {
+  for (const id of allIds) {
     if (!nodeStart.has(id)) nodeStart.set(id, fallback + strandedI++ * SIBLING_LAG);
+  }
+
+  // DESIGN 8.7: a panel's own member has no edge of its own feeding it — the
+  // edge that reaches the panel targets the panel's own cluster id, never
+  // any one member (DESIGN 2.6) — so nothing above ties its build to
+  // anything. Left alone, a member schedules as its own independent root,
+  // which is what let architecture.mmd's WEB (inside Application) draw on
+  // before the Edge→Application edge that is supposed to feed it had even
+  // started. Clamped to the panel's own start instead — never earlier than
+  // the panel it belongs to, which is in turn already gated on whatever
+  // feeds it.
+  for (const [memberId, clusterId] of Object.entries(drawing.panelOf)) {
+    const panelReady = nodeStart.get(clusterId);
+    if (panelReady === undefined) continue;
+    if ((nodeStart.get(memberId) ?? lead) < panelReady) nodeStart.set(memberId, panelReady);
   }
 
   // Loop-backs draw once both ends are individually settled, staggered among
@@ -246,14 +280,22 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
   loopEdges.forEach((edge, i) => {
     const bothSettled =
       Math.max(nodeStart.get(edge.from) ?? lead, nodeStart.get(edge.to) ?? lead) + m.build;
-    edgeStart.set(edge.id, bothSettled + i * SIBLING_LAG);
+    const start = bothSettled + i * SIBLING_LAG;
+    edgeStart.set(edge.id, start);
+    // DESIGN 8.7: `pathEdges` below (an `onPath` edge — a ring's own closing
+    // edge, drawn on the primary path same as any other member, can well be
+    // one) reads `edgeArrive` with the same forced non-null assertion
+    // `edgeStart` gets — a loop-back or a ring's own return draws on with no
+    // travelling dot of its own (DESIGN 8.2/8.3's spark is the forward
+    // spine's), so it arrives exactly when its own draw-on finishes.
+    edgeArrive.set(edge.id, start + EDGE_GROW);
   });
 
   const pathEdges = drawing.edges.filter((e) => e.onPath && edgeStart.has(e.id));
 
   const settleOf = (edge: DrawnEdge): number => {
     const start = edgeStart.get(edge.id) ?? lead;
-    if (edge.backward) return start + EDGE_GROW;
+    if (edge.backward || edge.ringClose) return start + EDGE_GROW;
     if (edge.onPath) return (edgeArrive.get(edge.id) ?? start + TRAVEL) + Math.max(PRESS, RIPPLE);
     return start + EDGE_GROW;
   };

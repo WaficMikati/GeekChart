@@ -287,15 +287,24 @@ export async function layout(
     // edge included — the parser's own cycle detector (`markBackEdges`)
     // flags whichever edge happens to close the cycle as a "backward" retry,
     // which is right for an arbitrary graph but wrong for a ring's own
-    // deterministic return: it draws, routes and animates exactly like
-    // every other edge here, one bend at most, never the go-around DESIGN
-    // 6.7's loop-back describes (the one exception, the column fallback
-    // below, still gets `ring` for the same reason — only its own edge into
-    // the corridor, `ringLoop`, is drawn differently).
+    // deterministic return: it draws and routes exactly like every other
+    // edge here, one bend at most, never the go-around DESIGN 6.7's
+    // loop-back describes (the one exception, the column fallback below,
+    // still gets `ring` for the same reason — only its own edge into the
+    // corridor, `ringLoop`, is drawn differently).
     for (const edge of graph.edges) {
       edge.ring = true;
       edge.backward = false;
     }
+    // DESIGN 8.7: `motion.ts`'s own build order is a plain Kahn walk over
+    // forward indegree, which needs at least one node at zero to start from
+    // — every node in a ring has exactly one, so clearing `backward` above
+    // leaves none. `ringClose` gives the walk back the one edge to set
+    // aside (the same way a genuine retry already is there), regardless of
+    // which layout form drew it — the grid form never sets `ringLoop` at
+    // all, so this could not simply reuse that flag.
+    const closingEdge = graph.edges.find((e) => e.from === ringOrder[ringOrder.length - 1]);
+    if (closingEdge) closingEdge.ringClose = true;
     const room = scene.canvas.width - scene.canvas.margin * 2;
     // Set only for the column fallback — `extentOf` (below) reads node and
     // cluster boxes alone, which never learns about a corridor no node sits

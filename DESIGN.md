@@ -352,6 +352,16 @@ most **three** of these (name, caption, label); the title block adds its two:
   the writer-facing form: name how long the build should take and the
   multiplier is derived from that chart's own natural cycle, honouring the
   same 0.25–4 clamp; `duration` wins if both are given. (Added 2026-08-28.)
+- **8.7** Emitted CSS is valid: no `NaN`, `undefined` or `Infinity` anywhere in
+  a chart's stylesheet. Gate: `8.7-valid-css` — a string scan of the chart's
+  own `<style>` block. A browser drops an invalid keyframe silently rather
+  than erroring, so this class of bug never shows up as a broken render, only
+  as an element that pops in instead of drawing on. (Added 2026-09-02: a
+  ring's build-order walk (`motion.ts`) is Kahn's algorithm over forward
+  indegree, which needs at least one node at zero to start from — a cycle
+  gives every node exactly one, so nothing entered the queue and every ring
+  edge's own timing stayed undefined; a channel edge into or out of a panel
+  had the same gap, since a panel is not one of the walk's own nodes either.)
 
 ## 9. Don'ts (the amateur tells)
 

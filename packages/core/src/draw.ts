@@ -164,6 +164,11 @@ export interface DrawnEdge {
   /** A retry or loop-back — excluded from the build's dependency order, so it
    *  never holds up the flow it answers (it draws once both ends already exist). */
   backward: boolean;
+  /** DESIGN 8.7: a ring's own closing edge (set regardless of layout form —
+   *  see `graph.ts`'s own field). `motion.ts` treats it the same way as
+   *  `backward` for scheduling purposes only, the one edge a cycle needs set
+   *  aside for Kahn's walk to have anywhere to start. */
+  ringClose: boolean;
   hasLabel: boolean;
   /** The path data, so a pulse can be sent along it. */
   d: string;
@@ -186,6 +191,11 @@ export interface Drawing {
    * briefly — paints a second depth cue that the static rule never intended.
    */
   inPanelNodes: string[];
+  /** DESIGN 8.7: which panel each of `inPanelNodes` belongs to (member id ->
+   *  cluster id) — `motion.ts` reads this to keep a panel's own members from
+   *  appearing before the panel itself has (which is in turn gated on
+   *  whatever edge feeds the panel). */
+  panelOf: Record<string, string>;
   /**
    * The tight bounding box of everything actually drawn — nodes, panels,
    * every edge's routed line, and every label plate — in the same coordinate
@@ -837,6 +847,7 @@ function attemptDraw(
       to: edge.to,
       onPath: role === 'path',
       backward: Boolean(edge.backward),
+      ringClose: Boolean(edge.ringClose),
       hasLabel: Boolean(edge.label),
       d,
       stroke: edge.stroke,
@@ -1022,6 +1033,9 @@ function attemptDraw(
     edges: drawnEdges,
     clusters: drawnClusters,
     inPanelNodes: drawnNodes.filter((id) => inPanel.has(id)),
+    panelOf: Object.fromEntries(
+      graph.clusters.flatMap((c) => c.nodes.map((nodeId) => [nodeId, c.id] as const)),
+    ),
     extent,
   };
 }

@@ -202,6 +202,17 @@ export interface GraphEdge {
    * around the column via a corridor to its right (DESIGN 6.7).
    */
   ringLoop?: boolean;
+  /**
+   * DESIGN 8.7: the ring's own closing edge, set for every ring (grid form
+   * included, where `ringLoop` above is never set — that one is specific to
+   * the column form's own corridor geometry). Read only by `motion.ts`'s
+   * build-order walk: a cycle has no node with zero forward indegree for
+   * Kahn's algorithm to start from unless one edge is set aside the way a
+   * genuine retry already is, and every ring edge is otherwise `backward:
+   * false` on purpose (DESIGN 1.8 — it draws and routes like any other ring
+   * edge). Never read by routing or drawing.
+   */
+  ringClose?: boolean;
 }
 
 export interface GraphCluster {

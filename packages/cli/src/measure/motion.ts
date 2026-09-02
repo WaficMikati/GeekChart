@@ -100,4 +100,31 @@ export const speedInRange: Check = {
   },
 };
 
-export const MOTION_CHECKS: Check[] = [holdsFinished, speedInRange];
+/**
+ * DESIGN 8.7: the emitted stylesheet never contains `NaN`, `undefined` or
+ * `Infinity` — a browser drops an invalid `@keyframes` stop silently rather
+ * than erroring, so an element with one simply pops in instead of drawing on
+ * (or never animates at all), with nothing in the rendered chart itself to
+ * say why. Scoped to this renderer's own scoped rules the same way 8.4/8.6
+ * are — a plain string scan, cheap enough to run on every chart, every gate.
+ */
+export const validCss: Check = {
+  id: '8.7-valid-css',
+  rule: '8.7',
+  run(svg) {
+    const css = [...svg.querySelectorAll('style')].map((s) => s.textContent ?? '').join('\n');
+    const hits = css.match(/\bNaN\b|\bundefined\b|\bInfinity\b/g) ?? [];
+    if (!hits.length) return [];
+    const counts = new Map<string, number>();
+    for (const h of hits) counts.set(h, (counts.get(h) ?? 0) + 1);
+    const summary = [...counts.entries()].map(([k, n]) => `${n} ${k}`).join(', ');
+    return [
+      {
+        severity: 'fail',
+        message: `8.7 invalid CSS in the stylesheet: ${summary}`,
+      },
+    ];
+  },
+};
+
+export const MOTION_CHECKS: Check[] = [holdsFinished, speedInRange, validCss];
