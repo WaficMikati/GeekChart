@@ -754,6 +754,8 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   const warnings = [
     ...checkMeasurementFont(measureWith),
     ...phoneHeightWarning(framed.svg, options.display),
+    // Layout-time findings (DESIGN 6.5's label truncation, today).
+    ...(size.warnings ?? []),
   ];
 
   return {

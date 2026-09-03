@@ -359,7 +359,7 @@ function attemptDraw(
       .map((c) => ({ id: c.id, box: panels.get(c.id)!, holds: c.nodes })),
   ];
   const routes = planRoutes(
-    routed.filter((edge) => !edge.bus && !edge.ring),
+    routed.filter((edge) => !edge.bus && !edge.ring && !edge.channel),
     boxOf,
     (id) => shapes.get(id),
     flow,
@@ -470,6 +470,21 @@ function attemptDraw(
       };
     }
     routes.set(edge.id, route);
+  }
+
+  // DESIGN 2.7: a channel-engine chart's routes were planned by the layout
+  // itself (layout/channels.ts) — grid indices first, coordinates derived
+  // last — so drawing them is a straight read, the same way a ring's grid
+  // is. A fan-in's members all end on the hub's one shared arrival point,
+  // which is what hands DESIGN 6.3's single arrowhead to the merge logic
+  // below by construction.
+  for (const edge of routed) {
+    if (!edge.channel) continue;
+    routes.set(edge.id, {
+      points: edge.channel.points,
+      startSide: edge.channel.startSide,
+      endSide: edge.channel.endSide,
+    });
   }
 
   // DESIGN 1.5: a stacked fan's parent→leaf edges are a bus, not a routed
@@ -695,6 +710,10 @@ function attemptDraw(
   const headWidth = scene.edgeStroke * scene.arrowWidth;
   const parts: string[] = [];
   const pendingLabels: LabelRequest[] = [];
+  // Channel-engine pills (DESIGN 6.5): pre-seated by layout/channels.ts,
+  // emitted verbatim rather than handed to the placer below.
+  const channelLabelMarkup: string[] = [];
+  const channelLabelBoxes: Box[] = [];
   // Every routed edge's own segments, kept so a label can be checked against
   // edges other than the one it belongs to (DESIGN 6.5) — not just the ones
   // that carry a label of their own.
@@ -837,7 +856,7 @@ function attemptDraw(
     endLabels.push(...cardinality(edge, tail.at, tail.dir, tip.at, tip.dir, scene));
 
     parts.push(
-      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus ? ' gc-bus' : ''}${edge.wrapTrunkX !== undefined ? ' gc-wrap' : ''}${edge.ringLoop ? ' gc-ring-loop' : ''}" data-id="${esc(edge.id)}" ` +
+      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus ? ' gc-bus' : ''}${edge.wrapTrunkX !== undefined ? ' gc-wrap' : ''}${edge.ringLoop ? ' gc-ring-loop' : ''}${edge.channel ? ' gc-channel' : ''}${edge.channel?.isReturn ? ' gc-return' : ''}" data-id="${esc(edge.id)}" ` +
         `data-from="${esc(edge.from)}" data-to="${esc(edge.to)}" pathLength="1" d="${d}"/>`,
     );
     arrows.push(marks);
@@ -860,6 +879,35 @@ function attemptDraw(
         `<circle class="gc-spark" data-id="${esc(edge.id)}" r="5" ` +
           `style="offset-path:path('${d}')"/>`,
       );
+    }
+
+    // DESIGN 6.5/6.9 for a channel chart: the pill was seated by the layout
+    // — on its own edge's longest exclusive run, centre on the path, the
+    // channel sized for it before routing — so nothing here searches. Same
+    // classes and data-id as a placed label, so motion and the gate's
+    // `data-label-count` see it identically.
+    if (edge.label && edge.channel?.label) {
+      const l = edge.channel.label;
+      const lcx = l.x + l.width / 2;
+      const lineHeight = scene.edgeLabelSize * 1.3;
+      const rows = l.lines.length ? l.lines : [edge.label];
+      const firstBaseline =
+        l.y + l.height / 2 + scene.edgeLabelSize * 0.36 - ((rows.length - 1) * lineHeight) / 2;
+      const text = rows
+        .map(
+          (row, i) =>
+            `<text x="${round(lcx)}" y="${round(firstBaseline + i * lineHeight)}">${esc(row)}</text>`,
+        )
+        .join('');
+      channelLabelMarkup.push(
+        `<g class="gc-edge-label" data-id="${esc(edge.id)}">` +
+          `<rect class="gc-plate" x="${round(l.x)}" y="${round(l.y)}" ` +
+          `width="${round(l.width)}" height="${round(l.height)}" rx="3"/>` +
+          text +
+          `</g>`,
+      );
+      channelLabelBoxes.push({ x: l.x, y: l.y, width: l.width, height: l.height });
+      continue;
     }
 
     if (edge.label) {
@@ -995,7 +1043,7 @@ function attemptDraw(
       .map((c) => ({ id: c.id, ...panels.get(c.id)! })),
   ];
   const labelResult = placeLabels(pendingLabels, labelNodeBoxes, scene, edgeSegments, size, allowGrowth);
-  parts.push(...labelResult.markup);
+  parts.push(...labelResult.markup, ...channelLabelMarkup);
 
   // Every mark is drawn from its own line's tangent rather than hung off an SVG
   // marker, so there is nothing left in `defs` for an edge to point at — and no
@@ -1008,12 +1056,12 @@ function attemptDraw(
   // never allowed to just drop one instead.
   const labelCount = graph.edges.filter((e) => e.label).length;
   const svg =
-    `<svg class="gc-chart" data-gc="${uid}" data-flow="${graph.direction}" data-label-count="${labelCount}" viewBox="${viewBox}" role="img" xmlns="${SVG}">` +
+    `<svg class="gc-chart" data-gc="${uid}" data-flow="${graph.direction}"${graph.engine === 'channels' ? ' data-gc-engine="channels"' : ''} data-label-count="${labelCount}" viewBox="${viewBox}" role="img" xmlns="${SVG}">` +
     `${parts.join('')}${endLabels.join('')}${sparks.join('')}${arrows.join('')}</svg>`;
 
   // The union of everything actually drawn, in the same coordinates the
   // pieces above were placed in — see `Drawing.extent`.
-  const extentBoxes: Extent[] = [...drawnBoxes, ...labelResult.boxes];
+  const extentBoxes: Extent[] = [...drawnBoxes, ...labelResult.boxes, ...channelLabelBoxes];
   const extentPoints: Point[] = edgeSegments.flatMap((s) => s.points);
   const exs = [...extentBoxes.map((b) => b.x), ...extentPoints.map((p) => p.x)];
   const exs1 = [...extentBoxes.map((b) => b.x + b.width), ...extentPoints.map((p) => p.x)];

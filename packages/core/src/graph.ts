@@ -119,6 +119,37 @@ export interface GraphNode {
   height?: number;
 }
 
+/**
+ * DESIGN 2.7: a channel-engine route, planned by `layout/channels.ts` and
+ * read by `draw.ts` exactly the way a ring's grid is — constructed geometry
+ * handed to the ordinary drawing and animation pipeline, never a second
+ * renderer. Coordinates are in the same space as `GraphNode.x`/`y`: the
+ * polyline starts on the source's outline and ends on the target's (the
+ * arrow tip's own point); `draw.ts` applies its usual start/end shortening
+ * and corner rounding on top.
+ */
+export interface ChannelRoute {
+  points: { x: number; y: number }[];
+  startSide: 'top' | 'bottom' | 'left' | 'right';
+  endSide: 'top' | 'bottom' | 'left' | 'right';
+  /**
+   * DESIGN 6.5: the label pill, already seated on the edge's own longest
+   * exclusive run — placement is a layout *input* here (DESIGN 6.9), so the
+   * old search in `draw.ts` never runs for a channel edge. `lines` is the
+   * wrapped text (one or two rows; a third was dropped with a
+   * `6.5-label-length` warning at layout time).
+   */
+  label?: { x: number; y: number; width: number; height: number; lines: string[] };
+  /**
+   * DESIGN 1.9: a ribbon's return edge — row's last node out the right
+   * gutter, along the band, down the left gutter, into the next row's first
+   * node's left face. Four rounded bends by construction, so the gate gives
+   * it the same allowance DESIGN 1.6's wrap bus already has, and exempts it
+   * from the plain flow-arrival side rule the way a ring loop is.
+   */
+  isReturn?: boolean;
+}
+
 export interface GraphEdge {
   id: string;
   from: string;
@@ -213,6 +244,13 @@ export interface GraphEdge {
    * edge). Never read by routing or drawing.
    */
   ringClose?: boolean;
+  /**
+   * DESIGN 2.7: set by the channel engine (`layout/channels.ts`) for every
+   * edge of a fan or chain it laid out — the finished route and (when the
+   * edge carries a label) the seated pill. Read by `draw.ts` in place of
+   * `route/plan.ts`'s search and `placeLabels`' placement, never by both.
+   */
+  channel?: ChannelRoute;
 }
 
 export interface GraphCluster {
@@ -240,6 +278,14 @@ export interface Graph {
   clusters: GraphCluster[];
   /** Ids along the longest route through the graph — what emphasis follows. */
   primaryPath: string[];
+  /**
+   * Set by `layout/channels.ts` when this chart was laid out by the channel
+   * engine (DESIGN 2.7). `draw.ts` stamps it on the SVG root as
+   * `data-gc-engine="channels"` so the gate can branch: the new channel
+   * checks (6.5-pill-on-line, 2.8-fan-symmetry, 1.9-ribbon) run only here,
+   * and the old label-placement-search checks never do.
+   */
+  engine?: 'channels';
 }
 
 /** Mermaid's shape vocabulary, mapped onto the shapes we actually draw. */

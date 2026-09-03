@@ -342,6 +342,11 @@ export const orphanColumns: Check = {
   id: '7.4-orphan-column',
   rule: '7.4',
   run(svg, ctx) {
+    // DESIGN 1.9's ribbon owns the wrapped-chain shape on a channel-engine
+    // chart (`1.9-ribbon`, channels.ts): its even row fill can still leave
+    // the top row one longer than the bottom, which this check — written
+    // for the old fold's stranded columns — would misread as an orphan.
+    if (svg.dataset.gcEngine === 'channels') return [];
     const cls = clusters(ctx);
     const { chainInfo: info } = chainInfo(ctx);
     if (cls.length || !info || !info.wraps) return [];

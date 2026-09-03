@@ -16,6 +16,7 @@ import {
   type Measurer,
   type Metrics,
 } from './measure.ts';
+import { detectChannelChart, layoutChannels } from './channels.ts';
 import { detectRing, layoutRing, layoutRingColumn, ringWidth, wrapLabelLines } from './ring.ts';
 import { identifySatellites, placeSatellites } from './satellites.ts';
 import { expandFan, findFans, planFan, type FanPlan } from './stack.ts';
@@ -46,6 +47,9 @@ export { makeMeasurer, resolveMeasurer, type Measurer };
 export interface LayoutResult {
   width: number;
   height: number;
+  /** Layout-time findings worth telling the writer (DESIGN 6.5's
+   *  `6.5-label-length` truncation is the one source today). */
+  warnings?: string[];
 }
 
 /**
@@ -77,6 +81,12 @@ export async function layout(
   // fits the ring at a declared display and, once sizing is done, to place
   // the nodes directly instead of handing the graph to ELK.
   const ringOrder = detectRing(graph);
+
+  // DESIGN 2.7: fans (2.8) and chains (1.9) go to the channel engine —
+  // detected the same way a ring is, up front and purely from structure,
+  // conservatively (a hybrid, a panel, a non-arrow tip all fall through to
+  // the old path unchanged). Placement runs below, after sizing.
+  const channelPlan = ringOrder ? null : detectChannelChart(graph);
 
   // Shapes that solve their own geometry from the label (a diamond, a note)
   // are never wrapped here — DESIGN 2.2's fixed-box list is about the shared
@@ -268,6 +278,28 @@ export async function layout(
     const fitted = fitShape(item, base, scene, flow);
     item.node.width = roundUp(fitted.width);
     item.node.height = roundUp(fitted.height);
+  }
+
+  // DESIGN 2.7: a detected fan or chain is placed by the channel engine on
+  // the real sizes just fitted — corridors and bands derived from their
+  // contents, routes as plans, pills seated as an input — and never handed
+  // to ELK or the route search. `draw.ts` reads the routes off
+  // `edge.channel` exactly the way it reads a ring's grid.
+  if (channelPlan) {
+    const pillMeasurer = resolveMeasurer(measureWith);
+    const measureLine = (s: string) =>
+      pillMeasurer.measure(
+        scene.edgeLabelUpper ? s.toUpperCase() : s,
+        scene.edgeLabelFont,
+        scene.edgeLabelSize,
+        scene.edgeLabelTracking,
+      );
+    const laid = layoutChannels(graph, channelPlan, scene, measureLine);
+    pillMeasurer.done();
+    // No `square()` here: the engine's own grid is already exact, and the
+    // banding pass snaps *centres* to the grid one at a time — which can
+    // move a symmetric pair asymmetrically and break DESIGN 2.8's ±1.
+    return { width: laid.width, height: laid.height, warnings: laid.warnings };
   }
 
   // DESIGN 1.8: placed directly, on real sizes, instead of handed to ELK —

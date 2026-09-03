@@ -44,6 +44,9 @@ export const RULES: Record<string, Rule> = {
     title: 'Bends allowed on a single ring edge',
     threshold: 1,
   },
+  '1.9': {
+    title: 'A wrapped chain is a reading-order ribbon: every row left-to-right, returns = rows − 1',
+  },
   '2.1': {
     title: 'Positions, widths, heights and gutters sit on this grid',
     threshold: GRID,
@@ -57,6 +60,10 @@ export const RULES: Record<string, Rule> = {
     title: 'An edge shorter than this means its nodes are touching',
     threshold: CLEARANCE.node,
     token: 'CLEARANCE',
+  },
+  '2.8': {
+    title: 'A fan parent sits centred on its children group, and each wrapped row on the same axis, within this',
+    threshold: 1,
   },
   '3.1': {
     title: 'On-screen legibility floor, in px, at the gate viewing width',
@@ -85,6 +92,14 @@ export const RULES: Record<string, Rule> = {
   '6.5-vertical': {
     title: 'A label plate covers at most this share of the vertical run it sits on',
     threshold: 0.4,
+  },
+  '6.5-on-line': {
+    title: "A channel pill's centre sits within this of its own edge's path",
+    threshold: 1,
+  },
+  '6.5-label-length': {
+    title: 'Characters per pill line; a label past two wrapped lines is truncated with a warning',
+    threshold: 28,
   },
   '6.5-min-run': {
     title: "Shortest vertical run a label may sit on, rather than sitting beside it",

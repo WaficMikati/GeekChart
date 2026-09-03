@@ -144,6 +144,11 @@ export const labelSwallow: Check = {
   id: '6.5-label-swallow',
   rule: '6.5',
   run(svg) {
+    // DESIGN 6.5 (rewritten 2026-09-03): on a channel-engine chart the pill
+    // sits *on* its line, knockout plate masking it, by construction — the
+    // on/beside coverage arithmetic below belongs to the old placement
+    // search. `6.5-pill-on-line` (channels.ts) is its replacement there.
+    if (svg.dataset.gcEngine === 'channels') return [];
     let swallowed = 0;
     const swallowIds: string[] = [];
     for (const t of svg.querySelectorAll('.gc-edge-label text, .gc-card')) {

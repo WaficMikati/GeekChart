@@ -54,6 +54,7 @@ import {
 } from './edges.ts';
 import { labelOverlaps, labelSwallow, textShapeCollision, labelOnOtherEdge } from './labels.ts';
 import { laneRide, laneOverrun, hashLabel } from './charts.ts';
+import { pillOnLine, fanSymmetry, ribbon } from './channels.ts';
 import { holdsFinished, speedInRange, validCss } from './motion.ts';
 import { createCtx, type Check, type Finding, type MeasureOptions } from './helpers.ts';
 
@@ -117,6 +118,11 @@ export const ALL_CHECKS: Check[] = [
   holdsFinished,
   speedInRange,
   validCss,
+  // Channel-engine charts only (keyed on data-gc-engine, never firing on the
+  // old path): DESIGN 6.5's pill-on-line, 2.8's fan symmetry, 1.9's ribbon.
+  pillOnLine,
+  fanSymmetry,
+  ribbon,
 ];
 
 export interface MeasureResult {
@@ -151,3 +157,4 @@ export { EDGE_CHECKS, edgeShapeStats } from './edges.ts';
 export { LABEL_CHECKS } from './labels.ts';
 export { CHART_CHECKS } from './charts.ts';
 export { MOTION_CHECKS } from './motion.ts';
+export { CHANNEL_CHECKS } from './channels.ts';

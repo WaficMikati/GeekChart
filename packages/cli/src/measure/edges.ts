@@ -114,8 +114,13 @@ export function edgeShapeStats(ctx: Ctx): {
         rect(nb).top < rect(na).top - 8 &&
         rect(nb).left <= rect(na).left + 8
       );
+      // DESIGN 1.9: a ribbon's return edge (`gc-return`) goes around the
+      // rows on purpose — right gutter, band, left gutter — the same
+      // deliberate detour a loop-back's corridor is, so it gets the same
+      // pass on the detour ratio a back edge already has.
       const back = isBack || e.classList.contains('gc-back');
-      if (!back && len > RULES['6.1']!.threshold! * direct) {
+      const ribbonReturn = e.classList.contains('gc-return');
+      if (!back && !ribbonReturn && len > RULES['6.1']!.threshold! * direct) {
         detours++;
         detourIds.push(e.dataset.id!);
       }
@@ -129,12 +134,16 @@ export function edgeShapeStats(ctx: Ctx): {
         if (prev && dir !== prev) bends++;
         prev = dir;
       }
+      // DESIGN 1.6: a wrap edge goes around the rows between parent and
+      // sibling — out of the bottom, across to the corridor, down, back to
+      // the sibling's centre, in — four bends, the loop-back's allowance.
+      // DESIGN 1.9: the ribbon's return earns the identical allowance for
+      // the identical reason (right gutter, band, left gutter — four bends
+      // by construction, drawn the same on every chart).
+      const loopish = back || e.classList.contains('gc-wrap') || ribbonReturn;
       if (
-        // DESIGN 1.6: a wrap edge goes around the rows between parent and
-        // sibling — out of the bottom, across to the corridor, down, back to
-        // the sibling's centre, in — four bends, the loop-back's allowance.
-        (!back && !e.classList.contains('gc-wrap') && bends > RULES['6.1-bends-forward']!.threshold!) ||
-        ((back || e.classList.contains('gc-wrap')) && bends > RULES['6.1-bends-loop']!.threshold!)
+        (!loopish && bends > RULES['6.1-bends-forward']!.threshold!) ||
+        (loopish && bends > RULES['6.1-bends-loop']!.threshold!)
       ) {
         overBent++;
         bentIds.push(`${e.dataset.id}:${bends}`);
@@ -480,9 +489,15 @@ export const arrivalSide: Check = {
       // the same as a loop-back: it deliberately arrives via a side corridor
       // (DESIGN 6.7), never the plain flow-in face this check assumes —
       // `layout/index.ts`'s own `1.8-ring` gate check covers its shape.
+      // DESIGN 1.9: the ribbon's return (`gc-return`) arrives on the next
+      // row's first node's *left* face by the rule's own words — never the
+      // plain flow-in face this check assumes — the same sanctioned
+      // exception a ring loop has; `1.9-ribbon` (channels.ts) measures its
+      // shape instead.
       if (
         (e.classList.contains('gc-bus') && !e.classList.contains('gc-wrap')) ||
-        e.classList.contains('gc-ring-loop')
+        e.classList.contains('gc-ring-loop') ||
+        e.classList.contains('gc-return')
       )
         continue;
       const { ra, rb, back, arrives, to } = g;
@@ -797,6 +812,10 @@ export const labelClear: Check = {
   id: '6.9-label-clear',
   rule: '6.9',
   run(svg, ctx) {
+    // DESIGN 6.9 (rewritten 2026-09-03): on a channel-engine chart label
+    // space is a layout input, and `6.5-pill-on-line` (channels.ts) measures
+    // the pills there — this check's arithmetic belongs to the old search.
+    if (svg.dataset.gcEngine === 'channels') return [];
     const plates = [...svg.querySelectorAll('.gc-edge-label .gc-plate')].filter((p) =>
       visible(p, svg),
     );
@@ -934,6 +953,10 @@ export const labelOnEdge: Check = {
   id: '6.11-label-on-edge',
   rule: '6.11',
   run(svg, ctx) {
+    // DESIGN 6.9 absorbed 6.11 (2026-09-03): a channel pill's relation to
+    // its own edge is measured by `6.5-pill-on-line` (centre within 1 of
+    // the path) — the beside-the-line distances below are the old search's.
+    if (svg.dataset.gcEngine === 'channels') return [];
     const edgeEls = [...svg.querySelectorAll<SVGGeometryElement>('.gc-edge[data-id]')];
     const pathsOf = new Map<string, [number, number][]>();
     for (const e of edgeEls) {
