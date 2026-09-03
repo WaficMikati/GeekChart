@@ -120,10 +120,11 @@ and the check that enforces it cannot drift apart.
   box-plus-gutter pitch — a chain never wraps earlier than the width forces
   (the turn count is rows − 1, and every avoided row is one less snake across
   the page). Every row reads **left to right**; the return edge from a row's
-  last node to the next row's first runs out the right gutter, along the
-  reserved band between the rows, up the left gutter and into the next row's
-  first node's left face — rounded turns, never crossing content, drawn the
-  same on every chart. Rows after the first are never right-to-left: the
+  last node to the next row's first runs out the right gutter, down into the
+  reserved band between the rows, along it, down the left gutter and into
+  the next row's first node's left face — four bends (the same allowance
+  1.6's wrap bus already earns), rounded turns, never crossing content,
+  drawn the same on every chart. Rows after the first are never right-to-left: the
   boustrophedon reversal taxes the reader at every turn. On a display that
   fits only **one** column the ribbon degenerates to a vertical list — no
   returns exist, edges run straight down — which is the phone form for free.
