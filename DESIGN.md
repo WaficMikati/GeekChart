@@ -375,6 +375,23 @@ the renderer keeps what was written and writers own their casing.)
   two of the four cut straight through the other wrapped row on the way
   down, 6.1's own "16 clearance from a foreign node.")
 
+- **6.14** **Returns are buses too.** Loop-backs into one target merge by
+  construction, exactly as forward fan-ins do (6.12/6.13): one return
+  corridor on one flank of the content, one drawn trunk in it, each
+  source's branch leaving its own face and joining the trunk, the trunk
+  arriving once at the target's forward-arrival face with the single
+  arrowhead 6.3 already demands. Never one private loop per source: the
+  content is enclosed by **at most one** loop corridor per flank, and two
+  loop routes never nest. Measured: among loop-backs sharing a target, at
+  most one distinct vertical corridor run exists per flank, and every
+  shared run is drawn once (the 1.5 trunk language). (Added 2026-09-03:
+  hub-with-returns drew three workers' returns as three independent
+  4-bend loops — each individually legal under 6.7/6.8, collectively a
+  maze of concentric rings. Every "clean" chart this project has produced
+  — leaf stacks, row buses, wrap buses, rings — is clean because shared
+  intent draws as one shared line; this rule closes the last family that
+  was still drawing it per-edge.)
+
 ## 7. Composition
 
 - **7.1** Every chart has a title (3: 22/600) and usually a kicker line in mono
