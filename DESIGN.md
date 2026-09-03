@@ -39,10 +39,11 @@ and the check that enforces it cannot drift apart.
   to it anyway would force the exact scale-down this option exists to
   remove, only now for having asked. (Revised 2026-08-28 alongside 1.6.)
 - **1.2** The content box is 904 wide (1000 − 2×48). A left-to-right run that
-  does not fit it **wraps into rows**; a run that fits but uses under half the
-  width is the same fault and is re-laid out. Content covers at least 35% of
-  the canvas area (the gate's 7.4 check). A thin strip across an empty stage has
-  failed this rule.
+  does not fit it **wraps into rows** — in the reading-order ribbon shape and
+  at the last possible moment, both defined by 1.9; a run that fits but uses
+  under half the width is the same fault and is re-laid out. Content covers at
+  least 35% of the canvas area (the gate's 7.4 check). A thin strip across an
+  empty stage has failed this rule.
 - **1.3** Outer margin 48. Content touches neither the edge nor the margin line.
 - **1.4** Height never exceeds 1.4× width. Tall stacks (Subgraphs is 470×1095
   today) go side by side instead. Not under a declared display narrower than
@@ -107,7 +108,30 @@ and the check that enforces it cannot drift apart.
   ring becomes a column with the return edge up a right corridor (the
   loop-back rules, 6.7). (Added 2026-09-01: a four-node LR cycle folded into
   reading-order rows instead — A B / C D — so C→D ran the wrong way and
-  D→A doubled back through the middle; see buzz-context-loop.mmd.)
+  D→A doubled back through the middle; see buzz-context-loop.mmd.) A ring
+  edge leaves by the face nearest its target's arrival face — the shortest
+  clean path — never a farther face that happens to be free: in a 2-row ring
+  of five, the odd node's closing edge exits its **left** face into the
+  bottom-left corner, not its top. (Added 2026-09-03: rings of 5/7/9 sent the
+  closing edge out the top while the left face sat empty and nearer,
+  reading as a wrong turn — the user's own review, three charts.)
+- **1.9** **Chain wrapping is a reading-order ribbon, wrapped at the last
+  possible moment.** Columns = as many as the declared display fits at full
+  box-plus-gutter pitch — a chain never wraps earlier than the width forces
+  (the turn count is rows − 1, and every avoided row is one less snake across
+  the page). Every row reads **left to right**; the return edge from a row's
+  last node to the next row's first runs out the right gutter, along the
+  reserved band between the rows, up the left gutter and into the next row's
+  first node's left face — rounded turns, never crossing content, drawn the
+  same on every chart. Rows after the first are never right-to-left: the
+  boustrophedon reversal taxes the reader at every turn. On a display that
+  fits only **one** column the ribbon degenerates to a vertical list — no
+  returns exist, edges run straight down — which is the phone form for free.
+  (Added 2026-09-03, replacing the alternating fold: a 10-step chain folded
+  into 4 rows and 3 turns inside 584px of a 1000px canvas; wrapped at full
+  width it is 2 rows and one turn. Chosen over the aligned serpentine and
+  segmented-row candidates by team review — consistent reading direction
+  plus a drawn, non-crossing return.)
 
 ## 2. Grid and sizing
 
@@ -139,19 +163,34 @@ and the check that enforces it cannot drift apart.
   inner padding on all sides and their children obey 2.3 inside them.
   Inputs above a panel and outputs below it line up **column for column**.
 
-- **2.7** Room for a label is the smallest that works. When no spot on a
-  label's own edge clears 6.5/6.9/6.11, the corridor that edge runs through
-  grows by **one grid step (8) at a time**, re-routes and tries again — along
-  an axis the edge actually runs on (a column gap for a horizontal run, a row
-  gap for a vertical one), the one adding less area first, and never past the
-  declared display width (1.1). An edge still unseated after 12 steps on an
-  axis stops asking; its label takes the best spot and the gate reports it.
-  Growth moves whole row bands (a node is past the corridor when its centre
-  is). Row gaps differ for other reasons too (panels, folds, satellites), so
-  this is pinned by test rather than gate: packages/cli/test/canvas.test.mts
-  holds the article chart at display 620 to its minimal height. (Added
-  2026-08-28: a formula-sized growth gave that chart 80 units for a label
-  that needed 32.)
+- **2.7** **Channels.** The floor plan reserves **corridors** (the vertical
+  gaps between columns) and **bands** (the horizontal gaps between rows) as
+  first-class members of the grid, before anything is placed. A route is a
+  **plan over grid indices** — which corridor, which band, which face —
+  and coordinates are derived from the plan last; a route is never searched
+  for through finished geometry. A channel's size is **derived from what
+  must live in it**: parallel runs at the 16 track pitch (6.4), each label
+  pill it hosts (6.5) plus 2 clearance, the turn legs of its routes
+  (standoff 4 + 2 × turn radius 12), and an arrowhead where one lands.
+  Derived means derived: when traffic or labels need more room, that
+  channel alone widens and the layout re-derives to a fixed point — nothing
+  re-seats, nothing reorders, and an uncrowded chart is laid out exactly as
+  if this rule did not exist. Band heights are uniform per chart (7.4's
+  even whitespace); the uniform value is the largest any band needs.
+  (Replaces the grow-8-retry-12-times loop of 2026-08-28 on 2026-09-03:
+  growth-as-repair fixed the label that asked and starved the next one —
+  sizing the gap from its contents up front is the same arithmetic run
+  once, before routing instead of after it. Pattern proven in the
+  channel-engine spike: 13/13 fan-family charts, zero overlaps, derived
+  gaps of ~75 where the old pipeline spent up to 224.)
+- **2.8** **Fan symmetry.** A parent sits centred on the geometric extent of
+  its children as a group — measured, within **±1** — and a wrapped
+  children group centres each row on the same axis; the axis holds through
+  a wrap (the far row is fed by one spine down the near row's centre
+  corridor, which 2.7's seating keeps free by giving the near row an even
+  count). The old tell was a Dispatcher parked over its first child, or an
+  Aggregator aligned to one producer of six. (Added 2026-09-03 from the
+  user's review — ten charts flagged for exactly this.)
 
 ## 3. Type
 
@@ -166,10 +205,14 @@ most **three** of these (name, caption, label); the title block adds its two:
 | chart title | 22 | 600 | −0.02em | sentence |
 | chart kicker / subtitle | 11 mono | 400 | 0.18em | UPPER |
 | node name | 13 | 600 | normal | sentence |
-| node caption | 11 mono | 400 | normal | lower |
+| node caption | 11 mono | 400 | normal | as written |
 | edge label, legend, axis tick | 11 mono | 400 | 0.08–0.14em | UPPER |
 | record row (class member, ER column) | 11 mono | 400 | normal | as written |
 | big index numeral (`01`) | 72 mono | 600 | — | — |
+
+(Caption case revised 2026-09-03 from forced `lower`: a writer's "ships to
+Production" arriving as "ships to production" read as a typo, not a style —
+the renderer keeps what was written and writers own their casing.)
 
 - **3.1** Nothing smaller than **11 canvas units**. Charts are responsive and a
   1000-unit canvas is routinely shown at ~760px (an artifact panel, a phone in
@@ -235,12 +278,31 @@ most **three** of these (name, caption, label); the title block adds its two:
   it perpendicular. Never at a corner, never ending short of or inside the box.
 - **6.3** Exactly one arrowhead per directed edge, 8×6, filled, aligned to the
   last segment within 1°. A bidirectional edge is two edges or a double-headed
-  one; never a stacked head.
+  one; never a stacked head. A fan-in earns its single head **by
+  construction**: every arrival on one face shares one arrival point (6.8's
+  merged trunk), so a second head on that face cannot be drawn, rather than
+  being drawn and repaired. (Strengthened 2026-09-03; measured in the
+  channel-engine spike — exactly one head per fan-in face on all 13 charts.)
 - **6.4** Edges fan from **separate** attachment points, spaced on the 8-grid,
   never converging on one pixel (today's Control plane).
-- **6.5** Edge labels are 8 mono caps on a knockout plate the colour of the
-  ground, 6 padding, centred on the segment's midpoint, and plates never overlap
-  each other or a node.
+- **6.5** An edge label sits **on its own line**: 11 mono caps in a pill
+  (height 22, rx 3, 8 side padding) the colour of the ground, masking the
+  line behind it, centred — centre within 1 of the path — on the midpoint
+  of its edge's **longest exclusive run**: the longest straight segment no
+  other edge shares. Not the longest run outright: on a bus (1.5, 6.12,
+  6.13) the longest footage is shared trunk, where pills from every branch
+  would collide by construction; each branch's exclusive leg is where its
+  pill belongs. Pills never overlap each other or a node; when two pills on
+  one channel would touch, one slides **along its own run** — never off it —
+  keeping 2 clear. A label longer than **28 characters** wraps to a second
+  pill line; past two lines the render keeps the first two and WARNs
+  (`6.5-label-length`) — a label that long is a sentence, and sentences
+  belong in captions. (Rewritten 2026-09-03 from labels placed beside the
+  line by search: the user's review flagged ~15 charts for exactly the
+  inconsistency the old rule permitted — some labels on the line, some
+  beside it, decided by whatever space the search happened to find.
+  "Exclusive run" measured in the channel-engine spike: 13/13 charts,
+  every pill centre within 0.00 of its own path, zero overlaps.)
 - **6.6** Dashed = return / async / optional (`5 4`). Dotted (`1.5 6`) = the
   Lyzr style of a channel along which a dot travels. Solid = the main call.
 - **6.7** Loops back go **around** the content, with a 24 clearance, as one
@@ -251,8 +313,10 @@ most **three** of these (name, caption, label); the title block adds its two:
   distance (+32); forward edges never cross each other; no two edges share a
   segment except a fan bus from one point; 16 clearance from every node it does
   not connect; ports on one side ordered by where their targets are; a label
-  sits on its line only if its plate covers ≤ 60% of a horizontal segment or
-  ≤ 40% of a vertical one at least 64 long — otherwise it sits beside the line.
+  sits on its line, always, per 6.5 (until 2026-09-03 this clause let a label
+  sit beside the line when its plate covered too much of a short segment —
+  superseded: 2.7 now sizes the run for the pill instead of the pill
+  hunting for a run).
   Added 2026-08-22 (second pass): a forward edge **arrives** on the side facing
   its source with the flow axis taking priority; a loop-back arrives on the
   same side the target's forward edge arrived on ("you are back at this
@@ -262,28 +326,22 @@ most **three** of these (name, caption, label); the title block adds its two:
   nearest corridor (length ≤ Manhattan distance of its ends + 128), and edges
   arriving on one side of a node merge into a single centred trunk with one
   arrowhead.
-- **6.9** An edge label never overlaps a node box; it keeps **8 units clear**
-  of every box it does not belong to. (Added 2026-08-28: DESIGN 1.5's own
-  labels exposed a placement the gate had never measured — a wide label
-  beside a short run can still, technically, avoid its own edge's two nodes
-  while landing on someone else's.)
+- **6.9** **Label space is an input, not a search result.** Every edge label
+  in the source is drawn exactly once, on its own edge (6.5), overlapping
+  nothing — and this holds because the channel hosting the pill was sized
+  for it before routing (2.7), never because a search found a gap. A pill
+  keeps 8 clear of every box it does not belong to and 16 from every other
+  edge's segments — as measured *consequences* of 2.7's derivation, checked
+  by the gate, not as placement targets. (Rewritten 2026-09-03, absorbing
+  6.10 and 6.11 of 2026-08-28: all three rules described one search — find
+  a clear spot, grow if there is none, prove the spot found belongs to the
+  right edge. With the space derived up front the search has nothing left
+  to decide; the numbers stay as the wall.)
 
-- **6.10** Every edge label in the source is drawn exactly once. When no
-  position clears 6.9, the layout makes room — the edge's corridor grows by
-  the label's height + 8 — rather than the label disappearing. (Added
-  2026-08-28: enforcing 6.9 without this let a label with nowhere clear to
-  sit be dropped instead, which is worse than a crowded one — a missing
-  label reads as the edge having none, not as a placement failure.)
+- **6.10** Absorbed into 6.9 (2026-09-03). The number stays reserved so
+  older commits and gate lines still cite it truthfully.
 
-- **6.11** A label sits on its own edge: its box comes within **8** of some
-  point of its own path — one gap, the same 8 a label beside its line has
-  always kept clear of the line itself (6.5) — and stays at least **16**
-  from every other edge's segments. (Added 2026-08-28: 6.10's own growing
-  corridor only means something if the label that needed the room lands
-  back on the edge it belongs to — the first attempt at 6.10 let it drift
-  onto whatever nearby edge had space instead. Revised the same day from 4:
-  a label legitimately sitting *beside* its line, not on it, is still on
-  its own edge.)
+- **6.11** Absorbed into 6.9 (2026-09-03), as 6.10.
 
 - **6.12** A node with **three or more** forward edges whose targets all land
   on one shared row directly below it draws as a bus: the trunk leaves the

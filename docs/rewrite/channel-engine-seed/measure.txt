@@ -1,0 +1,93 @@
+fanout-3
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads per leaf face: 1,1,1
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 77.5px
+fanout-4
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads per leaf face: 1,1,1,1
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 77.5px
+fanout-5
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads per leaf face: 1,1,1,1,1
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 77.5px
+fanout-6
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads per leaf face: 1,1,1,1,1,1
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 77.5px
+fanout-8
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads per leaf face: 1,1,1,1,1,1,1,1
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 77.5, 77.5px
+fanout-10
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads per leaf face: 1,1,1,1,1,1,1,1,1,1
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 77.5, 77.5px
+fanout-12
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads per leaf face: 1,1,1,1,1,1,1,1,1,1,1,1
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 77.5, 77.5px
+fanin-3
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads on hub face: 1 on A's top face
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 73.5px
+fanin-4
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads on hub face: 1 on A's top face
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 73.5px
+fanin-6
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads on hub face: 1 on A's top face
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 73.5px
+fanin-8
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads on hub face: 1 on A's top face
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 73.5, 73.5px
+fanin-10
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads on hub face: 1 on A's top face
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 73.5, 73.5px
+diamond-fan
+  PASS  pill overlaps: pill/pill 0, pill/node 0
+  PASS  pill on own edge: max centre-to-path 0.00px
+  PASS  edge-through-box: 0 crossings
+  PASS  arrowheads per leaf face: 1,1,1
+  PASS  parent-centre offset: 0.00px
+        row gaps measured: 77.5px
+
+ALL CHECKS PASS

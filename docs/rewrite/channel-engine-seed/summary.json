@@ -1,0 +1,157 @@
+{
+  "fanout-3": {
+    "canvas": {
+      "width": 504,
+      "height": 270
+    },
+    "rowGapDerived": 77.5,
+    "leafRows": [
+      3
+    ],
+    "surprises": []
+  },
+  "fanout-4": {
+    "canvas": {
+      "width": 648,
+      "height": 270
+    },
+    "rowGapDerived": 77.5,
+    "leafRows": [
+      4
+    ],
+    "surprises": []
+  },
+  "fanout-5": {
+    "canvas": {
+      "width": 792,
+      "height": 270
+    },
+    "rowGapDerived": 77.5,
+    "leafRows": [
+      5
+    ],
+    "surprises": []
+  },
+  "fanout-6": {
+    "canvas": {
+      "width": 936,
+      "height": 270
+    },
+    "rowGapDerived": 77.5,
+    "leafRows": [
+      6
+    ],
+    "surprises": []
+  },
+  "fanout-8": {
+    "canvas": {
+      "width": 648,
+      "height": 395
+    },
+    "rowGapDerived": 77.5,
+    "leafRows": [
+      4,
+      4
+    ],
+    "surprises": []
+  },
+  "fanout-10": {
+    "canvas": {
+      "width": 936,
+      "height": 395
+    },
+    "rowGapDerived": 77.5,
+    "leafRows": [
+      6,
+      4
+    ],
+    "surprises": [
+      "wrap unbalanced to keep the near row even — the spine needs the centre corridor free"
+    ]
+  },
+  "fanout-12": {
+    "canvas": {
+      "width": 936,
+      "height": 395
+    },
+    "rowGapDerived": 77.5,
+    "leafRows": [
+      6,
+      6
+    ],
+    "surprises": []
+  },
+  "fanin-3": {
+    "canvas": {
+      "width": 504,
+      "height": 266
+    },
+    "rowGapDerived": 73.5,
+    "leafRows": [
+      3
+    ],
+    "surprises": []
+  },
+  "fanin-4": {
+    "canvas": {
+      "width": 648,
+      "height": 266
+    },
+    "rowGapDerived": 73.5,
+    "leafRows": [
+      4
+    ],
+    "surprises": []
+  },
+  "fanin-6": {
+    "canvas": {
+      "width": 936,
+      "height": 266
+    },
+    "rowGapDerived": 73.5,
+    "leafRows": [
+      6
+    ],
+    "surprises": []
+  },
+  "fanin-8": {
+    "canvas": {
+      "width": 648,
+      "height": 387
+    },
+    "rowGapDerived": 73.5,
+    "leafRows": [
+      4,
+      4
+    ],
+    "surprises": [
+      "uniform row gap leaves 11.5px slack in 1 band(s) — the price of DESIGN's uniform gaps"
+    ]
+  },
+  "fanin-10": {
+    "canvas": {
+      "width": 936,
+      "height": 387
+    },
+    "rowGapDerived": 73.5,
+    "leafRows": [
+      6,
+      4
+    ],
+    "surprises": [
+      "wrap unbalanced to keep the near row even — the spine needs the centre corridor free",
+      "uniform row gap leaves 11.5px slack in 1 band(s) — the price of DESIGN's uniform gaps"
+    ]
+  },
+  "diamond-fan": {
+    "canvas": {
+      "width": 504,
+      "height": 294
+    },
+    "rowGapDerived": 77.5,
+    "leafRows": [
+      3
+    ],
+    "surprises": []
+  }
+}
