@@ -1,0 +1,6 @@
+flowchart TB
+  U[Login form] --> V{"Credentials valid?"}
+  V -->|yes| MFA{"MFA enabled?"}
+  V -->|no| E[Show error] --> U
+  MFA -->|yes| OTP[Prompt for code] --> S[Session created]
+  MFA -->|no| S

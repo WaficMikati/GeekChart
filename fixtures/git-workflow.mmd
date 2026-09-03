@@ -1,0 +1,5 @@
+flowchart TB
+  M[main] --> FB[feature branch] --> C[Commits] --> PR[Pull request] --> R{"Review?"}
+  R -->|approved| MG[Merge]
+  R -->|changes| C
+  MG --> M

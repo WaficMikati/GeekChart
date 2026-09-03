@@ -361,6 +361,12 @@ export const channelCentre: Check = {
         const dx = pts[i]![0] - pts[i - 1]![0];
         const dy = pts[i]![1] - pts[i - 1]![1];
         if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+        // A rounded corner (12×12, diagonal) is not a run — the same reading
+        // `clearance` below uses. Folding it into a neighbouring run skewed
+        // the measured midpoint of a perfectly centred Z by half the corner,
+        // and which side it folded onto came down to floating-point ties in
+        // the screen transform at non-integer scales.
+        if (Math.abs(dx) < 13 * ctx.unit && Math.abs(dy) < 13 * ctx.unit) continue;
         const dir: 'h' | 'v' = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
         const last = runs[runs.length - 1];
         if (last && last.dir === dir) last.b = pts[i]!;

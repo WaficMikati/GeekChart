@@ -61,6 +61,9 @@ export const RULES: Record<string, Rule> = {
     threshold: CLEARANCE.node,
     token: 'CLEARANCE',
   },
+  '6.2-side-exclusivity': {
+    title: 'On a channel chart, a node side that receives an edge never emits one',
+  },
   '2.8': {
     title: 'A fan parent sits centred on its children group, and each wrapped row on the same axis, within this',
     threshold: 1,

@@ -148,6 +148,17 @@ export interface ChannelRoute {
    * from the plain flow-arrival side rule the way a ring loop is.
    */
   isReturn?: boolean;
+  /**
+   * The gate allowance this route earns, emitted as the same classes the old
+   * path's equivalents carry so the gate treats like shapes alike:
+   * - 'bus'  → `gc-bus`: a DESIGN 1.5 leaf-stack trunk drawn by the channel
+   *   engine — deliberately short branches, side arrival, the fan-from-one-
+   *   point shared trunk.
+   * - 'wrap' → `gc-bus gc-wrap`: a rank-skipping forward edge routed around
+   *   the rows between its ends via a reserved corridor — DESIGN 6.13's own
+   *   shape (four bends, ordinary top arrival), planned instead of searched.
+   */
+  exempt?: 'bus' | 'wrap';
 }
 
 export interface GraphEdge {

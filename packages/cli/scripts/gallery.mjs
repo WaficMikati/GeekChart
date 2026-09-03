@@ -110,6 +110,20 @@ const GROUPS = [
   },
   {
     section: 'Catalog',
+    name: 'Channel engine',
+    dir: fixturesRoot,
+    note: 'the general flowchart families the channel engine plans (DESIGN 2.7, phase 3a)',
+    items: [
+      ['two-diamonds', 'Two diamonds', 'flowchart'],
+      ['diamond-cascade', 'Diamond cascade', 'flowchart'],
+      ['ternary-tree', 'Ternary tree', 'flowchart'],
+      ['git-workflow', 'Git workflow', 'flowchart'],
+      ['login-flow', 'Login flow', 'flowchart'],
+      ['back-to-start', 'Back to start', 'flowchart'],
+    ],
+  },
+  {
+    section: 'Catalog',
     name: 'Panels',
     dir: fixturesRoot,
     note: 'a subgraph drawn as a container — the composition family',

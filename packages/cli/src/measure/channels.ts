@@ -155,7 +155,8 @@ function detectFan(ctx: Ctx): { hub: string; leaves: string[] } | null {
 /**
  * DESIGN 2.8: the parent sits centred on the geometric extent of its
  * children as a group, within ±1, and every wrapped row centres on the same
- * axis.
+ * axis. Measured on the cross axis — horizontal for a TB fan, vertical for
+ * an LR one (phase 3a's axis variant; same rule, axes swapped).
  */
 export const fanSymmetry: Check = {
   id: '2.8-fan-symmetry',
@@ -165,34 +166,37 @@ export const fanSymmetry: Check = {
     const fan = detectFan(ctx);
     if (!fan) return [];
     const ids = nodeById(ctx);
+    const tb = svg.dataset.flow !== 'LR' && svg.dataset.flow !== 'RL';
+    const lo = (b: DOMRect): number => (tb ? b.left : b.top);
+    const hi = (b: DOMRect): number => (tb ? b.right : b.bottom);
     const tol = RULES['2.8']!.threshold! * ctx.unit;
     const hubRect = rect(outline(ids.get(fan.hub)!));
-    const hubCx = (hubRect.left + hubRect.right) / 2;
+    const hubC = (lo(hubRect) + hi(hubRect)) / 2;
     const leafRects = fan.leaves.map((id) => rect(outline(ids.get(id)!)));
-    const groupCx =
-      (Math.min(...leafRects.map((b) => b.left)) + Math.max(...leafRects.map((b) => b.right))) / 2;
+    const groupC = (Math.min(...leafRects.map(lo)) + Math.max(...leafRects.map(hi))) / 2;
     const findings: Finding[] = [];
-    if (Math.abs(hubCx - groupCx) > tol) {
+    if (Math.abs(hubC - groupC) > tol) {
       findings.push({
         severity: 'fail',
-        message: `2.8 parent off its children's centre by ${((hubCx - groupCx) / ctx.unit).toFixed(1)}`,
+        message: `2.8 parent off its children's centre by ${((hubC - groupC) / ctx.unit).toFixed(1)}`,
       });
     }
-    // Rows band by vertical overlap; each row's own centre holds the axis.
+    // Rows band by flow-axis overlap; each row's own centre holds the axis.
+    const flo = (b: DOMRect): number => (tb ? b.top : b.left);
+    const fhi = (b: DOMRect): number => (tb ? b.bottom : b.right);
     const rows: { top: number; bottom: number; rects: DOMRect[] }[] = [];
-    for (const b of [...leafRects].sort((a, z) => a.top - z.top)) {
-      const row = rows.find((r) => b.top < r.bottom - 1 && b.bottom > r.top + 1);
+    for (const b of [...leafRects].sort((a, z) => flo(a) - flo(z))) {
+      const row = rows.find((r) => flo(b) < r.bottom - 1 && fhi(b) > r.top + 1);
       if (row) {
         row.rects.push(b);
-        row.top = Math.min(row.top, b.top);
-        row.bottom = Math.max(row.bottom, b.bottom);
-      } else rows.push({ top: b.top, bottom: b.bottom, rects: [b] });
+        row.top = Math.min(row.top, flo(b));
+        row.bottom = Math.max(row.bottom, fhi(b));
+      } else rows.push({ top: flo(b), bottom: fhi(b), rects: [b] });
     }
     let rowsOff = 0;
     for (const row of rows) {
-      const cx =
-        (Math.min(...row.rects.map((b) => b.left)) + Math.max(...row.rects.map((b) => b.right))) / 2;
-      if (Math.abs(cx - groupCx) > tol) rowsOff++;
+      const c = (Math.min(...row.rects.map(lo)) + Math.max(...row.rects.map(hi))) / 2;
+      if (Math.abs(c - groupC) > tol) rowsOff++;
     }
     if (rowsOff) {
       findings.push({
@@ -201,6 +205,61 @@ export const fanSymmetry: Check = {
       });
     }
     return findings;
+  },
+};
+
+/**
+ * DESIGN 6.2 (phase 3a): a node side that receives an edge never emits one —
+ * the user's own review of git-workflow found Merge with a line out of the
+ * same side another came in. Held by construction in the channel planners
+ * (arrivals on the flow-in face, departures on the flow-out or a free side
+ * face), measured here from the drawn geometry: for each node, each face is
+ * either all arrivals or all departures.
+ */
+export const sideExclusivity: Check = {
+  id: '6.2-side-exclusivity',
+  rule: '6.2',
+  run(svg, ctx) {
+    if (!isChannels(svg)) return [];
+    const ids = nodeById(ctx);
+    const sideOf = (p: [number, number], b: DOMRect): string => {
+      const d = [
+        Math.abs(p[1] - b.top),
+        Math.abs(p[1] - b.bottom),
+        Math.abs(p[0] - b.left),
+        Math.abs(p[0] - b.right),
+      ];
+      const m = Math.min(...d);
+      return m === d[0] ? 'top' : m === d[1] ? 'bottom' : m === d[2] ? 'left' : 'right';
+    };
+    const roles = new Map<string, Set<'in' | 'out'>>();
+    for (const m of edgeMeta(ctx)) {
+      const ctm = m.e.getScreenCTM();
+      if (!ctm) continue;
+      const pts = pathPointsHV(m.e.getAttribute('d'), ctm);
+      if (pts.length < 2) continue;
+      const src = m.from && ids.get(m.from);
+      const dst = m.to && ids.get(m.to);
+      if (src) {
+        const key = `${m.from}|${sideOf(pts[0]!, rect(outline(src)))}`;
+        if (!roles.has(key)) roles.set(key, new Set());
+        roles.get(key)!.add('out');
+      }
+      if (dst) {
+        const key = `${m.to}|${sideOf(pts[pts.length - 1]!, rect(outline(dst)))}`;
+        if (!roles.has(key)) roles.set(key, new Set());
+        roles.get(key)!.add('in');
+      }
+    }
+    const mixed = [...roles.entries()].filter(([, r]) => r.size > 1).map(([k]) => k);
+    return mixed.length
+      ? [
+          {
+            severity: 'fail',
+            message: `6.2 ${mixed.length} node sides both receive and emit (${mixed.slice(0, 3).join(' ')})`,
+          },
+        ]
+      : [];
   },
 };
 
@@ -289,4 +348,4 @@ export const ribbon: Check = {
   },
 };
 
-export const CHANNEL_CHECKS: Check[] = [pillOnLine, fanSymmetry, ribbon];
+export const CHANNEL_CHECKS: Check[] = [pillOnLine, fanSymmetry, ribbon, sideExclusivity];

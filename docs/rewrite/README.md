@@ -29,8 +29,15 @@ flagged review charts as the wall; ship as 0.2.0 only at green)
 1. **DESIGN first** (this branch): rules 1.9, 2.7, 2.8, 6.3, 6.5, 6.9
    rewritten; caption casing freed; ring port sense in 1.8. Done here.
 2. **Channel engine into core** for fans and chains; rings and buses stay.
+   Done (`packages/core/src/layout/channels.ts`).
 3. **Generalize** to trees, diamonds, clusters; delete the router, label
-   search and corridor growth.
+   search and corridor growth. Phase 3a done (`layout/grid.ts`): trees with
+   1.5 leaf stacking, decision diamonds and reconverging branches (6.3's
+   merged arrival, 6.2's side exclusivity), rank-skipping joins via reserved
+   corridors, loop-backs per 6.7/6.8, and the LR/TB axis variants — the
+   planner verifies its own result against the gate's budgets and declines
+   to the old path when a shape can't hold them. Phase 3b: clusters/panels,
+   and deleting the old router.
 4. **Bugs**: dotted/thick strokes, box-to-text sizing, caption casing in
    normalize, edge-label length cap, ring closing-edge port.
 5. **Re-render the 201-chart review** for user sign-off.

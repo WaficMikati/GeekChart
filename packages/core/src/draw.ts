@@ -856,7 +856,7 @@ function attemptDraw(
     endLabels.push(...cardinality(edge, tail.at, tail.dir, tip.at, tip.dir, scene));
 
     parts.push(
-      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus ? ' gc-bus' : ''}${edge.wrapTrunkX !== undefined ? ' gc-wrap' : ''}${edge.ringLoop ? ' gc-ring-loop' : ''}${edge.channel ? ' gc-channel' : ''}${edge.channel?.isReturn ? ' gc-return' : ''}" data-id="${esc(edge.id)}" ` +
+      `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus || edge.channel?.exempt ? ' gc-bus' : ''}${edge.wrapTrunkX !== undefined || edge.channel?.exempt === 'wrap' ? ' gc-wrap' : ''}${edge.ringLoop ? ' gc-ring-loop' : ''}${edge.channel ? ' gc-channel' : ''}${edge.channel?.isReturn ? ' gc-return' : ''}" data-id="${esc(edge.id)}" ` +
         `data-from="${esc(edge.from)}" data-to="${esc(edge.to)}" pathLength="1" d="${d}"/>`,
     );
     arrows.push(marks);

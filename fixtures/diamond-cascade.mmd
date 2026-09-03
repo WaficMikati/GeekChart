@@ -1,0 +1,8 @@
+flowchart TB
+  S[Start] --> Q1{"Check A?"}
+  Q1 -->|pass| Q2{"Check B?"}
+  Q1 -->|fail| E1[Reject A]
+  Q2 -->|pass| Q3{"Check C?"}
+  Q2 -->|fail| E2[Reject B]
+  Q3 -->|pass| OK[Accept]
+  Q3 -->|fail| E3[Reject C]

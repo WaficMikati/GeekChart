@@ -294,12 +294,15 @@ export async function layout(
         scene.edgeLabelSize,
         scene.edgeLabelTracking,
       );
-    const laid = layoutChannels(graph, channelPlan, scene, measureLine);
+    const laid = layoutChannels(graph, channelPlan, scene, measureLine, packToDisplay);
     pillMeasurer.done();
     // No `square()` here: the engine's own grid is already exact, and the
     // banding pass snaps *centres* to the grid one at a time — which can
     // move a symmetric pair asymmetrically and break DESIGN 2.8's ±1.
-    return { width: laid.width, height: laid.height, warnings: laid.warnings };
+    if (laid) return { width: laid.width, height: laid.height, warnings: laid.warnings };
+    // A `grid` plan declined once real sizes were known (too wide, a loop
+    // with no in-budget corridor, a gap the gate would flag) — the chart
+    // falls through to the old path exactly as if never detected.
   }
 
   // DESIGN 1.8: placed directly, on real sizes, instead of handed to ELK —

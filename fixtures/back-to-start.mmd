@@ -1,0 +1,4 @@
+flowchart LR
+  A[Intake] --> B[Triage] --> C[Fix] --> D[Verify]
+  D -->|regression| B
+  D -->|done| E[Close]

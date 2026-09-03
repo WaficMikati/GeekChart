@@ -277,6 +277,11 @@ the renderer keeps what was written and writers own their casing.)
   routing failure.
 - **6.2** Edges attach at the **midpoint of a side**, on the outline, and leave
   it perpendicular. Never at a corner, never ending short of or inside the box.
+  A side that **receives** an edge never **emits** one: arrivals own their
+  face, and anything leaving the node takes a free one — a plan-time
+  constraint in the channel engine, checked by the gate on channel charts
+  (`6.2-side-exclusivity`). (Added 2026-09-03 from the user's review of
+  git-workflow: Merge had a line out of the same side one came in.)
 - **6.3** Exactly one arrowhead per directed edge, 8×6, filled, aligned to the
   last segment within 1°. A bidirectional edge is two edges or a double-headed
   one; never a stacked head. A fan-in earns its single head **by

@@ -66,6 +66,11 @@ async function mount(source: string, options: AnyRequest = {}) {
   );
   await session.page.setContent(reply.html, { waitUntil: 'load' });
   await session.page.evaluate(() => document.fonts.ready);
+  // Measure the still frame, the way the gate does (gate.mjs's `still`
+  // class): mid-animation, an element still waiting on its own draw-on sits
+  // at opacity 0 and the visibility-aware checks (7.3's centring) would
+  // read a half-built chart.
+  await session.page.addStyleTag({ content: 'svg.gc-chart, svg.gc-chart * { animation: none !important; }' });
   return reply;
 }
 
@@ -116,11 +121,19 @@ describe('channel engine — routing and scope', () => {
     }
   });
 
-  test('everything else keeps the old path: a decision flow, a 3-leaf-less fan, a TB chain', async () => {
+  test('a TB chain is the grid planner’s vertical list (phase 3a’s axis variant)', async () => {
+    const tbChain = chain(5).replace('flowchart LR', 'flowchart TB');
+    const reply = await mount(tbChain);
+    assert.ok(isChannels(reply.svg), `expected channels engine for:\n${tbChain}`);
+  });
+
+  test('everything else keeps the old path: a too-wide LR decision flow, a 3-node fan, a cluster', async () => {
+    // flow.mmd is an LR run of six ranks — wider than the undeclared room —
+    // so the grid planner declines it and the old path runs unchanged.
     const flow = readFileSync(join(fixtures, 'flow.mmd'), 'utf8');
     const twoLeaves = `flowchart TB\n  Q{Pick}\n  A[Left]\n  B[Right]\n  Q -->|yes| A\n  Q -->|no| B`;
-    const tbChain = chain(5).replace('flowchart LR', 'flowchart TB');
-    for (const src of [flow, twoLeaves, tbChain]) {
+    const clustered = readFileSync(join(fixtures, 'subgraphs.mmd'), 'utf8');
+    for (const src of [flow, twoLeaves, clustered]) {
       const reply = await mount(src);
       assert.ok(!isChannels(reply.svg), `expected old path for:\n${src}`);
     }
@@ -270,8 +283,159 @@ describe('channel engine — chains (DESIGN 1.9)', () => {
   });
 });
 
+describe('channel engine — the grid planner (phase 3a)', () => {
+  const fixture = (name: string) => readFileSync(join(fixtures, name), 'utf8');
+  const nodeBox = async (id: string) =>
+    session.page.evaluate((nid) => {
+      const n = document.querySelector(`svg.gc-chart .gc-node[data-id="${nid}"] .gc-outline`);
+      const b = (n as SVGGraphicsElement).getBBox();
+      return { x: b.x, y: b.y, w: b.width, h: b.height, cx: b.x + b.width / 2 };
+    }, id);
+  const edgeXs = async (id: string) =>
+    session.page.evaluate((eid) => {
+      const e = document.querySelector(`svg.gc-chart .gc-edge[data-id="${eid}"]`)!;
+      const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+      return nums.filter((_, i) => i % 2 === 0);
+    }, id);
+
+  test('two-diamonds: the second decision sits under the first, not off to the side', async () => {
+    // The user's review: "Second being on the left, aligned to Start, is
+    // nonsensical." The deep branch keeps its parent's axis: Q2 directly
+    // under Q1's own column band, and Q2 centred on C/D as a group (2.8).
+    const reply = await mount(fixture('two-diamonds.mmd'));
+    assert.ok(isChannels(reply.svg));
+    const [q1, q2, c, d] = await Promise.all(['Q1', 'Q2', 'C', 'D'].map(nodeBox));
+    assert.ok(
+      q2!.cx > q1!.x && q2!.cx < q1!.x + q1!.w,
+      `Q2's centre ${q2!.cx} sits outside Q1's column band [${q1!.x}, ${q1!.x + q1!.w}]`,
+    );
+    assert.ok(Math.abs(q1!.cx - q2!.cx) <= 1, `Q2 is ${Math.abs(q1!.cx - q2!.cx)} off Q1's axis`);
+    const groupC = (Math.min(c!.x, d!.x) + Math.max(c!.x + c!.w, d!.x + d!.w)) / 2;
+    assert.ok(Math.abs(q2!.cx - groupC) <= 1, `Q2 is ${Math.abs(q2!.cx - groupC)} off C/D's centre`);
+  });
+
+  test('diamond-cascade: every label on its own line, every run orthogonal', async () => {
+    // The user's review flagged bare diagonal-ish runs with labels floating
+    // beside them; a channel chart draws neither.
+    const reply = await mount(fixture('diamond-cascade.mmd'));
+    assert.ok(isChannels(reply.svg));
+    assert.deepEqual(await gateCheck('6.5-pill-on-line'), []);
+    const diagonal = await session.page.evaluate(() => {
+      let bad = 0;
+      for (const e of document.querySelectorAll('svg.gc-chart .gc-edge[data-id]')) {
+        const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+        for (let i = 2; i + 1 < nums.length; i += 2) {
+          const dx = Math.abs(nums[i]! - nums[i - 2]!);
+          const dy = Math.abs(nums[i + 1]! - nums[i - 1]!);
+          if (dx > 12 && dy > 12) bad++; // a rounded corner moves ≤12 on each axis
+        }
+      }
+      return bad;
+    });
+    assert.equal(diagonal, 0, `${diagonal} diagonal-ish runs`);
+    // The cascade's spine holds one axis: each Check sits under the last.
+    const [q1, q2, q3] = await Promise.all(['Q1', 'Q2', 'Q3'].map(nodeBox));
+    assert.ok(Math.abs(q1!.cx - q2!.cx) <= 1 && Math.abs(q2!.cx - q3!.cx) <= 1);
+  });
+
+  test('ternary-tree: the root centres on the widest row, the branch row on the same axis', async () => {
+    const reply = await mount(fixture('ternary-tree.mmd'));
+    assert.ok(isChannels(reply.svg));
+    const boxes = await session.page.evaluate(() => {
+      return [...document.querySelectorAll('svg.gc-chart .gc-node[data-id]')].map((n) => {
+        const b = (n.querySelector('.gc-outline') as SVGGraphicsElement).getBBox();
+        return { id: n.getAttribute('data-id')!, x: b.x, y: b.y, w: b.width };
+      });
+    });
+    const root = boxes.find((b) => b.id === 'ROOT')!;
+    const rows = new Map<number, typeof boxes>();
+    for (const b of boxes) {
+      const key = Math.round(b.y / 8);
+      rows.set(key, [...(rows.get(key) ?? []), b]);
+    }
+    const widest = [...rows.values()].sort(
+      (a, b) =>
+        Math.max(...b.map((n) => n.x + n.w)) -
+        Math.min(...b.map((n) => n.x)) -
+        (Math.max(...a.map((n) => n.x + n.w)) - Math.min(...a.map((n) => n.x))),
+    )[0]!;
+    const widestC =
+      (Math.min(...widest.map((n) => n.x)) + Math.max(...widest.map((n) => n.x + n.w))) / 2;
+    assert.ok(
+      Math.abs(root.x + root.w / 2 - widestC) <= 1,
+      `root is ${Math.abs(root.x + root.w / 2 - widestC).toFixed(1)} off the widest row's centre`,
+    );
+    const branches = boxes.filter((b) => /^R\d$/.test(b.id));
+    assert.equal(branches.length, 4);
+    const branchC =
+      (Math.min(...branches.map((n) => n.x)) + Math.max(...branches.map((n) => n.x + n.w))) / 2;
+    assert.ok(
+      Math.abs(root.x + root.w / 2 - branchC) <= 1,
+      `second row is ${Math.abs(root.x + root.w / 2 - branchC).toFixed(1)} off the root's axis`,
+    );
+  });
+
+  test('git-workflow: no node side both receives and emits, labels on their lines', async () => {
+    // The user's review: Merge had a line out of the same side one came in.
+    const reply = await mount(fixture('git-workflow.mmd'));
+    assert.ok(isChannels(reply.svg));
+    assert.deepEqual(await gateCheck('6.2-side-exclusivity'), []);
+    assert.deepEqual(await gateCheck('6.5-pill-on-line'), []);
+  });
+
+  test('login-flow: the rank-skipping MFA→S edge hugs the free side of OTP, not the long way', async () => {
+    const reply = await mount(fixture('login-flow.mmd'));
+    assert.ok(isChannels(reply.svg));
+    const otp = await nodeBox('OTP');
+    const xs = await edgeXs('L_MFA_S_0');
+    const beyond = Math.max(...xs) - (otp!.x + otp!.w);
+    assert.ok(beyond > 8, `MFA→S never leaves OTP's column (max x ${Math.max(...xs)})`);
+    assert.ok(
+      beyond <= 120,
+      `MFA→S swings ${beyond.toFixed(0)} past OTP — the long way, not the adjacent corridor`,
+    );
+    assert.ok(
+      Math.min(...xs) >= otp!.x - 40,
+      `MFA→S also wanders past OTP's other side (min x ${Math.min(...xs)})`,
+    );
+  });
+
+  test('back-to-start: an LR chain with a loop-back arrives where the forward flow arrives, one head', async () => {
+    const reply = await mount(fixture('back-to-start.mmd'));
+    assert.ok(isChannels(reply.svg));
+    const { back, bends, heads } = await session.page.evaluate(() => {
+      const e = document.querySelector('svg.gc-chart .gc-edge[data-id="L_D_B_0"]')!;
+      const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+      const pts: [number, number][] = [];
+      for (let i = 0; i + 1 < nums.length; i += 2) pts.push([nums[i]!, nums[i + 1]!]);
+      let bendCount = 0;
+      let prev: 'h' | 'v' | null = null;
+      for (let i = 1; i < pts.length; i++) {
+        const dx = Math.abs(pts[i]![0] - pts[i - 1]![0]);
+        const dy = Math.abs(pts[i]![1] - pts[i - 1]![1]);
+        if (dx < 0.5 && dy < 0.5) continue;
+        const dir: 'h' | 'v' = dx >= dy ? 'h' : 'v';
+        if (prev && dir !== prev) bendCount++;
+        prev = dir;
+      }
+      const headCount = ['L_A_B_0', 'L_D_B_0'].filter((id) =>
+        document.querySelector(`svg.gc-chart .gc-arrow[data-id="${id}"]`),
+      ).length;
+      return { back: e.classList.contains('gc-back'), bends: bendCount, heads: headCount };
+    });
+    assert.ok(back, 'D→B must draw as a loop-back');
+    assert.ok(bends <= 4, `loop-back has ${bends} bends`);
+    assert.equal(heads, 1, 'the loop and the forward edge into Triage merge into one arrowhead');
+    assert.deepEqual(await gateCheck('6.2-side-exclusivity'), []);
+  });
+});
+
 describe('channel engine — the whole gate still applies', () => {
   test('every channel chart passes the full measure suite', async () => {
+    const hubWithReturns = `flowchart TB
+  HUB[Scheduler] --> W1[Worker 1] --> HUB
+  HUB --> W2[Worker 2] --> HUB
+  HUB --> W3[Worker 3] --> HUB`;
     const cases: [string, string, AnyRequest][] = [
       ['fanout-4', fanout(4), {}],
       ['fanout-10', fanout(10), {}],
@@ -282,6 +446,13 @@ describe('channel engine — the whole gate still applies', () => {
       ['chain-10', chain(10), { display: 1000 }],
       ['chain-10-phone', chain(10), { display: 358 }],
       ['labeled-chain-8', chain(8, true), {}],
+      ['two-diamonds', readFileSync(join(fixtures, 'two-diamonds.mmd'), 'utf8'), {}],
+      ['diamond-cascade', readFileSync(join(fixtures, 'diamond-cascade.mmd'), 'utf8'), {}],
+      ['ternary-tree', readFileSync(join(fixtures, 'ternary-tree.mmd'), 'utf8'), {}],
+      ['git-workflow', readFileSync(join(fixtures, 'git-workflow.mmd'), 'utf8'), {}],
+      ['login-flow', readFileSync(join(fixtures, 'login-flow.mmd'), 'utf8'), {}],
+      ['back-to-start', readFileSync(join(fixtures, 'back-to-start.mmd'), 'utf8'), {}],
+      ['hub-with-returns', hubWithReturns, {}],
     ];
     for (const [name, src, options] of cases) {
       const reply = await mount(src, options);
