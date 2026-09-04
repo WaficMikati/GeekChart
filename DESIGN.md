@@ -167,8 +167,29 @@ and the check that enforces it cannot drift apart.
 - **2.5** Corner radius is one value per chart: `rx 6` for nodes, `rx 12` for
   panels/clusters. Never mixed.
 - **2.6** Panels (clusters, swimlanes, the Lyzr-style control plane) have 24
-  inner padding on all sides and their children obey 2.3 inside them.
-  Inputs above a panel and outputs below it line up **column for column**.
+  inner padding on all sides — and no more: a panel taller than its
+  contents plus padding has failed this rule. The panel's title is a
+  **mono kicker inside the top padding** — 11 mono caps at the panel's
+  left padding edge, baseline 30 below the panel top, first child row 48
+  below the panel top — never a centred heading in its own empty band.
+  The title's strip is reserved space: no edge crosses it. Children are
+  **centred** in the panel and obey 2.3 inside it; children of sibling
+  panels share exact rows. Inputs above a panel and outputs below it line
+  up **column for column**. A nested panel is a child like any other: it
+  obeys 2.3 within its parent's content box, carries its own kicker in
+  its own padding, and padding accumulates 24 per level. (Title, padding
+  and centring approved by mockup 2026-09-04 — the user's review flagged
+  tall panels with floating titles and left-aligned children.)
+- **2.10** **Panels keep one row.** A row of sibling panels that will not
+  fit the declared display width does not wrap panels onto new rows —
+  the panels' **contents** stack top-to-bottom inside them instead
+  (1.5's leaf-stack move applied at panel scale), and the panel row
+  stands. A panel exiled to its own row below its siblings reads as a
+  different tier, which is a meaning the source never stated. Cross-panel
+  edges connect the shapes themselves — departing the child's own face
+  (6.2), crossing the panel border perpendicular — never the panel
+  border as a proxy. (Added 2026-09-04, approved by mockup:
+  three-subgraphs sent Data to a lonely second row.)
 
 - **2.7** **Channels.** The floor plan reserves **corridors** (the vertical
   gaps between columns) and **bands** (the horizontal gaps between rows) as
