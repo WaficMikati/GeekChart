@@ -167,8 +167,10 @@ export function layoutPanelChart(
   const known = (id: string): boolean => byId.has(id) || clusterById.has(id);
   for (const e of graph.edges) {
     if (!known(e.from) || !known(e.to)) return decline('edge endpoint missing');
-    if (e.backward || e.from === e.to) return decline('loop-back');
+    if (e.from === e.to) return decline('self loop');
   }
+  const forwardEdges = graph.edges.filter((e) => !e.backward);
+  const backEdges = graph.edges.filter((e) => e.backward);
   if (!graph.clusters.length) return decline('no panels');
 
   // --- FLOOR PLAN 1: the cluster forest ------------------------------------
@@ -290,14 +292,28 @@ export function layoutPanelChart(
     return { owner, from, to };
   };
 
+  // Only the FORWARD edges rank a container (2.7's floor plan); a loop-back
+  // orders nothing, so it is planned after seating, against 6.7/6.14's own
+  // corridor. `liftedIn` is therefore the forward graph alone.
   const liftedIn = new Map<string, Lifted[]>(); // container key -> its edges
   const key = (owner: string | null): string => owner ?? '';
-  for (const e of graph.edges) {
+  for (const e of forwardEdges) {
     const l = liftedOf(e);
     if (!l) return decline(`edge ${e.id} runs inside one item`);
     const list = liftedIn.get(key(l.owner)) ?? [];
     list.push({ edge: e, from: l.from, to: l.to });
     liftedIn.set(key(l.owner), list);
+  }
+  // DESIGN 6.14 needs one corridor outside everything the bus serves, and
+  // that corridor is the chart's own flank. A return between two shapes of
+  // ONE panel would want a corridor inside that panel's padding, which 2.6
+  // reserves for nothing but padding — a different shape, and not this one.
+  const backLifted: Lifted[] = [];
+  for (const e of backEdges) {
+    const l = liftedOf(e);
+    if (!l) return decline(`edge ${e.id} runs inside one item`);
+    if (l.owner !== null) return decline(`loop-back ${e.id} is inside panel ${l.owner}`);
+    backLifted.push({ edge: e, from: l.from, to: l.to });
   }
 
   // --- SEAT ---------------------------------------------------------------
@@ -517,6 +533,9 @@ export function layoutPanelChart(
     pts: Pt[];
     startSide: Side;
     endSide: Side;
+    /** DESIGN 6.14: a branch of a return bus — 4 bends, shared trunk. */
+    isReturn?: boolean;
+    bus?: boolean;
   }
   interface Solved {
     seated: { w: number; h: number };
@@ -548,7 +567,7 @@ export function layoutPanelChart(
       bc: number;
     }
     const legs: Leg[] = [];
-    for (const e of graph.edges) {
+    for (const e of forwardEdges) {
       const l = liftedOf(e)!;
       const horizontal = (interiorOf.get(key(l.owner)) ?? flowAxis) === 'x';
       const a = boxOf(e.from);
@@ -629,16 +648,124 @@ export function layoutPanelChart(
         endSide: horizontal ? 'left' : 'top',
       });
     }
+    // --- RETURNS (DESIGN 6.7 / 6.14) ---------------------------------------
+    // A loop-back across a panel border goes AROUND the content: out of its
+    // own source's flank face, into one corridor 24 clear of everything on
+    // that flank (6.7's clearance, which its own source is not exempt from),
+    // along to the band 24 above all of it, and down into the target's own
+    // forward-arrival face. Four bends — the loop-back's allowance.
+    //
+    // 6.14: one corridor per target, not one per loop-back. Every return into
+    // one target leaves its own face and joins that one trunk, so the shared
+    // run is drawn once and the arrival is the single point 6.3's one head
+    // already needs. The turn band lies OUTSIDE every panel on purpose: a
+    // horizontal run above a target that sits in a panel's first row would be
+    // running along 2.6's reserved title strip, which is the one thing that
+    // strip forbids. Coming straight down through it is what 2.6 allows.
+    if (backLifted.length) {
+      const rootAlong: Axis = interiorOf.get(ROOT) ?? flowAxis;
+      const along: Axis = rootAlong;
+      const cross: Axis = along === 'x' ? 'y' : 'x';
+      const lo = (b: { x: number; y: number }, a: Axis): number => b[a];
+      const hi = (
+        b: { x: number; y: number; w: number; h: number },
+        a: Axis,
+      ): number => b[a] + (a === 'x' ? b.w : b.h);
+      const mid = (b: { x: number; y: number; w: number; h: number }, a: Axis): number =>
+        (lo(b, a) + hi(b, a)) / 2;
+      // The corridor runs along the cross axis, so on a top-to-bottom chart
+      // it is the vertical line 6.14 is written about and `6.14-return-bus`
+      // measures — it clusters a bus's runs by x and counts one drawn line
+      // per flank. On a left-to-right chart the same trunk lies horizontally
+      // and each branch's join is a short vertical drop into it, which that
+      // check reads as one corridor per branch. The shape is not wrong; the
+      // check has a TB axis baked in, and widening it is a change to a rule
+      // every LR chart on the old and new paths is already measured by. So
+      // an LR panel chart with a return declines, and says so.
+      if (cross !== 'x') return decline('a return in an LR panel chart');
+      const rootBoxes = roots.map((i) => ({ x: i.x, y: i.y, w: i.w, h: i.h }));
+      const crossLo = Math.min(...rootBoxes.map((b) => lo(b, cross)));
+      const crossHi = Math.max(...rootBoxes.map((b) => hi(b, cross)));
+      const byTarget = new Map<string, Lifted[]>();
+      for (const l of backLifted) {
+        // A return orders nothing downstream, so it has to actually point
+        // back: the target's rank is the source's or earlier.
+        if (l.to.rank > l.from.rank)
+          return decline(`${l.edge.id} is marked backward but ranks forward`);
+        byTarget.set(l.edge.to, [...(byTarget.get(l.edge.to) ?? []), l]);
+      }
+      // At most one corridor per flank (6.14's no-nesting clause), so a
+      // second group takes the other flank and a third has nowhere to go.
+      if (byTarget.size > 2)
+        return decline(`${byTarget.size} return groups against two flanks`);
+      const takenFlanks: number[] = [];
+      for (const [targetId, group] of byTarget) {
+        const t = boxOf(targetId);
+        // Whichever flank the sources sit nearer, and never one already
+        // carrying a return.
+        const order = ([-1, 1] as const).slice().sort((p, q) => {
+          const d = (s: -1 | 1): number =>
+            group.reduce(
+              (acc, l) =>
+                acc +
+                Math.abs((s === -1 ? crossLo : crossHi) - mid(boxOf(l.edge.from), cross)),
+              0,
+            ) + (takenFlanks.includes(s) ? 1e6 : 0);
+          return d(p) - d(q);
+        });
+        const side = order[0]!;
+        if (takenFlanks.includes(side)) return decline(`both flanks already carry a return`);
+        takenFlanks.push(side);
+        const corridor = side === -1 ? crossLo - CLEARANCE.loop : crossHi + CLEARANCE.loop;
+        const bus = group.length > 1;
+        const flankSide: Side =
+          cross === 'x' ? (side === -1 ? 'left' : 'right') : side === -1 ? 'top' : 'bottom';
+        // DESIGN 6.8: a loop-back arrives on the side the target's own forward
+        // edge arrived on — "you are back at this step" — which on this axis
+        // is the flow-in face. The trunk turns in through the band just above
+        // the target, or above the outermost panel holding it when the band
+        // 24 above the shape itself would be inside 2.6's reserved title
+        // strip: a run ALONG that strip is the one thing the strip forbids,
+        // while coming straight down through it is what 2.6 allows.
+        let turn = lo(t, along) - CLEARANCE.loop;
+        for (const pid of chainOf(targetId)) {
+          const p = panelItems.get(pid)!;
+          turn = Math.min(turn, lo(p, along) - CLEARANCE.loop);
+        }
+        const pt = (c: number, a: number): Pt =>
+          cross === 'x' ? { x: c, y: a } : { x: a, y: c };
+        for (const l of group) {
+          const s = boxOf(l.edge.from);
+          const face = side === -1 ? lo(s, cross) : hi(s, cross);
+          routes.push({
+            edge: l.edge,
+            pts: [
+              pt(face, mid(s, along)),
+              pt(corridor, mid(s, along)),
+              pt(corridor, turn),
+              pt(mid(t, cross), turn),
+              pt(mid(t, cross), lo(t, along)),
+            ],
+            startSide: flankSide,
+            endSide: along === 'y' ? 'top' : 'left',
+            isReturn: true,
+            bus,
+          });
+        }
+      }
+    }
+
     // DESIGN 2.3: a sole child sits on its sole parent's own centre line.
     // Across a panel border the shapes still have to line up — a packing move
     // that slides one of them off the other is not a legal packing move.
     const kids = new Map<string, number>();
     const dads = new Map<string, number>();
-    for (const e of graph.edges) {
+    for (const e of forwardEdges) {
       kids.set(e.from, (kids.get(e.from) ?? 0) + 1);
       dads.set(e.to, (dads.get(e.to) ?? 0) + 1);
     }
     for (const r of routes) {
+      if (r.isReturn) continue;
       if (kids.get(r.edge.from) !== 1 || dads.get(r.edge.to) !== 1) continue;
       if (r.pts.length === 2) continue;
       // Not between panels (2.10): a panel's cross position is 2.6's shared
@@ -828,8 +955,9 @@ export function layoutPanelChart(
   }
 
   for (const r of routes) {
-    // Bends (6.1) and the short-jog range.
-    if (r.pts.length - 2 > RULES['6.1-bends-forward']!.threshold!)
+    // Bends (6.1) — a loop-back has its own allowance — and the short-jog range.
+    const bendBudget = RULES[r.isReturn ? '6.1-bends-loop' : '6.1-bends-forward']!.threshold!;
+    if (r.pts.length - 2 > bendBudget)
       return decline(`edge ${r.edge.id} bends`);
     for (let i = 1; i < r.pts.length; i++) {
       const d =
@@ -871,6 +999,48 @@ export function layoutPanelChart(
     }
   }
 
+  // DESIGN 6.7's own length budget, run here so a plan that could not hold it
+  // declines instead of shipping: a lone loop-back against the Manhattan
+  // distance of its own two ends plus the 128 corridor pad, and a 6.14 bus
+  // against the half perimeter of the box its own nodes span, measured once
+  // on the branch that starts the trunk — the same arithmetic the gate runs.
+  {
+    const walk = (pts: Pt[]): number => {
+      let len = 0;
+      for (let i = 1; i < pts.length; i++)
+        len += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
+      return len;
+    };
+    const pad = RULES['6.7']!.threshold!;
+    const busGroups = new Map<string, Route[]>();
+    for (const r of routes) {
+      if (!r.isReturn) continue;
+      if (r.bus) {
+        busGroups.set(r.edge.to, [...(busGroups.get(r.edge.to) ?? []), r]);
+        continue;
+      }
+      const a = r.pts[0]!;
+      const z = r.pts[r.pts.length - 1]!;
+      const budget = Math.abs(z.x - a.x) + Math.abs(z.y - a.y) + pad;
+      if (walk(r.pts) > budget)
+        return decline(
+          `return ${r.edge.id} runs ${Math.round(walk(r.pts))} against ${Math.round(budget)}`,
+        );
+    }
+    for (const [to, branches] of busGroups) {
+      const boxes = [boxOf(to), ...branches.map((r) => boxOf(r.edge.from))];
+      const span =
+        Math.max(...boxes.map((b) => b.x + b.w)) -
+        Math.min(...boxes.map((b) => b.x)) +
+        (Math.max(...boxes.map((b) => b.y + b.h)) - Math.min(...boxes.map((b) => b.y)));
+      const trunk = Math.min(...branches.map((r) => walk(r.pts)));
+      if (trunk > span + pad)
+        return decline(
+          `the return bus into ${to} runs ${Math.round(trunk)} against ${Math.round(span + pad)}`,
+        );
+    }
+  }
+
   // 6.2: a side that receives never emits.
   {
     const used = new Map<string, Set<Side>>();
@@ -890,10 +1060,13 @@ export function layoutPanelChart(
   }
 
   // Forward edges never cross (6.1); a shared start or end point is the
-  // fan/merge exemption.
+  // fan/merge exemption. A return goes AROUND the content by construction —
+  // 6.1's clause is about forward edges, and the corridor it rides is the
+  // one place 6.7 says it belongs.
   const near = (a: Pt, b: Pt): boolean => Math.abs(a.x - b.x) < 1.5 && Math.abs(a.y - b.y) < 1.5;
   for (let i = 0; i < routes.length; i++) {
     for (let j = i + 1; j < routes.length; j++) {
+      if (routes[i]!.isReturn || routes[j]!.isReturn) continue;
       const A = routes[i]!.pts;
       const B = routes[j]!.pts;
       if (near(A[0]!, B[0]!) || near(A[A.length - 1]!, B[B.length - 1]!)) continue;
@@ -1046,6 +1219,9 @@ export function layoutPanelChart(
       points: r.pts.map((p) => ({ x: p.x - minX, y: p.y - minY })),
       startSide: r.startSide,
       endSide: r.endSide,
+      // DESIGN 6.14: the branches of one return bus share the trunk's run by
+      // construction, which is 6.4's own "a fan bus from one point" exemption.
+      ...(r.bus ? { exempt: 'bus' as const, isReturn: true } : {}),
       label: sp
         ? {
             x: sp.cx - sp.pill.width / 2 - minX,

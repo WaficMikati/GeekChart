@@ -1804,6 +1804,128 @@ describe('channel engine — panels', () => {
     });
   }
 
+  // DESIGN 6.7/6.14: a loop-back across a panel border. The planner declined
+  // every panel chart with one; now the returns into one target merge into a
+  // single trunk in one corridor 24 clear of both panels, and the arrival is
+  // the one point 6.3's single head needs.
+  const returnBus = `flowchart TB
+  subgraph Intake
+    A1[Receive] --> A2[Validate]
+  end
+  subgraph Review
+    R1[Score] --> R2[Decide]
+  end
+  A2 --> R1
+  R1 --> A1
+  R2 --> A1`;
+
+  test('DESIGN 6.14: returns across a panel border are one trunk in one corridor', async () => {
+    const reply = await mount(returnBus);
+    assert.ok(isChannels(reply.svg), 'a panel chart with a loop-back should stay on the engine');
+    assert.deepEqual(await gateCheck('6.14-return-bus'), []);
+    assert.deepEqual(await gateFails(), []);
+
+    const seen = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const sb = svg.getBoundingClientRect();
+      const unit = sb.width / svg.viewBox.baseVal.width;
+      const box = (r: DOMRect) => ({
+        x: (r.left - sb.left) / unit,
+        y: (r.top - sb.top) / unit,
+        w: r.width / unit,
+        h: r.height / unit,
+      });
+      const path = (id: string) => {
+        const e = document.querySelector<SVGPathElement>(`.gc-edge[data-id="${id}"]`)!;
+        const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+        const ctm = e.getScreenCTM()!;
+        const pts: { x: number; y: number }[] = [];
+        for (let i = 0; i + 1 < nums.length; i += 2)
+          pts.push({
+            x: (nums[i]! * ctm.a + ctm.e - sb.left) / unit,
+            y: (nums[i + 1]! * ctm.d + ctm.f - sb.top) / unit,
+          });
+        return pts;
+      };
+      return {
+        one: path('L_R1_A1_0'),
+        two: path('L_R2_A1_0'),
+        heads: ['L_R1_A1_0', 'L_R2_A1_0'].filter((id) =>
+          document.querySelector(`.gc-arrow[data-id="${id}"]`),
+        ),
+        panels: [...svg.querySelectorAll('.gc-cluster .gc-cluster-box')].map((p) =>
+          box(p.getBoundingClientRect()),
+        ),
+        target: box(
+          document
+            .querySelector('.gc-node[data-id="A1"] .gc-outline')!
+            .getBoundingClientRect(),
+        ),
+      };
+    });
+
+    // 6.14: one trunk, so both branches end on the same arrival point and
+    // 6.3's one head is drawn once, by construction.
+    const endOf = (pts: { x: number; y: number }[]) => pts[pts.length - 1]!;
+    assert.ok(
+      Math.abs(endOf(seen.one).x - endOf(seen.two).x) <= 1 &&
+        Math.abs(endOf(seen.one).y - endOf(seen.two).y) <= 1,
+      'the two returns arrive at different points, so they are not one bus',
+    );
+    assert.equal(seen.heads.length, 1, 'a return bus carries exactly one arrowhead');
+    // It arrives on A1's own top face at its centre — 6.8's "you are back at
+    // this step", which on a TB chart is the flow-in face.
+    assert.ok(
+      Math.abs(endOf(seen.one).x - (seen.target.x + seen.target.w / 2)) <= 1,
+      'the trunk does not arrive on A1‘s centre line',
+    );
+
+    // 6.7: the corridor stands 24 clear of every panel it passes, on one
+    // flank, outside both of them. Read off the drawn path's own longest
+    // vertical run — the points either side of it are the 12 corner arc's
+    // ends, not the corridor.
+    const corridorOf = (pts: { x: number; y: number }[]): number => {
+      let best = -1;
+      let x = 0;
+      for (let i = 1; i < pts.length; i++) {
+        if (Math.abs(pts[i]!.x - pts[i - 1]!.x) > 1) continue;
+        const run = Math.abs(pts[i]!.y - pts[i - 1]!.y);
+        if (run > best) {
+          best = run;
+          x = pts[i]!.x;
+        }
+      }
+      return x;
+    };
+    const corridorX = corridorOf(seen.one);
+    assert.ok(
+      Math.abs(corridorOf(seen.two) - corridorX) <= 1,
+      'the two branches ride different corridors',
+    );
+    for (const p of seen.panels) {
+      const clear = corridorX < p.x ? p.x - corridorX : corridorX - (p.x + p.w);
+      assert.ok(clear >= 24 - 1, `the corridor stands ${clear.toFixed(1)} off a panel, not 24`);
+    }
+  });
+
+  test('a loop-back the 6.7 budget cannot hold declines rather than shipping long', async () => {
+    // One return, from the last shape of the second panel back to the first
+    // shape of the first: reaching the target's own flow-in face means going
+    // over the top of everything, which measures 660 against 6.7's own
+    // Manhattan-plus-128 of 548. The planner checks that budget itself.
+    const lone = `flowchart TB
+  subgraph Build
+    B1[Compile] --> B2[Test]
+  end
+  subgraph Ship
+    S1[Stage] --> S2[Release]
+  end
+  B2 --> S1
+  S2 --> B1`;
+    const reply = await mount(lone);
+    assert.ok(!isChannels(reply.svg), 'a return over 6.7 budget should go to the old path');
+  });
+
   test('2.10-panel-endpoint has teeth: the old path spreads its arrivals off the columns', async () => {
     // control-plane is the old path's own panel-endpoint composition — the
     // geometry 2.10's column clause replaces. Its four inputs are spread
