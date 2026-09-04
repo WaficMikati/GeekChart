@@ -2459,3 +2459,68 @@ describe('edge-label length, DESIGN 6.5', () => {
     assert.equal(reply.warnings.filter((w) => w.startsWith('6.5-label-length')).length, 1);
   });
 });
+
+describe('rings, DESIGN 1.8', () => {
+  const ring = (n: number) =>
+    `flowchart LR\n  ${Array.from({ length: n }, (_, i) => `N${i}["Stage ${i + 1}"]`).join(' --> ')} --> N0\n`;
+
+  for (const n of [5, 7, 9]) {
+    test(`a ring of ${n} closes out its source's left face, not its top`, async () => {
+      // 1.8: "A ring edge leaves by the face nearest its target's arrival face
+      // — the shortest clean path — never a farther face that happens to be
+      // free: in a 2-row ring of five, the odd node's closing edge exits its
+      // left face into the bottom-left corner, not its top." An odd ring's
+      // short bottom row was routed vertical-first instead: out the top, along
+      // the row gap, down the target's column and back up into its bottom —
+      // two bends and the wrong face, while the left face sat empty and
+      // nearer. The user flagged rings of 5, 7 and 9 for exactly this.
+      await mount(ring(n), { motion: false });
+      const geometry = await session.page.evaluate((last: string) => {
+        const edge = document.querySelector<SVGPathElement>(
+          `.gc-edge[data-id="L_${last}_N0_0"]`,
+        );
+        // A `DOMRect` does not survive `page.evaluate`'s serialisation, so
+        // each box is copied into a plain object before it crosses.
+        const boxOf = (id: string) => {
+          const rect = document
+            .querySelector<SVGGraphicsElement>(`.gc-node[data-id="${id}"] .gc-outline`)
+            ?.getBBox();
+          return rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null;
+        };
+        const source = boxOf(last);
+        const target = boxOf('N0');
+        return edge && source && target
+          ? { d: edge.getAttribute('d')!, source, target }
+          : null;
+      }, `N${n - 1}`);
+      assert.ok(geometry, `found the closing edge of a ring of ${n}`);
+      const points = ptsOf(geometry.d);
+      const start = points[0]!;
+      const { source, target } = geometry;
+
+      // The departure sits on the source's left face: on its left x (allowing
+      // the arrow's own stub back off the outline), at the face's mid-height.
+      assert.ok(
+        Math.abs(start.x - source.x) <= 12,
+        `left face is x ${source.x}, the edge leaves at x ${start.x}`,
+      );
+      assert.ok(
+        Math.abs(start.y - (source.y + source.height / 2)) <= 1,
+        `the edge leaves at y ${start.y}, the face's middle is ${source.y + source.height / 2}`,
+      );
+      assert.ok(
+        start.y > source.y + 1,
+        'leaving at the top of the box is the wrong face this rule names',
+      );
+
+      // And arrives on the target's bottom face, one bend later.
+      const end = points[points.length - 1]!;
+      assert.ok(
+        Math.abs(end.y - (target.y + target.height)) <= 12,
+        `bottom face is y ${target.y + target.height}, the edge arrives at y ${end.y}`,
+      );
+      // DESIGN 1.8: "one straight run or one bend". A `Q` per rounded corner.
+      assert.equal((geometry.d.match(/Q/g) ?? []).length, 1, 'a ring edge bends at most once');
+    });
+  }
+});

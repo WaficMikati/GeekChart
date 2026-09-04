@@ -462,18 +462,31 @@ function attemptDraw(
         endSide: leavingDown ? 'top' : 'bottom',
       };
     } else {
-      // An odd-sized ring's short bottom row: one bend, down/up the source's
-      // own column to the row gap, then across to the target's column.
+      // An odd-sized ring's short bottom row: the closing edge crosses both a
+      // row and a column, so it gets DESIGN 1.8's one bend.
+      //
+      // Horizontal first, out the face that already points at the target.
+      // 1.8: "A ring edge leaves by the face nearest its target's arrival face
+      // — the shortest clean path — never a farther face that happens to be
+      // free: in a 2-row ring of five, the odd node's closing edge exits its
+      // left face into the bottom-left corner, not its top." Vertical-first
+      // was what this did until 2026-09-04, and it cost two bends as well as
+      // the wrong face: out of the top, along the row gap, then down the
+      // target's column and back up into its bottom — the user's review called
+      // it a wrong turn on rings of 5, 7 and 9 alike.
+      //
+      // The corner it turns through is always empty on an odd ring: the bottom
+      // row is short at its own left end (`layout/ring.ts`), so the target's
+      // column has no bottom-row node for this run to cross.
       const leavingDown = fromCy < toCy;
-      const midY = leavingDown ? (from.y + from.height + to.y) / 2 : (to.y + to.height + from.y) / 2;
+      const leavingRight = fromCx < toCx;
       route = {
         points: [
-          { x: fromCx, y: leavingDown ? from.y + from.height : from.y },
-          { x: fromCx, y: midY },
-          { x: toCx, y: midY },
+          { x: leavingRight ? from.x + from.width : from.x, y: fromCy },
+          { x: toCx, y: fromCy },
           { x: toCx, y: leavingDown ? to.y : to.y + to.height },
         ],
-        startSide: leavingDown ? 'bottom' : 'top',
+        startSide: leavingRight ? 'right' : 'left',
         endSide: leavingDown ? 'top' : 'bottom',
       };
     }
