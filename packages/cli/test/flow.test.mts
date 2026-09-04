@@ -2238,3 +2238,31 @@ describe('reduced motion', () => {
     assert.equal(state.hiddenOutlines, 0, 'the un-animated state must be the finished chart');
   });
 });
+
+describe('type case, DESIGN 3', () => {
+  test("a caption keeps the writer's own casing", async () => {
+    // The type table reads "as written" for a node caption: a writer's "ships to
+    // Production" arriving as "ships to production" reads as a typo, not a
+    // style. Checked on the rendered glyphs, not the source string, so a CSS
+    // `text-transform` cannot sneak it back in.
+    await mount(
+      `flowchart LR
+  A["Deploy<br/>ships to Production"] --> B["Verify<br/>runs in CI"]
+`,
+      { motion: false },
+    );
+    const captions = await session.page.evaluate(() =>
+      [...document.querySelectorAll<SVGTextElement>('.gc-caption')].map((el) => ({
+        text: el.textContent ?? '',
+        transform: getComputedStyle(el).textTransform,
+      })),
+    );
+    assert.deepEqual(
+      captions.map((c) => c.text),
+      ['ships to Production', 'runs in CI'],
+    );
+    for (const caption of captions) {
+      assert.equal(caption.transform, 'none', 'a caption is never case-folded by CSS');
+    }
+  });
+});
