@@ -571,6 +571,10 @@ describe('channel engine — the grid planner (phase 3a)', () => {
   });
 
   test('ternary-tree: the root centres on the widest row, the branch row on the same axis', async () => {
+    // Also the ternary-tree half of 2.8's 2026-09-04 revision: the leaves are
+    // a stacked list, indented under each branch by the leaf-stacking rule.
+    // That indent hangs off the column rather than belonging to it, so it
+    // must not drag the root 16 to the right of its four branches.
     const reply = await mount(fixture('ternary-tree.mmd'));
     assert.ok(isChannels(reply.svg));
     const boxes = await session.page.evaluate(() => {
@@ -614,7 +618,10 @@ describe('channel engine — the grid planner (phase 3a)', () => {
       [
         ['ADM', ['A1', 'A2']],
         ['ACA', ['B1', 'B2']],
-        ['CEO', ['ADM', 'ACA', 'CAR']],
+        // The 2026-09-04 revision: CEO's subtree, not its three leads. The
+        // leads' own midpoint is 494 because Careers is one leaf wide where
+        // its siblings are two; the subtree's midpoint is 448.
+        ['CEO', ['ADM', 'ACA', 'CAR', 'A1', 'A2', 'B1', 'B2', 'C1']],
       ],
     ],
     [
@@ -623,10 +630,14 @@ describe('channel engine — the grid planner (phase 3a)', () => {
       [
         ['PY', ['PYDATA', 'PYWEB']],
         ['JAVA', ['JAVAENT', 'JAVAAND']],
+        // Both branches are two leaves wide, so the subtree extent and the
+        // children row agree here — this chart must not move.
+        ['Q1', ['PY', 'JAVA', 'PYDATA', 'PYWEB', 'JAVAENT', 'JAVAAND']],
+        ['START', ['PY', 'JAVA', 'PYDATA', 'PYWEB', 'JAVAENT', 'JAVAAND']],
       ],
     ],
   ] as [string, string, [string, string[]][]][]) {
-    test(`DESIGN 2.8/7.4: ${name} centres every parent on its children, gaps and all`, async () => {
+    test(`DESIGN 2.8/7.4: ${name} centres every parent on its whole subtree`, async () => {
       // The defect the user's review flagged ten times: a narrow parent over a
       // wide pair was parked ~60 off centre, because centring it opened a gap
       // past 7.4's 200 to the next parent and the planner declined. 7.4's
@@ -645,14 +656,34 @@ describe('channel engine — the grid planner (phase 3a)', () => {
         assert.ok(b, `${name} has no ${id}`);
         return b;
       };
-      for (const [parent, kids] of families) {
+      const midOf = (members: string[]): number =>
+        (Math.min(...members.map((k) => at(k).x)) +
+          Math.max(...members.map((k) => at(k).x + at(k).w))) /
+        2;
+      for (const [parent, sub] of families) {
         const p = at(parent);
-        const l = Math.min(...kids.map((k) => at(k).x));
-        const r = Math.max(...kids.map((k) => at(k).x + at(k).w));
-        const off = p.x + p.w / 2 - (l + r) / 2;
+        const off = p.x + p.w / 2 - midOf(sub);
         assert.ok(
           Math.abs(off) <= 1,
-          `${parent} sits ${off.toFixed(1)} off the centre of ${kids.join('/')}`,
+          `${parent} sits ${off.toFixed(1)} off the centre of its subtree (${sub.join('/')})`,
+        );
+      }
+      if (name === 'org-chart') {
+        // The user's own words: "Academy director should be aligned to
+        // Mentors. they should be in the same column." Mentors is the middle
+        // of the five leaves, so the two statements are the same measurement.
+        const ceo = at('CEO');
+        const leafMid = midOf(['A1', 'A2', 'B1', 'B2', 'C1']);
+        const off = ceo.x + ceo.w / 2 - leafMid;
+        assert.ok(
+          Math.abs(off) <= 1,
+          `the director sits ${off.toFixed(1)} off the centre of the five-leaf bottom row`,
+        );
+        const mentors = at('B1');
+        const col = ceo.x + ceo.w / 2 - (mentors.x + mentors.w / 2);
+        assert.ok(
+          Math.abs(col) <= 1,
+          `the director is ${col.toFixed(1)} out of Mentors' column`,
         );
       }
       assert.deepEqual(await gateFails(), []);

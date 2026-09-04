@@ -249,7 +249,15 @@ and the check that enforces it cannot drift apart.
   subtree is what the eye weighs (revised 2026-09-04: org-chart's
   director sat centred on its three leads' midpoint, visibly off the
   five-leaf row's centre — the user: "Academy director should be aligned
-  to Mentors. they should be in the same column"). A wrapped
+  to Mentors. they should be in the same column"). The extent is the
+  subtree's **column** — this node's box and the boxes on the ranks below
+  it. Two things hang off a column instead of belonging to it and are left
+  out, because another rule already decides where they go: a 2.9 flank leaf,
+  which sits beside its parent in the flank gutter on the parent's own row,
+  and a stacked leaf list, which is indented under its parent on purpose.
+  Counting either one moves a parent that should not move — login-flow's
+  Login form slid 120 off its own straight drop to V, and ternary-tree's
+  root slid 16 off its four branches. A wrapped
   children group centres each row on the same axis; the axis holds through
   a wrap (the far row is fed by one spine down the near row's centre
   corridor, which 2.7's seating keeps free by giving the near row an even

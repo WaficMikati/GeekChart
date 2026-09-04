@@ -100,6 +100,18 @@ interface SubExt {
   anchor: number;
   /** Child subtree offsets: the child's own `lo` sits at this offset. */
   kidAt: Map<string, number>;
+  /**
+   * DESIGN 2.8's extent, in the same frame as `lo`/`hi`: the boxes of this
+   * node and of the ranks below it — the column the eye reads as
+   * "this branch". It leaves
+   * out the two things that hang off a column rather than belonging to it:
+   * a 2.9 flank leaf (which sits in the flank gutter on its parent's own
+   * row) and a stacked leaf list (which the leaf-stacking rule indents under
+   * its parent on purpose). Those keep `lo`/`hi` — the packing extent — from
+   * being the same number.
+   */
+  coreLo: number;
+  coreHi: number;
 }
 
 export function layoutGrid(
@@ -342,9 +354,10 @@ export function layoutGrid(
     return parents;
   };
 
-  // SEAT — recursive tidy tree over the cross axis. Each parent is centred
-  // on the geometric extent of its children as a group (DESIGN 2.8, applied
-  // at every level); when depths differ, the deepest branch keeps the
+  // SEAT — recursive tidy tree over the cross axis. Subtrees are seated
+  // first, then each parent is centred on the geometric extent of its
+  // entire subtree (DESIGN 2.8, applied at every level); when depths differ,
+  // the deepest branch keeps the
   // parent's own axis (the decision-cascade spine) and shallow branches sit
   // beside it.
   const seatAll = (
@@ -418,13 +431,16 @@ export function layoutGrid(
           build(e.to); // a stacked leaf still needs its own (trivial) extent
           kidAt.set(e.to, colLo);
         }
-        ext = { lo: 0, hi: Math.max(w, colLo + kidW), anchor: w / 2, kidAt };
+        // The stacked leaf column is indented under the node by its own rule,
+        // so 2.8's extent is the node's box alone.
+        ext = { lo: 0, hi: Math.max(w, colLo + kidW), anchor: w / 2, kidAt, coreLo: 0, coreHi: w };
       } else {
         const kidEdges = rowKidsOf.get(id)!;
         if (!kidEdges.length) {
           const kidAt = new Map<string, number>();
           seatFlanks(kidAt, w / 2);
-          ext = { lo: -padLo, hi: w + padHi, anchor: w / 2, kidAt };
+          // Flanks sit in the gutter beside this box, not under it.
+          ext = { lo: -padLo, hi: w + padHi, anchor: w / 2, kidAt, coreLo: 0, coreHi: w };
         } else {
           const hs = kidEdges.map((e) => subHeight(e.to));
           const deepest = Math.max(...hs);
@@ -462,14 +478,24 @@ export function layoutGrid(
           const anchorKids = allEqual
             ? ordered.map((_, i) => i)
             : ordered.map((_, i) => i).filter((i) => subHeight(ordered[i]!.to) === deepest);
+          // DESIGN 2.8 (revised 2026-09-04): what decides where the parent
+          // sits is each child's WHOLE subtree, not the child's own box. The
+          // subtrees are seated first (this is the recursion's return trip),
+          // so `coreLo..coreHi` is already the union of every box in the
+          // child's column; the midpoint of those columns is the axis the eye
+          // weighs. A childless child's column is just its box, so pure fans
+          // and even trees do not move; only a parent whose children carry
+          // uneven subtrees does. org-chart's director was 46 off the centre
+          // of its five-leaf bottom row because Careers' branch is one leaf
+          // wide and its two siblings are two.
+          const kidCore = (i: number): [number, number] => {
+            const base = kidAt.get(ordered[i]!.to)! - kidExts[i]!.lo;
+            return [base + kidExts[i]!.coreLo, base + kidExts[i]!.coreHi];
+          };
           const centreOfKids = (): number => {
-            const boxLo = Math.min(
-              ...anchorKids.map((i) => anchorsRel[i]! - su(byId.get(ordered[i]!.to)!) / 2),
-            );
-            const boxHi = Math.max(
-              ...anchorKids.map((i) => anchorsRel[i]! + su(byId.get(ordered[i]!.to)!) / 2),
-            );
-            return (boxLo + boxHi) / 2;
+            const subLo = Math.min(...anchorKids.map((i) => kidCore(i)[0]));
+            const subHi = Math.max(...anchorKids.map((i) => kidCore(i)[1]));
+            return (subLo + subHi) / 2;
           };
           let anchor = centreOfKids();
           // DESIGN 2.7: a fan's horizontal branch legs are ONE shared derived
@@ -524,7 +550,13 @@ export function layoutGrid(
           seatFlanks(kidAt, anchor);
           const lo = Math.min(childLo, anchor - w / 2 - padLo);
           const hi = Math.max(childHi, anchor + w / 2 + padHi);
-          ext = { lo, hi, anchor, kidAt };
+          // This column, for the rank above: every child's column plus this
+          // box. Only the ANCHOR kids count — with uneven depths the shallow
+          // branches sit beside the spine rather than under it, the same set
+          // 2.8's centring above uses.
+          const coreLo = Math.min(anchor - w / 2, ...anchorKids.map((i) => kidCore(i)[0]));
+          const coreHi = Math.max(anchor + w / 2, ...anchorKids.map((i) => kidCore(i)[1]));
+          ext = { lo, hi, anchor, kidAt, coreLo, coreHi };
         }
       }
       exts.set(id, ext);

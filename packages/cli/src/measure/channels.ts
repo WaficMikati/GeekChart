@@ -266,37 +266,129 @@ function detectFan(ctx: Ctx): { hub: string; leaves: string[] } | null {
 }
 
 /**
- * DESIGN 2.8: the parent sits centred on the geometric extent of its
- * children as a group, within ±1, and every wrapped row centres on the same
- * axis. Measured on the cross axis — horizontal for a TB fan, vertical for
- * an LR one (phase 3a's axis variant; same rule, axes swapped).
+ * A rooted tree read off the drawn edges: every node reached by at most one
+ * edge, one root, no cycles. Wider than `detectFan` (which only sees a single
+ * hub with all the leaves hanging off it) so 2.8 can be measured at every
+ * level of a chart like org-chart, not just at a star's centre.
+ */
+function detectTree(ctx: Ctx): { root: string; kids: Map<string, string[]> } | null {
+  const ids = nodeById(ctx);
+  const meta = edgeMeta(ctx).filter((m) => m.from && m.to);
+  if (ids.size < 4 || meta.length !== ids.size - 1) return null;
+  const kids = new Map<string, string[]>();
+  const parent = new Map<string, string>();
+  for (const m of meta) {
+    const from = m.from!;
+    const to = m.to!;
+    if (!ids.has(from) || !ids.has(to) || from === to) return null;
+    if (parent.has(to)) return null; // two ways in: not a tree
+    parent.set(to, from);
+    kids.set(from, [...(kids.get(from) ?? []), to]);
+  }
+  const roots = [...ids.keys()].filter((id) => !parent.has(id));
+  if (roots.length !== 1) return null;
+  // Reachability from the one root also rules out a detached cycle.
+  const seen = new Set<string>();
+  const walk = (id: string): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    for (const k of kids.get(id) ?? []) walk(k);
+  };
+  walk(roots[0]!);
+  return seen.size === ids.size ? { root: roots[0]!, kids } : null;
+}
+
+/**
+ * DESIGN 2.8 (revised 2026-09-04): the parent sits centred on the geometric
+ * extent of its **entire subtree**, within ±1 — not on its immediate
+ * children's row, which is a different number as soon as one branch is wider
+ * than another. Measured at every parent in the tree, and every wrapped row
+ * still centres on the same axis. Measured on the cross axis — horizontal
+ * for a TB chart, vertical for an LR one (phase 3a's axis variant; same
+ * rule, axes swapped).
+ *
+ * The subtree extent here is the **column**: this node's box plus the columns
+ * of the children on the ranks below it. Two things hang off a column rather
+ * than belonging to it, and both are left out, exactly as the seating leaves
+ * them out — a 2.9 flank leaf, which sits beside its parent on the parent's
+ * own row, and a stacked leaf list, which the leaf-stacking rule indents
+ * under its parent on purpose. A parent whose children are stacked is not
+ * measured at all: that column is drawn by the stacking rule, not by 2.8.
  */
 export const fanSymmetry: Check = {
   id: '2.8-fan-symmetry',
   rule: '2.8',
   run(svg, ctx) {
     if (!isChannels(svg)) return [];
-    const fan = detectFan(ctx);
-    if (!fan) return [];
     const ids = nodeById(ctx);
     const tb = svg.dataset.flow !== 'LR' && svg.dataset.flow !== 'RL';
     const lo = (b: DOMRect): number => (tb ? b.left : b.top);
     const hi = (b: DOMRect): number => (tb ? b.right : b.bottom);
-    const tol = RULES['2.8']!.threshold! * ctx.unit;
-    const hubRect = rect(outline(ids.get(fan.hub)!));
-    const hubC = (lo(hubRect) + hi(hubRect)) / 2;
-    const leafRects = fan.leaves.map((id) => rect(outline(ids.get(id)!)));
-    const groupC = (Math.min(...leafRects.map(lo)) + Math.max(...leafRects.map(hi))) / 2;
-    const findings: Finding[] = [];
-    if (Math.abs(hubC - groupC) > tol) {
-      findings.push({
-        severity: 'fail',
-        message: `2.8 parent off its children's centre by ${((hubC - groupC) / ctx.unit).toFixed(1)}`,
-      });
-    }
-    // Rows band by flow-axis overlap; each row's own centre holds the axis.
     const flo = (b: DOMRect): number => (tb ? b.top : b.left);
     const fhi = (b: DOMRect): number => (tb ? b.bottom : b.right);
+    const tol = RULES['2.8']!.threshold! * ctx.unit;
+    const findings: Finding[] = [];
+
+    // Panels place their own contents (DESIGN 4/5): a chain threaded through
+    // three stacked subgraphs is not a fan and 2.8 has nothing to say about
+    // where its links sit, so the tree walk stays out of panelled charts.
+    const tree = panelBoxes(ctx).length ? null : detectTree(ctx);
+    if (tree) {
+      const boxOf = new Map<string, DOMRect>();
+      for (const [id, el] of ids) boxOf.set(id, rect(outline(el)));
+      /** The children on the ranks below `id` — a flank shares its row. */
+      const below = (id: string): string[] => {
+        const b = boxOf.get(id)!;
+        return (tree.kids.get(id) ?? []).filter((k) => flo(boxOf.get(k)!) > fhi(b) - 1);
+      };
+      /** True when those children do not all share one row (a stacked list). */
+      const stacked = (kids: string[]): boolean =>
+        kids.some((k) => flo(boxOf.get(k)!) > fhi(boxOf.get(kids[0]!)!) - 1);
+      const column = new Map<string, [number, number]>();
+      const measure = (id: string): [number, number] => {
+        const done = column.get(id);
+        if (done) return done;
+        const b = boxOf.get(id)!;
+        let span: [number, number] = [lo(b), hi(b)];
+        const kids = below(id);
+        if (kids.length && !stacked(kids)) {
+          const cols = kids.map(measure);
+          span = [
+            Math.min(span[0], ...cols.map((c) => c[0])),
+            Math.max(span[1], ...cols.map((c) => c[1])),
+          ];
+        }
+        column.set(id, span);
+        return span;
+      };
+      let worst = 0;
+      let worstId = '';
+      for (const id of ids.keys()) {
+        const kids = below(id);
+        if (!kids.length || stacked(kids)) continue;
+        const cols = kids.map(measure);
+        const subLo = Math.min(...cols.map((c) => c[0]));
+        const subHi = Math.max(...cols.map((c) => c[1]));
+        const b = boxOf.get(id)!;
+        const off = (lo(b) + hi(b)) / 2 - (subLo + subHi) / 2;
+        if (Math.abs(off) > Math.abs(worst)) {
+          worst = off;
+          worstId = id;
+        }
+      }
+      if (Math.abs(worst) > tol) {
+        findings.push({
+          severity: 'fail',
+          message: `2.8 ${worstId} off its subtree's centre by ${(worst / ctx.unit).toFixed(1)}`,
+        });
+      }
+    }
+
+    const fan = detectFan(ctx);
+    if (!fan) return findings;
+    const leafRects = fan.leaves.map((id) => rect(outline(ids.get(id)!)));
+    const groupC = (Math.min(...leafRects.map(lo)) + Math.max(...leafRects.map(hi))) / 2;
+    // Rows band by flow-axis overlap; each row's own centre holds the axis.
     const rows: { top: number; bottom: number; rects: DOMRect[] }[] = [];
     for (const b of [...leafRects].sort((a, z) => flo(a) - flo(z))) {
       const row = rows.find((r) => flo(b) < r.bottom - 1 && fhi(b) > r.top + 1);
