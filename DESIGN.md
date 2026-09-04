@@ -493,7 +493,13 @@ the renderer keeps what was written and writers own their casing.)
   direction (timeline, layers). Inputs/outputs on either side of a panel are
   centred on it.
 - **7.4** Whitespace is even. If the right half of the stage is empty, wrap,
-  re-centre, or change the canvas height — never leave it.
+  re-centre, or change the canvas height — never leave it. A gap that a
+  bus trunk or derived channel runs through is not empty — it is doing
+  work — so it never counts against this rule, and 2.8's centring never
+  yields to it. (Ruled 2026-09-04: centring a 160-wide parent over a
+  344-wide pair opens a 208 gap to its neighbour; the old path passed
+  this rule only by parking the parent 60 off centre — the defect the
+  user's review flagged ten times. Centring wins.)
 - **7.5** Nothing is clipped at the canvas edge, including the last milestone
   diamond and the last quadrant label. Measured, not eyeballed.
 - **7.6** Every chart type — including pie, mindmap, git graph — is drawn by
