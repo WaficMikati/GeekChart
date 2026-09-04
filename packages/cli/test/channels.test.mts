@@ -427,15 +427,114 @@ describe('channel engine — the grid planner (phase 3a)', () => {
     assert.ok(bends <= 4, `loop-back has ${bends} bends`);
     assert.equal(heads, 1, 'the loop and the forward edge into Triage merge into one arrowhead');
     assert.deepEqual(await gateCheck('6.2-side-exclusivity'), []);
+    assert.deepEqual(await gateCheck('6.14-return-bus'), []);
+  });
+
+  test('hub-with-returns: three returns are one bus — one corridor, one trunk, one head', async () => {
+    // The user's review: three workers returning to one scheduler drew three
+    // independent 4-bend loops — concentric rings, each individually legal.
+    // DESIGN 6.14: they merge into one bus instead.
+    const reply = await mount(fixture('hub-with-returns.mmd'));
+    assert.ok(isChannels(reply.svg));
+    assert.deepEqual(await gateCheck('6.14-return-bus'), []);
+
+    const shape = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const pts = (d: string): [number, number][] => {
+        const out: [number, number][] = [];
+        let cx = 0;
+        let cy = 0;
+        for (const seg of d.matchAll(/([MLHVQCZ])([^MLHVQCZ]*)/gi)) {
+          const ns = (seg[2]!.match(/-?\d+(\.\d+)?/g) || []).map(Number);
+          if (ns.length < 2) continue;
+          cx = ns[ns.length - 2]!;
+          cy = ns[ns.length - 1]!;
+          out.push([cx, cy]);
+        }
+        return out;
+      };
+      const returns = ['L_W1_HUB_0', 'L_W2_HUB_0', 'L_W3_HUB_0'].map(
+        (id) => svg.querySelector(`.gc-edge[data-id="${id}"]`) as SVGPathElement,
+      );
+      // Distinct long vertical runs across all three returns: the trunk.
+      const trunks = new Set<number>();
+      for (const e of returns) {
+        const p = pts(e.getAttribute('d') || '');
+        for (let i = 1; i < p.length; i++) {
+          if (Math.abs(p[i]![0] - p[i - 1]![0]) < 1 && Math.abs(p[i]![1] - p[i - 1]![1]) > 40)
+            trunks.add(Math.round(p[i]![0]));
+        }
+      }
+      // The arrival: every branch ends at one point, so one head is drawn.
+      const ends = returns.map((e) => {
+        const p = pts(e.getAttribute('d') || '');
+        return p[p.length - 1]!;
+      });
+      const heads = returns.filter((e) =>
+        svg.querySelector(`.gc-arrow[data-id="${e.getAttribute('data-id')}"]`),
+      ).length;
+      // The trunk's own start — the band turning up into the corridor. Every
+      // branch draws it, so read it off the first: the corner must be an arc
+      // (a Q), not two perpendicular line segments meeting at a square edge.
+      const d0 = returns[0]!.getAttribute('d') || '';
+      const p0 = pts(d0);
+      const trunkX = [...trunks][0]!;
+      const cmds = [...d0.matchAll(/([MLHVQCZ])([^MLHVQCZ]*)/gi)].map((m) => m[1]!.toUpperCase());
+      let cornerIsArc: boolean | null = null;
+      for (let i = 1; i < p0.length; i++) {
+        // The turn from the band (horizontal) onto the trunk (vertical).
+        const horizontal = Math.abs(p0[i]![1] - p0[i - 1]![1]) < 1;
+        if (horizontal && Math.abs(p0[i]![0] - trunkX) < 14 && i + 1 < p0.length) {
+          cornerIsArc = cmds[i + 1] === 'Q' || cmds[i + 1] === 'C';
+          break;
+        }
+      }
+      return {
+        corridors: trunks.size,
+        ends,
+        heads,
+        cornerIsArc,
+        returnClass: returns.every((e) => e.classList.contains('gc-return')),
+      };
+    });
+
+    assert.equal(shape.corridors, 1, 'three returns ride one corridor, not three');
+    assert.ok(shape.returnClass, 'each branch is drawn as part of the return bus');
+    for (const e of shape.ends) {
+      assert.ok(
+        Math.abs(e[0] - shape.ends[0]![0]) < 1.5 && Math.abs(e[1] - shape.ends[0]![1]) < 1.5,
+        `returns arrive at different points: ${JSON.stringify(shape.ends)}`,
+      );
+    }
+    assert.equal(shape.heads, 1, 'one arrowhead into Scheduler, by construction');
+    assert.equal(shape.cornerIsArc, true, 'the trunk starts with a rounded turn, not a square corner');
+    assert.deepEqual(await gateCheck('6.2-side-exclusivity'), []);
+    assert.deepEqual(await gateCheck('6.7-long-loop'), []);
+  });
+
+  test('git-workflow: two returns to different targets take separate flanks and never nest', async () => {
+    await mount(fixture('git-workflow.mmd'));
+    assert.deepEqual(await gateCheck('6.14-return-bus'), []);
+    const sides = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const box = (id: string) => {
+        const e = svg.querySelector(`.gc-edge[data-id="${id}"]`)!;
+        const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+        const xs = nums.filter((_, i) => i % 2 === 0);
+        const ys = nums.filter((_, i) => i % 2 === 1);
+        return { x1: Math.min(...xs), x2: Math.max(...xs), y1: Math.min(...ys), y2: Math.max(...ys) };
+      };
+      return { rc: box('L_R_C_0'), mgm: box('L_MG_M_0') };
+    });
+    const { rc, mgm } = sides;
+    const nests = (a: typeof rc, b: typeof rc) =>
+      a.x1 <= b.x1 - 1 && a.y1 <= b.y1 - 1 && a.x2 >= b.x2 + 1 && a.y2 >= b.y2 + 1;
+    assert.ok(!nests(rc, mgm) && !nests(mgm, rc), 'the two loop routes must not nest');
   });
 });
 
 describe('channel engine — the whole gate still applies', () => {
   test('every channel chart passes the full measure suite', async () => {
-    const hubWithReturns = `flowchart TB
-  HUB[Scheduler] --> W1[Worker 1] --> HUB
-  HUB --> W2[Worker 2] --> HUB
-  HUB --> W3[Worker 3] --> HUB`;
     const cases: [string, string, AnyRequest][] = [
       ['fanout-4', fanout(4), {}],
       ['fanout-10', fanout(10), {}],
@@ -452,7 +551,7 @@ describe('channel engine — the whole gate still applies', () => {
       ['git-workflow', readFileSync(join(fixtures, 'git-workflow.mmd'), 'utf8'), {}],
       ['login-flow', readFileSync(join(fixtures, 'login-flow.mmd'), 'utf8'), {}],
       ['back-to-start', readFileSync(join(fixtures, 'back-to-start.mmd'), 'utf8'), {}],
-      ['hub-with-returns', hubWithReturns, {}],
+      ['hub-with-returns', readFileSync(join(fixtures, 'hub-with-returns.mmd'), 'utf8'), {}],
     ];
     for (const [name, src, options] of cases) {
       const reply = await mount(src, options);

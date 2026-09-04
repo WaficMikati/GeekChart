@@ -120,6 +120,7 @@ const GROUPS = [
       ['git-workflow', 'Git workflow', 'flowchart'],
       ['login-flow', 'Login flow', 'flowchart'],
       ['back-to-start', 'Back to start', 'flowchart'],
+      ['hub-with-returns', 'Hub with returns', 'flowchart'],
     ],
   },
   {

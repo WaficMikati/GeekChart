@@ -348,4 +348,169 @@ export const ribbon: Check = {
   },
 };
 
-export const CHANNEL_CHECKS: Check[] = [pillOnLine, fanSymmetry, ribbon, sideExclusivity];
+/**
+ * DESIGN 6.14: returns are buses too. Re-detected from the DOM the way every
+ * other check here is — loop-backs are the `gc-back` edges, their groups are
+ * the ones sharing a `data-to`, and a "corridor run" is a vertical run of a
+ * loop path long enough to be a leg rather than a turn.
+ *
+ * Four measurements, one per clause of the rule:
+ *   - at most one distinct corridor run per flank of the target, within a
+ *     group (three workers returning to one hub is one line up one side, not
+ *     three concentric rings);
+ *   - every shared run drawn once: the runs that fall on one corridor are
+ *     coincident copies of a single trunk, so the ink they cover is the
+ *     longest of them — not several runs stacked end to end at one x;
+ *   - one arrowhead where the group arrives (6.3, earned by construction:
+ *     every branch ends at one point, so a second head cannot be drawn);
+ *   - across groups, no nesting — neither route's bounding box strictly
+ *     contains the other's.
+ */
+export const returnBus: Check = {
+  id: '6.14-return-bus',
+  rule: '6.14',
+  run(svg, ctx) {
+    if (!isChannels(svg)) return [];
+    const ids = nodeById(ctx);
+    interface Run {
+      x: number;
+      y1: number;
+      y2: number;
+    }
+    interface Branch {
+      id: string;
+      pts: [number, number][];
+      runs: Run[];
+    }
+    const groups = new Map<string, Branch[]>();
+    for (const m of edgeMeta(ctx)) {
+      if (!m.to || !m.e.classList.contains('gc-back')) continue;
+      const ctm = m.e.getScreenCTM();
+      if (!ctm) continue;
+      const pts = pathPointsHV(m.e.getAttribute('d'), ctm);
+      if (pts.length < 2) continue;
+      const runs: Run[] = [];
+      for (let i = 1; i < pts.length; i++) {
+        const [x1, y1] = pts[i - 1]!;
+        const [x2, y2] = pts[i]!;
+        // A corner arc moves ≤12 on each axis; a corridor leg is longer.
+        if (Math.abs(x1 - x2) < 1 && Math.abs(y1 - y2) > 16 * ctx.unit) {
+          runs.push({ x: x1, y1: Math.min(y1, y2), y2: Math.max(y1, y2) });
+        }
+      }
+      groups.set(m.to, [...(groups.get(m.to) ?? []), { id: m.e.dataset.id!, pts, runs }]);
+    }
+    if (!groups.size) return [];
+    const findings: Finding[] = [];
+
+    for (const [to, branches] of groups) {
+      const target = ids.get(to);
+      if (!target) continue;
+      const tb = rect(outline(target));
+      const tc = (tb.left + tb.right) / 2;
+      // Cluster every branch's corridor runs by x; a cluster is one drawn
+      // vertical line however many branches ride it.
+      const clusters: { x: number; runs: Run[] }[] = [];
+      for (const b of branches) {
+        for (const r of b.runs) {
+          // A run on the target's own centre line is the arrival leg, not a
+          // corridor: it is the trunk's last drop into the face. Only that
+          // line is excused — a corridor that happens to pass under a wide
+          // target is still a corridor.
+          if (Math.abs(r.x - tc) <= 2 * ctx.unit) continue;
+          const c = clusters.find((k) => Math.abs(k.x - r.x) <= 1.5);
+          if (c) c.runs.push(r);
+          else clusters.push({ x: r.x, runs: [r] });
+        }
+      }
+      for (const flank of [-1, 1] as const) {
+        const onFlank = clusters.filter((c) => Math.sign(c.x - tc) === flank);
+        if (onFlank.length > 1) {
+          findings.push({
+            severity: 'fail',
+            message:
+              `6.14 ${onFlank.length} loop corridors on one flank of ${to} ` +
+              `(${onFlank.map((c) => Math.round((c.x - tc) / ctx.unit)).join(' ')})`,
+          });
+        }
+      }
+      // Drawn once: within a corridor, the runs are copies of one trunk, so
+      // their union is the longest of them. Two runs at one x that do not
+      // overlap are two lines, not one.
+      for (const c of clusters) {
+        const lo = Math.min(...c.runs.map((r) => r.y1));
+        const hi = Math.max(...c.runs.map((r) => r.y2));
+        const longest = Math.max(...c.runs.map((r) => r.y2 - r.y1));
+        if (hi - lo > longest + 1) {
+          findings.push({
+            severity: 'fail',
+            message: `6.14 the corridor into ${to} is drawn as ${c.runs.length} separate runs`,
+          });
+        }
+      }
+      // One arrowhead where the group arrives (6.3's merged head).
+      const end = branches[0]!.pts[branches[0]!.pts.length - 1]!;
+      const scattered = branches.some((b) => {
+        const p = b.pts[b.pts.length - 1]!;
+        return Math.abs(p[0] - end[0]) > 1.5 || Math.abs(p[1] - end[1]) > 1.5;
+      });
+      if (branches.length > 1 && scattered) {
+        findings.push({
+          severity: 'fail',
+          message: `6.14 ${branches.length} returns into ${to} arrive at different points`,
+        });
+      } else {
+        let heads = 0;
+        for (const a of svg.querySelectorAll('.gc-arrow[data-id]')) {
+          const owner = svg.querySelector<SVGPathElement>(
+            `.gc-edge[data-id="${a.getAttribute('data-id')}"]`,
+          );
+          const ctm = owner?.getScreenCTM();
+          if (!owner || !ctm) continue;
+          const pts = pathPointsHV(owner.getAttribute('d'), ctm);
+          const p = pts[pts.length - 1];
+          if (!p) continue;
+          if (Math.abs(p[0] - end[0]) <= 1.5 && Math.abs(p[1] - end[1]) <= 1.5) heads++;
+        }
+        if (heads !== 1) {
+          findings.push({
+            severity: 'fail',
+            message: `6.14 ${heads} arrowheads where the returns into ${to} arrive`,
+          });
+        }
+      }
+    }
+
+    // Across groups: no nesting.
+    const boxes = [...groups.entries()].map(([to, branches]) => {
+      const all = branches.flatMap((b) => b.pts);
+      return {
+        to,
+        x1: Math.min(...all.map((p) => p[0])),
+        y1: Math.min(...all.map((p) => p[1])),
+        x2: Math.max(...all.map((p) => p[0])),
+        y2: Math.max(...all.map((p) => p[1])),
+      };
+    });
+    for (const a of boxes) {
+      for (const b of boxes) {
+        if (a === b) continue;
+        if (a.x1 <= b.x1 - 1 && a.y1 <= b.y1 - 1 && a.x2 >= b.x2 + 1 && a.y2 >= b.y2 + 1) {
+          findings.push({
+            severity: 'fail',
+            message: `6.14 the returns into ${b.to} nest inside the returns into ${a.to}`,
+          });
+        }
+      }
+    }
+    return findings;
+  },
+};
+
+export const CHANNEL_CHECKS: Check[] = [
+  pillOnLine,
+  fanSymmetry,
+  ribbon,
+  sideExclusivity,
+  returnBus,
+];

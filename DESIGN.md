@@ -312,7 +312,16 @@ the renderer keeps what was written and writers own their casing.)
 - **6.6** Dashed = return / async / optional (`5 4`). Dotted (`1.5 6`) = the
   Lyzr style of a channel along which a dot travels. Solid = the main call.
 - **6.7** Loops back go **around** the content, with a 24 clearance, as one
-  rounded orthogonal path — not a free-form arc under the diagram.
+  rounded orthogonal path — not a free-form arc under the diagram. A return
+  that several loop-backs share (6.14) is **one** path, so it is measured
+  once — on the branch that starts the trunk, against the half perimeter of
+  the box the bus's own nodes span, plus the same 128 corridor pad. 6.8's
+  per-edge Manhattan budget is the yardstick for a loop that hugs its own
+  source, and that is exactly the shape 6.14 replaces. (Added 2026-09-03
+  from the numbers: hub-with-returns' trunk is 549 against 560 + 128, while
+  measuring its three branches against their own straight lines — 837, 693
+  and 549 against 436, 292 and 436 — measures the concentric rings the rule
+  forbids and nothing else.)
 - **6.8 What the gate measures on every edge of every graph chart** (added
   2026-08-22, no per-chart exceptions): orthogonal only; leaves the side facing
   its target; ≤ 2 bends forward, ≤ 4 on a loop-back; path ≤ 1.4× the straight
@@ -384,7 +393,12 @@ the renderer keeps what was written and writers own their casing.)
   content is enclosed by **at most one** loop corridor per flank, and two
   loop routes never nest. Measured: among loop-backs sharing a target, at
   most one distinct vertical corridor run exists per flank, and every
-  shared run is drawn once (the 1.5 trunk language). (Added 2026-09-03:
+  shared run is drawn once (the 1.5 trunk language) — `6.14-return-bus`,
+  which also holds the no-nesting clause across groups. The branch that
+  starts the trunk is one continuous path turning at the standard 12
+  radius; the others join it as plain T's, with no arc at a T, exactly as a
+  forward bus and 1.5's leaf-stack trunk already do. The bus's length is
+  6.7's own measurement, taken once. (Added 2026-09-03:
   hub-with-returns drew three workers' returns as three independent
   4-bend loops — each individually legal under 6.7/6.8, collectively a
   maze of concentric rings. Every "clean" chart this project has produced

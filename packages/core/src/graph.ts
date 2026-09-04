@@ -141,11 +141,20 @@ export interface ChannelRoute {
    */
   label?: { x: number; y: number; width: number; height: number; lines: string[] };
   /**
-   * DESIGN 1.9: a ribbon's return edge — row's last node out the right
-   * gutter, along the band, down the left gutter, into the next row's first
-   * node's left face. Four rounded bends by construction, so the gate gives
-   * it the same allowance DESIGN 1.6's wrap bus already has, and exempts it
-   * from the plain flow-arrival side rule the way a ring loop is.
+   * A route that deliberately goes *around* the content rather than between
+   * two boxes, drawn as `gc-return`. Two shapes carry it:
+   *
+   * - DESIGN 1.9: a ribbon's return edge — row's last node out the right
+   *   gutter, along the band, down the left gutter, into the next row's
+   *   first node's left face.
+   * - DESIGN 6.14: a branch of a merged return bus — every loop-back into
+   *   one target leaving its own face into a shared band, up one flank
+   *   corridor, and arriving once at the target.
+   *
+   * Both are four rounded bends by construction, so the gate gives them the
+   * allowance DESIGN 1.6's wrap bus already has and exempts them from the
+   * plain flow-arrival side rule the way a ring loop is. A return bus is
+   * also measured as one route rather than one loop per branch (6.7).
    */
   isReturn?: boolean;
   /**

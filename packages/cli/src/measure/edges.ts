@@ -781,17 +781,53 @@ export const longLoop: Check = {
     const { geom } = geomAndHairpins(ctx);
     let longLoops = 0;
     const longLoopIds: string[] = [];
+    const corridorPad = RULES['6.7']!.threshold!;
+    /**
+     * DESIGN 6.14: loop-backs that merged into one return bus (`gc-back`
+     * plus `gc-return`) are one route with branches, not one route each —
+     * the trunk is drawn once and every branch rides it. So the group is
+     * measured once, on the branch that starts the trunk (the shortest: it
+     * runs the whole corridor and none of the shared band), and against what
+     * the bus has to go around — the half perimeter of the box its own nodes
+     * span — plus the same 128 corridor pad a lone loop-back gets. The
+     * Manhattan distance between one branch's own two ends is the yardstick
+     * for a loop that hugs its own source, which is exactly the private ring
+     * 6.14 exists to forbid; applying it to a branch would measure the shape
+     * the rule replaced rather than the one it asks for.
+     */
+    const buses = new Map<string, SVGPathElement[]>();
     for (const [e, g] of geom) {
-      if (!g.back) continue;
+      if (!g.back || !e.classList.contains('gc-return')) continue;
+      buses.set(g.to, [...(buses.get(g.to) ?? []), e]);
+    }
+    const inBus = new Set([...buses.values()].flat());
+    const walk = (e: SVGPathElement): number => {
       const pts = pathPoints(e.getAttribute('d'));
       let len = 0;
       for (let i = 1; i < pts.length; i++) {
         len += Math.abs(pts[i]![0] - pts[i - 1]![0]) + Math.abs(pts[i]![1] - pts[i - 1]![1]);
       }
+      return len;
+    };
+    for (const [to, branches] of buses) {
+      const rects = [geom.get(branches[0]!)!.rb, ...branches.map((b) => geom.get(b)!.ra)];
+      const span =
+        (Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left)) +
+          (Math.max(...rects.map((r) => r.bottom)) - Math.min(...rects.map((r) => r.top)))) /
+        ctx.unit;
+      const trunk = Math.min(...branches.map(walk));
+      if (trunk > span + corridorPad) {
+        longLoops++;
+        longLoopIds.push(`${to}-bus:${Math.round(trunk)}>${Math.round(span + corridorPad)}`);
+      }
+    }
+    for (const [e, g] of geom) {
+      if (!g.back || inBus.has(e)) continue;
+      const pts = pathPoints(e.getAttribute('d'));
+      const len = walk(e);
       const a = pts[0]!;
       const b = pts[pts.length - 1]!;
       const manhattan = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]);
-      const corridorPad = RULES['6.7']!.threshold!;
       if (len > manhattan + corridorPad) {
         longLoops++;
         longLoopIds.push(`${e.dataset.id}:${Math.round(len)}>${Math.round(manhattan + corridorPad)}`);

@@ -81,6 +81,8 @@ interface PlannedEdge {
   edge: GraphEdge;
   pts: FlowPt[];
   exempt?: 'bus' | 'wrap';
+  /** DESIGN 6.14: a branch of a merged return bus. */
+  isReturn?: boolean;
   /** The straight run the pill may sit on (flow coords), when labeled. */
   pillRun?: [FlowPt, FlowPt];
   /** Preferred pill centre along the run (flow coords), else run midpoint. */
@@ -430,33 +432,65 @@ export function layoutGrid(
     // lane in its source band and one in its arrival band; a loop-back takes
     // an arrival lane in the band above its target (or the reserved strip
     // above row 0 / below the last row when there is no band there).
+    //
+    // A lane belongs to a *route*, not to an edge. DESIGN 6.14's return bus
+    // puts several loop-backs on one drawn line by construction, exactly as
+    // 1.5's leaf-stack trunk and 6.12's row bus do on the forward side; a
+    // lane each is precisely the nest of concentric rings 6.14 forbids.
     const laneEdges: GraphEdge[][] = Array.from({ length: lastRow }, () => []);
+    const laneSlots: number[] = Array.from({ length: lastRow }, () => 0);
     const laneIndex = new Map<string, number>(); // `${edgeId}@${band}` -> k
-    const allocLane = (band: number, e: GraphEdge): boolean => {
+    /** Lanes that must hold a pill, not just a line: `${edgeId}@${band}`. */
+    const lanePills = new Set<string>();
+    const allocLane = (band: number, es: GraphEdge[]): boolean => {
       if (band < 0 || band >= lastRow) return false;
-      laneIndex.set(`${e.id}@${band}`, laneEdges[band]!.length);
-      laneEdges[band]!.push(e);
+      const k = laneSlots[band]!++;
+      for (const e of es) {
+        laneIndex.set(`${e.id}@${band}`, k);
+        laneEdges[band]!.push(e);
+      }
       return true;
     };
-    const stripTop: GraphEdge[] = [];
-    const stripBottom: GraphEdge[] = [];
+    // Strips outside the rows: one slot per route, same as a lane.
+    const stripTop: GraphEdge[][] = [];
+    const stripBottom: GraphEdge[][] = [];
+    const stripSlot = new Map<string, number>(); // `${edgeId}@top|bottom` -> k
+    const allocStrip = (where: 'top' | 'bottom', es: GraphEdge[]): void => {
+      const strip = where === 'top' ? stripTop : stripBottom;
+      const k = strip.length;
+      strip.push(es);
+      for (const e of es) stripSlot.set(`${e.id}@${where}`, k);
+    };
 
     for (const e of joins) {
       const rs = rank.get(e.from)!;
       const rt = rank.get(e.to)!;
       if (stackedLeaves.has(e.from) || stackedLeaves.has(e.to)) return decline('join touches stack');
       if (rt === rs + 1) {
-        if (!allocLane(rs, e)) return decline('join lane');
+        if (!allocLane(rs, [e])) return decline('join lane');
+        if (pills.has(e.id)) lanePills.add(`${e.id}@${rs}`);
       } else {
-        if (!allocLane(rs, e) || !allocLane(rt - 1, e)) return decline('join lanes');
+        if (!allocLane(rs, [e]) || !allocLane(rt - 1, [e])) return decline('join lanes');
       }
     }
 
+    /**
+     * DESIGN 6.14: one plan per *target*, not per loop-back. Every return
+     * into one node is one bus — one corridor on one flank, one trunk in it,
+     * each source's branch joining the trunk, and one arrival carrying 6.3's
+     * single head.
+     */
     interface LoopPlan {
-      edge: GraphEdge;
+      target: string;
+      edges: GraphEdge[];
       side: -1 | 1; // -1 = low-u side, 1 = high-u side
       exit: 'side' | 'flow';
       corridorU: number;
+      /** Rows the corridor leg spans: the target's rank to the deepest source's. */
+      rLo: number;
+      rHi: number;
+      /** Two or more sources: the merged bus. One source is just a loop-back. */
+      bus: boolean;
     }
     const loopPlans: LoopPlan[] = [];
     const corridorLegs: { u: number; rLo: number; rHi: number; pillU: number }[] = [];
@@ -514,22 +548,44 @@ export function layoutGrid(
       return u;
     };
 
-    for (const e of loops) {
-      const s = byId.get(e.from)!;
-      const t = byId.get(e.to)!;
-      const rs = rank.get(e.from)!;
-      const rt = rank.get(e.to)!;
-      if (stackedLeaves.has(e.from) || stackedLeaves.has(e.to)) return decline('loop touches stack');
-      const sLo = anchorU.get(s.id)! - su(s) / 2;
-      const sHi = anchorU.get(s.id)! + su(s) / 2;
-      const myPillU = pills.has(e.id) ? pu(pills.get(e.id)!) : 0;
-      const exempt = new Set([s.id, t.id]);
+    // DESIGN 6.14: group the loop-backs by target first. Widest span first,
+    // so a long return claims its flank before a short one and the short one
+    // is never left nested inside it.
+    const loopGroups: { target: string; edges: GraphEdge[] }[] = [];
+    {
+      const byTarget = new Map<string, GraphEdge[]>();
+      for (const e of loops) {
+        if (stackedLeaves.has(e.from) || stackedLeaves.has(e.to))
+          return decline('loop touches stack');
+        const list = byTarget.get(e.to);
+        if (list) list.push(e);
+        else byTarget.set(e.to, [e]);
+      }
+      for (const [target, edges] of byTarget) loopGroups.push({ target, edges });
+      const span = (g: { target: string; edges: GraphEdge[] }): number =>
+        Math.max(...g.edges.map((e) => rank.get(e.from)!)) - rank.get(g.target)!;
+      loopGroups.sort((a, b) => span(b) - span(a));
+    }
+    /** Flanks already carrying a return, with the rows it encloses. */
+    const flankTaken: { side: -1 | 1; rLo: number; rHi: number }[] = [];
+
+    for (const g of loopGroups) {
+      const t = byId.get(g.target)!;
+      const rt = rank.get(g.target)!;
+      const rsMax = Math.max(...g.edges.map((e) => rank.get(e.from)!));
+      const bus = g.edges.length > 1;
+      const members = [t, ...g.edges.map((e) => byId.get(e.from)!)];
+      const exempt = new Set(members.map((n) => n.id));
+      const myPillU = Math.max(
+        0,
+        ...g.edges.map((e) => (pills.has(e.id) ? pu(pills.get(e.id)!) : 0)),
+      );
       const clearAt = (u: number): boolean => {
-        for (const b of rowSpanBoxes(rt, rs, exempt)) {
+        for (const b of rowSpanBoxes(rt, rsMax, exempt)) {
           if (u > b.lo - EDGE_NODE_CLEAR + 0.5 && u < b.hi + EDGE_NODE_CLEAR - 0.5) return false;
         }
         for (const leg of corridorLegs) {
-          if (leg.rHi < rt || leg.rLo > rs) continue;
+          if (leg.rHi < rt || leg.rLo > rsMax) continue;
           const sep = Math.max(TRACK, myPillU / 2 + 4, leg.pillU / 2 + 4);
           if (Math.abs(u - leg.u) < sep - 0.5) return false;
         }
@@ -537,57 +593,110 @@ export function layoutGrid(
       };
       const candidates: LoopPlan[] = [];
       for (const side of [-1, 1] as const) {
-        const outerStart = side === -1 ? sLo - LOOP_CLEAR : sHi + LOOP_CLEAR;
-        const options = [settleCorridor(side, outerStart, rt, rs, exempt, myPillU)];
+        // The corridor clears every node the bus serves, target included —
+        // one flank for the whole group, not one per branch.
+        const outerStart =
+          side === -1
+            ? Math.min(...members.map((n) => anchorU.get(n.id)! - su(n) / 2)) - LOOP_CLEAR
+            : Math.max(...members.map((n) => anchorU.get(n.id)! + su(n) / 2)) + LOOP_CLEAR;
+        const options = [settleCorridor(side, outerStart, rt, rsMax, exempt, myPillU)];
         // The snug inner corridor: tight against the nearest neighbour on
         // this side (DESIGN 6.8's "nearest corridor"), when the gap between
-        // it and the source's own face is clear.
-        {
-          const inner = side === -1 ? sLo - MIN_JOG : sHi + MIN_JOG;
+        // it and the source's own face is clear. A lone return may hug its
+        // own source that way; a bus has to clear every source it serves.
+        if (!bus) {
+          const s = byId.get(g.edges[0]!.from)!;
+          const inner =
+            side === -1
+              ? anchorU.get(s.id)! - su(s) / 2 - MIN_JOG
+              : anchorU.get(s.id)! + su(s) / 2 + MIN_JOG;
           if (clearAt(inner) && !options.some((u) => Math.abs(u - inner) < 1)) {
             options.unshift(inner);
           }
         }
         for (const u of options) {
           // A side-face exit needs a clear straight shot from the face to
-          // the corridor across the source's own row.
-          const blocked = rowNodes[rs]!.some((n) => {
-            if (n.id === s.id) return false;
-            const a = anchorU.get(n.id)!;
-            const lo = a - su(n) / 2;
-            const hi = a + su(n) / 2;
-            const from = side === -1 ? Math.min(u, sLo) : Math.min(sHi, u);
-            const to = side === -1 ? Math.max(u, sLo) : Math.max(sHi, u);
-            return hi > from && lo < to;
+          // the corridor across the source's own row. A bus never takes one:
+          // its branches merge in a shared band below their own row, which
+          // only a flow-face exit reaches (DESIGN 6.14's drawn shape).
+          let exit: 'side' | 'flow' = 'flow';
+          if (!bus) {
+            const s = byId.get(g.edges[0]!.from)!;
+            const sLo = anchorU.get(s.id)! - su(s) / 2;
+            const sHi = anchorU.get(s.id)! + su(s) / 2;
+            const blocked = rowNodes[rsMax]!.some((n) => {
+              if (n.id === s.id) return false;
+              const a = anchorU.get(n.id)!;
+              const lo = a - su(n) / 2;
+              const hi = a + su(n) / 2;
+              const from = side === -1 ? Math.min(u, sLo) : Math.min(sHi, u);
+              const to = side === -1 ? Math.max(u, sLo) : Math.max(sHi, u);
+              return hi > from && lo < to;
+            });
+            exit = blocked ? 'flow' : 'side';
+          }
+          if (
+            exit === 'flow' &&
+            g.edges.some((e) => Math.abs(anchorU.get(e.from)! - u) < LOOP_CLEAR)
+          )
+            continue;
+          candidates.push({
+            target: g.target,
+            edges: g.edges,
+            side,
+            exit,
+            corridorU: u,
+            rLo: rt,
+            rHi: rsMax,
+            bus,
           });
-          const exit: 'side' | 'flow' = blocked ? 'flow' : 'side';
-          if (exit === 'flow' && Math.abs(anchorU.get(s.id)! - u) < LOOP_CLEAR) continue;
-          candidates.push({ edge: e, side, exit, corridorU: u });
         }
       }
-      if (!candidates.length) return decline(`loop ${e.id} has no corridor`);
+      if (!candidates.length) return decline(`loop into ${g.target} has no corridor`);
+      // DESIGN 6.14: prefer the flank that encloses least — the return
+      // hugs the content instead of lassoing it — and never a flank already
+      // carrying a return over these rows (at most one corridor per flank,
+      // and two loop routes that never nest).
+      const enclosure = (c: LoopPlan): number =>
+        members.reduce((acc, n) => acc + Math.abs(c.corridorU - anchorU.get(n.id)!), 0) +
+        (c.exit === 'flow' ? 64 : 0) +
+        (flankTaken.some((f) => f.side === c.side && f.rHi >= c.rLo && f.rLo <= c.rHi) ? 4096 : 0);
       candidates.sort(
         (a, b) =>
-          Math.abs(a.corridorU - anchorU.get(s.id)!) +
-          Math.abs(a.corridorU - anchorU.get(t.id)!) +
-          (a.exit === 'flow' ? 64 : 0) -
-          (Math.abs(b.corridorU - anchorU.get(s.id)!) +
-            Math.abs(b.corridorU - anchorU.get(t.id)!) +
-            (b.exit === 'flow' ? 64 : 0)),
+          enclosure(a) - enclosure(b) ||
+          // A tie is a symmetric picture. The bus starts at the last source
+          // in reading order, so it turns up the high-u flank; a lone return
+          // keeps the low-u one it has always taken.
+          (bus ? b.side - a.side : a.side - b.side),
       );
       const pick = candidates[0]!;
       loopPlans.push(pick);
-      corridorLegs.push({ u: pick.corridorU, rLo: rt, rHi: rs, pillU: myPillU });
-      // Arrival lane: the band above the target, or the strip above row 0.
+      flankTaken.push({ side: pick.side, rLo: pick.rLo, rHi: pick.rHi });
+      corridorLegs.push({ u: pick.corridorU, rLo: rt, rHi: rsMax, pillU: myPillU });
+      // Arrival: one lane for the whole group — the band above the target,
+      // or the strip above row 0. One lane is what merges the heads (6.3).
       if (rt > 0) {
-        if (!allocLane(rt - 1, e)) return decline('loop arrival lane');
+        if (!allocLane(rt - 1, g.edges)) return decline('loop arrival lane');
       } else {
-        stripTop.push(e);
+        allocStrip('top', g.edges);
       }
-      // A flow-face exit needs a lane below the source's row too.
+      // A flow-face exit needs a band below the sources' row too — one lane
+      // per row, shared by every branch leaving from it (the shared band).
       if (pick.exit === 'flow') {
-        if (rs === lastRow) stripBottom.push(e);
-        else if (!allocLane(rs, e)) return decline('loop exit lane');
+        const byRow = new Map<number, GraphEdge[]>();
+        for (const e of g.edges) {
+          const rs = rank.get(e.from)!;
+          const list = byRow.get(rs);
+          if (list) list.push(e);
+          else byRow.set(rs, [e]);
+        }
+        for (const [rs, es] of byRow) {
+          if (rs === lastRow) allocStrip('bottom', es);
+          else {
+            if (!allocLane(rs, es)) return decline('loop exit lane');
+            for (const e of es) if (pills.has(e.id)) lanePills.add(`${e.id}@${rs}`);
+          }
+        }
       }
     }
 
@@ -734,12 +843,11 @@ export function layoutGrid(
           }
         }
       }
-      const lanes = laneEdges[b]!.length;
-      // Only a same-band join's pill rides its lane; loop pills ride their
-      // corridor leg instead.
-      const lanePill = laneEdges[b]!.some(
-        (e) => !e.backward && pills.has(e.id) && rank.get(e.to)! === rank.get(e.from)! + 1,
-      );
+      const lanes = laneSlots[b]!;
+      // Only a same-band join's pill rides its lane, plus a return-bus
+      // branch's pill on its own band run (6.14); a lone loop's pill rides
+      // its corridor leg instead.
+      const lanePill = laneEdges[b]!.some((e) => lanePills.has(`${e.id}@${b}`));
       const slot = lanePill ? 24 : TRACK;
       laneSlot.push(slot);
       const laneZone = lanes ? 8 + slot * lanes : 0;
@@ -754,10 +862,12 @@ export function layoutGrid(
     const bandV = roundUp(bandNeed, GRID);
 
     // Strips above the first row / below the last, for loops that arrive at
-    // a root or leave the last row through the flow face.
+    // a root or leave the last row through the flow face. The first slot
+    // stands off by DESIGN 6.7's own 24 — a return runs *around* the
+    // content, and 16 would be exactly the clearance floor 6.8 measures.
     const stripSlotTop = TRACK;
     const stripSlotBottom = TRACK;
-    const stripTopV = stripTop.length ? TRACK + stripSlotTop * (stripTop.length - 1) : 0;
+    const stripTopV = stripTop.length ? LOOP_CLEAR + stripSlotTop * (stripTop.length - 1) : 0;
 
     // Row centres along the flow axis.
     const rowC: number[] = [];
@@ -790,14 +900,10 @@ export function layoutGrid(
       const slot = laneSlot[b]!;
       return rowTopMin(b + 1) - 8 - slot * k - slot / 2;
     };
-    const stripTopLaneV = (e: GraphEdge): number => {
-      const k = stripTop.indexOf(e);
-      return rowTopMin(0) - TRACK - stripSlotTop * k;
-    };
-    const stripBottomLaneV = (e: GraphEdge): number => {
-      const k = stripBottom.indexOf(e);
-      return stackBottom + TRACK + stripSlotBottom * k;
-    };
+    const stripTopLaneV = (e: GraphEdge): number =>
+      rowTopMin(0) - LOOP_CLEAR - stripSlotTop * stripSlot.get(`${e.id}@top`)!;
+    const stripBottomLaneV = (e: GraphEdge): number =>
+      stackBottom + LOOP_CLEAR + stripSlotBottom * stripSlot.get(`${e.id}@bottom`)!;
 
     /**
      * DESIGN 6.5: the exclusive stretch of a fan branch's bus run — from
@@ -1002,52 +1108,106 @@ export function layoutGrid(
     // target's forward traffic arrives on (DESIGN 6.8), at the same point —
     // which is what merges the heads (6.3).
     for (const lp of loopPlans) {
-      const e = lp.edge;
-      const s = byId.get(e.from)!;
-      const t = byId.get(e.to)!;
-      const rs = rank.get(e.from)!;
-      const rt = rank.get(e.to)!;
-      const tU = anchorU.get(e.to)!;
+      const rt = rank.get(lp.target)!;
+      const t = byId.get(lp.target)!;
+      const tU = anchorU.get(lp.target)!;
       const tTop = topOf(t);
       const cu = lp.corridorU;
-      const arriveV = rt > 0 ? laneV(rt - 1, e) : stripTopLaneV(e);
-      const legFarV = lp.exit === 'side' ? rowC[rs]! : rs === lastRow ? stripBottomLaneV(e) : laneV(rs, e);
-      let pts: FlowPt[];
-      if (lp.exit === 'side') {
-        const face =
-          lp.side === -1 ? anchorU.get(e.from)! - su(s) / 2 : anchorU.get(e.from)! + su(s) / 2;
-        pts = simplify([
-          { x: face, y: rowC[rs]! },
-          { x: cu, y: rowC[rs]! },
-          { x: cu, y: arriveV },
-          { x: tU, y: arriveV },
-          { x: tU, y: tTop },
-        ]).map((q) => ({ u: q.x, v: q.y }));
-      } else {
+      // One arrival for the whole group, so 6.3's head cannot be doubled.
+      const arriveV = rt > 0 ? laneV(rt - 1, lp.edges[0]!) : stripTopLaneV(lp.edges[0]!);
+      for (const e of lp.edges) {
+        const s = byId.get(e.from)!;
+        const rs = rank.get(e.from)!;
         const sU = anchorU.get(e.from)!;
-        pts = simplify([
-          { x: sU, y: bottomOf(s) },
-          { x: sU, y: legFarV },
-          { x: cu, y: legFarV },
-          { x: cu, y: arriveV },
-          { x: tU, y: arriveV },
-          { x: tU, y: tTop },
-        ]).map((q) => ({ u: q.x, v: q.y }));
+        const legFarV =
+          lp.exit === 'side' ? rowC[rs]! : rs === lastRow ? stripBottomLaneV(e) : laneV(rs, e);
+        let pts: FlowPt[];
+        if (lp.exit === 'side') {
+          const face = lp.side === -1 ? sU - su(s) / 2 : sU + su(s) / 2;
+          pts = simplify([
+            { x: face, y: rowC[rs]! },
+            { x: cu, y: rowC[rs]! },
+            { x: cu, y: arriveV },
+            { x: tU, y: arriveV },
+            { x: tU, y: tTop },
+          ]).map((q) => ({ u: q.x, v: q.y }));
+        } else {
+          pts = simplify([
+            { x: sU, y: bottomOf(s) },
+            { x: sU, y: legFarV },
+            { x: cu, y: legFarV },
+            { x: cu, y: arriveV },
+            { x: tU, y: arriveV },
+            { x: tU, y: tTop },
+          ]).map((q) => ({ u: q.x, v: q.y }));
+        }
+        const pill = pills.get(e.id);
+        let pillRun: [FlowPt, FlowPt] | undefined;
+        let pillAt: FlowPt | undefined;
+        if (pill && lp.bus) {
+          // DESIGN 6.5 on a bus: the trunk is shared footage, so the pill
+          // belongs on this branch's own exclusive stretch of the band —
+          // from just past the neighbour nearer the corridor out to this
+          // branch's own turn — exactly as `busRunFor` does on the forward
+          // side. When that stretch is too short, its own drop instead.
+          const run = returnRunFor(lp, e, legFarV);
+          if (run) pillRun = run;
+          else {
+            pillRun = [
+              { u: sU, v: bottomOf(s) + STANDOFF },
+              { u: sU, v: legFarV - TURN },
+            ];
+          }
+        } else if (pill) {
+          const legTop = arriveV + TURN;
+          const legBottom = legFarV - TURN;
+          pillRun = [
+            { u: cu, v: Math.min(legTop, legBottom) },
+            { u: cu, v: Math.max(legTop, legBottom) },
+          ];
+          pillAt = { u: cu, v: nearestBandCentre(arriveV, legFarV) };
+        }
+        planned.push({
+          edge: e,
+          pts,
+          exempt: lp.bus ? 'bus' : undefined,
+          isReturn: lp.bus,
+          pillRun,
+          pillAt,
+        });
       }
+    }
+
+    /**
+     * DESIGN 6.5/6.14: the exclusive stretch of a return-bus branch's band
+     * run — from just past the nearest branch between it and the corridor
+     * (whose own run covers the footage past that point) out to this
+     * branch's own turn into its source — or null when it cannot hold the
+     * pill.
+     */
+    function returnRunFor(lp: LoopPlan, e: GraphEdge, bandV: number): [FlowPt, FlowPt] | null {
       const pill = pills.get(e.id);
-      const legTop = arriveV + TURN;
-      const legBottom = legFarV - TURN;
-      planned.push({
-        edge: e,
-        pts,
-        pillRun: pill
-          ? [
-              { u: cu, v: Math.min(legTop, legBottom) },
-              { u: cu, v: Math.max(legTop, legBottom) },
-            ]
-          : undefined,
-        pillAt: pill ? { u: cu, v: nearestBandCentre(arriveV, legFarV) } : undefined,
-      });
+      if (!pill) return null;
+      const sU = anchorU.get(e.from)!;
+      const cu = lp.corridorU;
+      let bound = cu;
+      for (const other of lp.edges) {
+        if (other === e) continue;
+        if (rank.get(other.from)! !== rank.get(e.from)!) continue;
+        const oU = anchorU.get(other.from)!;
+        if ((oU - sU) * (cu - sU) <= 0) continue; // the far side of us
+        if (Math.abs(oU - sU) >= Math.abs(cu - sU)) continue; // beyond the corridor
+        if (Math.abs(oU - sU) < Math.abs(bound - sU)) bound = oU;
+      }
+      const inner = bound + Math.sign(sU - bound) * (TURN + PILL_CLEAR);
+      const outer = sU + Math.sign(bound - sU) * TURN;
+      const lo = Math.min(inner, outer);
+      const hi = Math.max(inner, outer);
+      if (hi - lo < pu(pill) + 2) return null;
+      return [
+        { u: lo, v: bandV },
+        { u: hi, v: bandV },
+      ];
     }
 
     function nearestBandCentre(vA: number, vB: number): number {
@@ -1354,10 +1514,18 @@ export function layoutGrid(
       }
       const bends = pts.length - 2;
       if (pe.edge.backward) {
-        const manhattan =
-          Math.abs(pts[pts.length - 1]!.x - pts[0]!.x) + Math.abs(pts[pts.length - 1]!.y - pts[0]!.y);
-        if (len > manhattan + RULES['6.7']!.threshold!)
-          return decline(`loop ${pe.edge.id} over budget (${Math.round(len)} > ${Math.round(manhattan)}+128)`);
+        // DESIGN 6.14: a return bus is one route with branches, so its
+        // budget is measured once, below — never per branch, which would be
+        // measuring the private ring the rule exists to forbid.
+        if (!pe.isReturn) {
+          const manhattan =
+            Math.abs(pts[pts.length - 1]!.x - pts[0]!.x) +
+            Math.abs(pts[pts.length - 1]!.y - pts[0]!.y);
+          if (len > manhattan + RULES['6.7']!.threshold!)
+            return decline(
+              `loop ${pe.edge.id} over budget (${Math.round(len)} > ${Math.round(manhattan)}+128)`,
+            );
+        }
         if (bends > RULES['6.1-bends-loop']!.threshold!) return decline(`loop ${pe.edge.id} bends`);
       } else if (pe.exempt === 'wrap') {
         if (bends > RULES['6.1-bends-loop']!.threshold!) return decline(`wrap ${pe.edge.id} bends`);
@@ -1372,6 +1540,67 @@ export function layoutGrid(
           return decline(
             `edge ${pe.edge.id} short jog (${pe.pts.map((q) => `${q.u},${q.v}`).join(' ')})`,
           );
+      }
+    }
+
+    // DESIGN 6.14 + 6.7: a return bus is measured once, on the branch that
+    // starts the trunk (the shortest — it runs the whole corridor and none
+    // of the band), and against what the bus has to go around: the half
+    // perimeter of the box its own nodes span, plus 6.7's same 128 corridor
+    // pad. Manhattan between one branch's ends is the yardstick for a loop
+    // that hugs its own source, which is exactly the shape 6.14 replaces.
+    const loopBoxes = new Map(nodeBoxes.map((b) => [b.id, b] as const));
+    const groupBox = new Map<string, { x1: number; y1: number; x2: number; y2: number }>();
+    for (const lp of loopPlans) {
+      const routeLen = (e: GraphEdge): number => {
+        const pts = realPts.get(e.id)!;
+        let n = 0;
+        for (let i = 1; i < pts.length; i++)
+          n += Math.abs(pts[i]!.x - pts[i - 1]!.x) + Math.abs(pts[i]!.y - pts[i - 1]!.y);
+        return n;
+      };
+      let x1 = Infinity;
+      let y1 = Infinity;
+      let x2 = -Infinity;
+      let y2 = -Infinity;
+      for (const e of lp.edges) for (const p of realPts.get(e.id)!) {
+        x1 = Math.min(x1, p.x);
+        y1 = Math.min(y1, p.y);
+        x2 = Math.max(x2, p.x);
+        y2 = Math.max(y2, p.y);
+      }
+      groupBox.set(lp.target, { x1, y1, x2, y2 });
+      if (!lp.bus) continue;
+      let bx1 = Infinity;
+      let by1 = Infinity;
+      let bx2 = -Infinity;
+      let by2 = -Infinity;
+      for (const id of [lp.target, ...lp.edges.map((e) => e.from)]) {
+        const b = loopBoxes.get(id)!;
+        bx1 = Math.min(bx1, b.x);
+        by1 = Math.min(by1, b.y);
+        bx2 = Math.max(bx2, b.x + b.w);
+        by2 = Math.max(by2, b.y + b.h);
+      }
+      const budget = bx2 - bx1 + (by2 - by1) + RULES['6.7']!.threshold!;
+      const trunk = Math.min(...lp.edges.map(routeLen));
+      if (trunk > budget)
+        return decline(
+          `return bus into ${lp.target} over budget (${Math.round(trunk)} > ${Math.round(budget)})`,
+        );
+    }
+    // DESIGN 6.14: two loop routes never nest — neither's bounding box
+    // strictly contains the other's.
+    {
+      const boxes = [...groupBox.entries()];
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = 0; j < boxes.length; j++) {
+          if (i === j) continue;
+          const a = boxes[i]![1];
+          const b = boxes[j]![1];
+          if (a.x1 <= b.x1 - 1 && a.y1 <= b.y1 - 1 && a.x2 >= b.x2 + 1 && a.y2 >= b.y2 + 1)
+            return decline(`loop into ${boxes[j]![0]} nests inside the loop into ${boxes[i]![0]}`);
+        }
       }
     }
 
@@ -1440,6 +1669,7 @@ export function layoutGrid(
           startSide: startSideOf(pe.pts[0]!, pe.pts[1]!),
           endSide: endSideOf(pe.pts[pe.pts.length - 2]!, pe.pts[pe.pts.length - 1]!),
           exempt: pe.exempt,
+          isReturn: pe.isReturn,
           label: sp
             ? {
                 x: sp.cx - sp.pill.width / 2 - minX,
