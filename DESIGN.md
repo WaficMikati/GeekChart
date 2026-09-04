@@ -193,6 +193,20 @@ and the check that enforces it cannot drift apart.
   Aggregator aligned to one producer of six. (Added 2026-09-03 from the
   user's review — ten charts flagged for exactly this.)
 
+- **2.9** **Same-row leaves.** A terminal branch off a decision's side sits
+  on the decision's **own row** — box centre sharing the decision's centre
+  y within 1 — joined by one straight labeled run from the side vertex to
+  the near face: no rank drop, no bends. Two guards: the target is
+  terminal (no outgoing edges — a side branch that continues somewhere
+  still ranks down, its target has downstream order to keep), and the
+  flank fits the declared display width (too narrow, and the leaf ranks
+  down rather than forcing a scale). Opposite sides of one decision may
+  each hold a leaf; two leaves off the same side rank down as before.
+  (Added 2026-09-03, approved by mockup: diamond-cascade parked Reject A
+  a rank below Check A with two bends "for no real reason" — the layered
+  convention that every edge drops a rank, applied to a leaf that nothing
+  downstream orders. The user's phrasing is the rule.)
+
 ## 3. Type
 
 Two families only: **Archivo** for names, **JetBrains Mono** for everything
