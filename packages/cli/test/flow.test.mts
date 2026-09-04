@@ -2239,6 +2239,101 @@ describe('reduced motion', () => {
   });
 });
 
+const EDGE_STYLES = `flowchart TB
+  A[Solid] --> B[Node]
+  A -.-> C[Dotted]
+  A ==> D[Thick]
+  A --- E[Open line]
+  A -.- F[Dotted line]
+`;
+
+/** Chromium reports a dasharray as "5px, 4px"; compare on the numbers alone. */
+const dashNumbers = (value: string): number[] =>
+  value === 'none' ? [] : value.split(',').map((part) => Number.parseFloat(part.trim()));
+
+describe('edge styles, DESIGN 6.6', () => {
+  test('a dotted link is drawn dashed, not solid', async () => {
+    // Every edge carried `pathLength="1"` for the draw-on, which rescales
+    // stroke-dasharray by the path's real length: `5 4` on a 340-unit path came
+    // out as a single 1700-unit dash. On top of that the motion layer pinned
+    // `stroke-dasharray:1` per edge in a rule that outlived the animation, so an
+    // elbowed dashed edge was solid in the played chart too. The user's words:
+    // "The dotted line is just a normal line", "There's nothing dotted".
+    await mount(EDGE_STYLES, { motion: false });
+    const edges = await session.page.evaluate(() =>
+      [...document.querySelectorAll<SVGPathElement>('.gc-edge')].map((el) => ({
+        id: el.dataset.id!,
+        cls: el.getAttribute('class')!,
+        dash: getComputedStyle(el).strokeDasharray,
+        width: Number.parseFloat(getComputedStyle(el).strokeWidth),
+        pathLength: el.getAttribute('pathLength'),
+      })),
+    );
+    const dotted = edges.filter((e) => e.cls.includes('gc-stroke-dotted'));
+    assert.equal(dotted.length, 2, 'both `-.->` and `-.-` are dotted links');
+    for (const edge of dotted) {
+      assert.deepEqual(
+        dashNumbers(edge.dash),
+        [5, 4],
+        `${edge.id}: DESIGN 6.6's dashed 5 4, in canvas units`,
+      );
+      assert.equal(
+        edge.pathLength,
+        null,
+        `${edge.id}: pathLength="1" would rescale the dash into a solid line`,
+      );
+    }
+
+    const thick = edges.filter((e) => e.cls.includes('gc-stroke-thick'));
+    assert.equal(thick.length, 1, 'one `==>` in this chart');
+    assert.equal(thick[0]!.width, 2, "DESIGN 4.1: the thick style sits at the 2 cap");
+    assert.deepEqual(dashNumbers(thick[0]!.dash), [], 'a thick edge is solid');
+
+    const solid = edges.filter((e) => e.cls.includes('gc-stroke-normal'));
+    assert.equal(solid.length, 2, '`-->` and `---` are both plain strokes');
+    for (const edge of solid) {
+      assert.deepEqual(dashNumbers(edge.dash), [], `${edge.id}: a plain link is solid`);
+      assert.equal(edge.width, 1.5, 'DESIGN 4.1: an edge is a 1.5 hairline');
+    }
+  });
+
+  test('the dash survives the build, not just the still frame', async () => {
+    // The pinned reveal dasharray used to be a static per-edge rule, so it was
+    // still in force after the animation had played out. Run every animation to
+    // its end and read the pattern back off the finished chart.
+    await mount(EDGE_STYLES);
+    const dash = await session.page.evaluate(async () => {
+      // Seek to the end of one pass rather than `finish()`: the default build
+      // loops forever, and an infinite effect has no end to finish to.
+      for (const animation of document.getAnimations()) {
+        const duration = Number(animation.effect?.getComputedTiming().duration ?? 0);
+        if (!duration) continue;
+        animation.pause();
+        animation.currentTime = duration * 0.999;
+      }
+      return [...document.querySelectorAll<SVGPathElement>('.gc-edge')]
+        .filter((el) => el.getAttribute('class')!.includes('gc-stroke-dotted'))
+        .map((el) => ({ id: el.dataset.id!, dash: getComputedStyle(el).strokeDasharray }));
+    });
+    assert.equal(dash.length, 2);
+    for (const edge of dash) {
+      assert.deepEqual(dashNumbers(edge.dash), [5, 4], `${edge.id}: built frame lost its dash`);
+    }
+  });
+
+  test('an open link has no arrowhead', async () => {
+    // `---` and `-.-` are lines, not calls: mermaid's `arrow_open` type.
+    await mount(EDGE_STYLES, { motion: false });
+    const headed = await session.page.evaluate(
+      () =>
+        new Set(
+          [...document.querySelectorAll<SVGPathElement>('.gc-arrow')].map((el) => el.dataset.id!),
+        ).size,
+    );
+    assert.equal(headed, 3, 'only the three arrowed links get a head');
+  });
+});
+
 describe('type case, DESIGN 3', () => {
   test("a caption keeps the writer's own casing", async () => {
     // The type table reads "as written" for a node caption: a writer's "ships to

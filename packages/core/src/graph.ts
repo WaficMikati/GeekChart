@@ -37,6 +37,17 @@ export type NodeShape =
 export type EdgeStroke = 'normal' | 'dotted' | 'thick';
 
 /**
+ * True when this stroke carries a dash pattern worth protecting.
+ *
+ * Two places need the same answer and must not drift: `draw.ts` leaves
+ * `pathLength="1"` off a patterned edge (the attribute rescales every dash by
+ * the path's real length, which turns DESIGN 6.6's `5 4` into one long solid
+ * dash), and `motion.ts` has to reveal such an edge without pinning a dasharray
+ * over the pattern for good.
+ */
+export const isPatternedStroke = (stroke: EdgeStroke): boolean => stroke === 'dotted';
+
+/**
  * What a node *is*, separate from the outline it wears.
  *
  * Shape alone runs out fast: a datastore and a terminal are both "not a

@@ -1,7 +1,7 @@
-import type { Graph } from './graph.ts';
+import { isPatternedStroke, type Graph } from './graph.ts';
 import type { Drawing, DrawnEdge } from './draw.ts';
 import type { Scene } from './scene.ts';
-import { PRESS_EASE, WAVE_LAG } from './tokens.ts';
+import { EDGE_DASH, PRESS_EASE, WAVE_LAG } from './tokens.ts';
 
 /**
  * The motion layer.
@@ -125,7 +125,26 @@ function isSingleSegment(d: string): boolean {
 
 /** Dashed/dotted strokes carry a pattern worth protecting; solid ones don't. */
 function isPatterned(stroke: DrawnEdge['stroke']): boolean {
-  return stroke !== 'normal' && stroke !== 'thick';
+  return isPatternedStroke(stroke);
+}
+
+/**
+ * How long `d` is, in canvas units.
+ *
+ * A patterned edge carries no `pathLength="1"` (see `draw.ts`), so its dash
+ * reveal has to be written in real units and needs the real length. Every
+ * coordinate pair in order, summed — for a `Q` corner that measures the two
+ * control legs rather than the curve, which overshoots by a unit or so per
+ * corner. Overshooting is the safe direction: the dash has to be at least as
+ * long as the path to hide it completely at offset = length.
+ */
+function pathLengthOf(d: string): number {
+  const nums = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+  let total = 0;
+  for (let i = 2; i + 1 < nums.length; i += 2) {
+    total += Math.hypot(nums[i]! - nums[i - 2]!, nums[i + 1]! - nums[i - 1]!);
+  }
+  return Math.max(total, 1);
 }
 
 export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline {
@@ -381,15 +400,36 @@ export function animate(drawing: Drawing, graph: Graph, scene: Scene): Timeline 
       line.at(start + 0.02, { opacity: '1' });
       line.at(start + EDGE_GROW, { transform: `${axis}(1)` });
       line.at(cycle, { transform: `${axis}(1)`, opacity: '1' });
+    } else if (isPatterned(edge.stroke)) {
+      // An elbowed dashed edge: same draw-on, but written in canvas units,
+      // because `draw.ts` leaves `pathLength="1"` off a patterned edge (the
+      // attribute would rescale DESIGN 6.6's `5 4` into one solid dash).
+      //
+      // The reveal dasharray lives in the keyframes rather than in a static
+      // per-edge rule. A static rule outlives the animation, which is exactly
+      // the bug this replaces: every elbowed dashed edge was pinned solid for
+      // good, in the played chart and in the finished frame alike. Here the
+      // last keyframes hand the pattern back, so the built chart is dashed
+      // whether it looped, played once and held, or never animated at all.
+      const len = Math.round(pathLengthOf(edge.d) * 10) / 10;
+      const hidden = `${len} ${len}`;
+      const pattern = EDGE_DASH.dashed;
+      line.at(0, { 'stroke-dasharray': hidden, 'stroke-dashoffset': `${len}`, opacity: '0' });
+      line.at(start, { 'stroke-dasharray': hidden, 'stroke-dashoffset': `${len}`, opacity: '0' });
+      line.at(start + EDGE_GROW * 0.1, { opacity: '1' });
+      line.at(start + EDGE_GROW, { 'stroke-dasharray': hidden, 'stroke-dashoffset': '0' });
+      line.at(start + EDGE_GROW + 0.01, {
+        'stroke-dasharray': pattern,
+        'stroke-dashoffset': '0',
+      });
+      line.at(cycle, { 'stroke-dasharray': pattern, 'stroke-dashoffset': '0', opacity: '1' });
     } else {
       // Draw on, not unfold: a `stroke-dashoffset` reveal against the
-      // `pathLength="1"` draw.ts already gives every edge, the same trick
+      // `pathLength="1"` draw.ts gives every solid edge, the same trick
       // `.gc-outline` uses (DESIGN 8.2). `stroke-dasharray:1` is pinned per
-      // edge — solid edges have no dasharray to offset against otherwise, and
-      // an elbowed dashed/dotted path takes this branch too, so the same rule
-      // also overrides `.gc-stroke-dotted`'s pattern (higher specificity: a
-      // brief loss of the dot pattern while it draws beats reading as
-      // unfolded).
+      // edge because a solid edge has no dasharray to offset against
+      // otherwise; nothing patterned reaches this branch, so the pin cannot
+      // flatten a pattern any more.
       originRules.push(`.gc-edge[data-id="${edge.id}"]{stroke-dasharray:1}`);
       line.at(0, { 'stroke-dashoffset': '1', opacity: '0' });
       line.at(start, { 'stroke-dashoffset': '1', opacity: '0' });

@@ -1,4 +1,5 @@
 import {
+  isPatternedStroke,
   panelKicker,
   type EdgeStroke,
   type EdgeTip,
@@ -879,7 +880,11 @@ function attemptDraw(
 
     parts.push(
       `<path class="gc-edge gc-role-${role} gc-stroke-${edge.stroke}${edge.backward ? ' gc-back' : ''}${edge.bus || edge.channel?.exempt ? ' gc-bus' : ''}${edge.wrapTrunkX !== undefined || edge.channel?.exempt === 'wrap' ? ' gc-wrap' : ''}${edge.ringLoop ? ' gc-ring-loop' : ''}${edge.channel ? ' gc-channel' : ''}${edge.channel?.isReturn ? ' gc-return' : ''}" data-id="${esc(edge.id)}" ` +
-        `data-from="${esc(edge.from)}" data-to="${esc(edge.to)}" pathLength="1" d="${d}"/>`,
+        // DESIGN 6.6: `pathLength="1"` rescales stroke-dasharray by the path's
+        // real length, so a `5 4` dash on a 200-unit path comes out as a single
+        // 1000-unit dash — solid. A patterned edge therefore keeps its natural
+        // path length and `motion.ts` reveals it in user units instead.
+        `data-from="${esc(edge.from)}" data-to="${esc(edge.to)}"${isPatternedStroke(edge.stroke) ? '' : ' pathLength="1"'} d="${d}"/>`,
     );
     arrows.push(marks);
     drawnEdges.push({

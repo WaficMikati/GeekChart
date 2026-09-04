@@ -193,6 +193,21 @@ export const PANEL = { pad: 24, head: 48, kicker: 30 } as const;
 export const STROKE = { node: 1.5, edge: 1.5, cluster: 1, divider: 0.8 } as const;
 
 /**
+ * DESIGN 6.6/4.1: the two non-solid edge styles, in canvas units.
+ *
+ * `dashed` is what mermaid's `-.->` and `-.-` mean in practice — a return, an
+ * async hop, an optional step — so it gets 6.6's dashed `5 4` rather than the
+ * fine `1.5 6` dotted, which 6.6 reserves for the Lyzr channel a dot travels
+ * along (git graph lanes are the only user of that one, and they set it
+ * themselves). `thick` is 4.1's one deliberate heavy style, held at the 2 cap.
+ *
+ * Both live here because `motion.ts` has to restore the pattern at the end of
+ * an edge's draw-on and cannot read it back out of the stylesheet.
+ */
+export const EDGE_DASH = { dashed: '5 4', dotted: '1.5 6' } as const;
+export const EDGE_THICK = 2;
+
+/**
  * Clearances: DESIGN 6.1/6.8's 16 units an edge keeps from a node it does not
  * connect to (also what makes an edge under 16 long "touching" its nodes,
  * 2.3); 6.7's 24 around whatever a loop-back goes around; the stub an arrow's

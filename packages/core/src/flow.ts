@@ -17,6 +17,7 @@ import {
   type Scene,
   type SceneName,
 } from './scene.ts';
+import { EDGE_DASH, EDGE_THICK } from './tokens.ts';
 import { ensureFonts } from './fonts.ts';
 import { drawSequence, sequenceCss } from './sequence.ts';
 import { chronicleCss, drawChronicle, toChronicle, type ChronicleKind } from './chronicle.ts';
@@ -109,8 +110,15 @@ export function sceneCss(scene: Scene): string {
    emphasis, so a coloured line always means something. */
 .gc-edge { fill: none; stroke: var(--gc-edge, ${scene.edge}); stroke-width: ${scene.edgeStroke}px;
   stroke-linecap: round; }
-.gc-stroke-dotted { stroke-dasharray: 1.5 6; }
-.gc-stroke-thick  { stroke-width: ${scene.edgeStroke * 1.8}px; }
+/* DESIGN 6.6: mermaid's dotted link is a return / async / optional hop, so it
+   draws dashed 5 4 — not the fine 1.5 6 dotted, which 6.6 keeps for the Lyzr
+   channel a dot travels along. The class name still says "dotted" because that
+   is mermaid's own word for the syntax. DESIGN 4.1: the deliberate thick style
+   sits at the 2 cap. Neither pattern survives a pathLength="1" path (the
+   attribute scales every dash by the path's real length), so draw.ts leaves
+   the attribute off a patterned edge and motion.ts reveals it differently. */
+.gc-stroke-dotted { stroke-dasharray: ${EDGE_DASH.dashed}; }
+.gc-stroke-thick  { stroke-width: ${EDGE_THICK}px; }
 
 .gc-edge-label text { fill: var(--gc-quiet, ${scene.quiet}); font-family: ${scene.edgeLabelFont};
   font-size: ${scene.type.label}px; letter-spacing: ${scene.edgeLabelTracking};
