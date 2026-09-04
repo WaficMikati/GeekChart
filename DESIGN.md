@@ -201,7 +201,15 @@ and the check that enforces it cannot drift apart.
   speaks of sibling panels sharing a rank — an LR row; a TB chart's
   sequential panels are a sequence, not a row, and owe each other
   nothing here. (Clarified 2026-09-04: the check read the rule as
-  unconditional and failed a legitimate TB panel stack.) Cross-panel
+  unconditional and failed a legitimate TB panel stack.) An edge whose
+  source names the **panel itself** as an endpoint (mermaid: `Web -->
+  ControlPlane`) attaches to the panel's border, perpendicular, the
+  arrowhead stopping on the border — the author said "into the system",
+  not "into each of these", so it never fans to the shapes inside. A
+  sole such edge on a face attaches at the face's centre (6.2's midpoint
+  rule at panel scale); multiple on one face align column-for-column
+  with the shapes inside (the Lyzr pattern this rule always described).
+  (Approved by mockup 2026-09-04, Metrics-centred revision.) Cross-panel
   edges connect the shapes themselves — departing the child's own face
   (6.2), crossing the panel border perpendicular — never the panel
   border as a proxy. (Added 2026-09-04, approved by mockup:
