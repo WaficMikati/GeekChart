@@ -219,7 +219,13 @@ and the check that enforces it cannot drift apart.
   Derived means derived: when traffic or labels need more room, that
   channel alone widens and the layout re-derives to a fixed point — nothing
   re-seats, nothing reorders, and an uncrowded chart is laid out exactly as
-  if this rule did not exist. Band heights are uniform per chart (7.4's
+  if this rule did not exist. A fan's horizontal branch legs are **one
+  shared derived length** — the widest pill any branch carries plus its
+  16 stubs — so branch labels mirror each other across the trunk instead
+  of one hanging on its drop because its own leg happened to be short.
+  (Added 2026-09-04: python-or-java's 224-wide NO pill hung below the bus
+  beside a 200 leg while YES sat on its run; the user: "it should mirror
+  YES.") Band heights are uniform per chart (7.4's
   even whitespace); the uniform value is the largest any band needs.
   (Replaces the grow-8-retry-12-times loop of 2026-08-28 on 2026-09-03:
   growth-as-repair fixed the label that asked and starved the next one —
