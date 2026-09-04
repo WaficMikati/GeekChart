@@ -5,6 +5,7 @@
 import { RULES, tokens } from '@geekchart/core';
 const { CANVAS } = tokens;
 import {
+  channelWorkIn,
   clusters,
   compositionRows,
   edgeMeta,
@@ -438,7 +439,25 @@ export const evenWhitespace: Check = {
           labelBoxes.some(
             (b) =>
               b.left < r - 1 && b.right > l + 1 && b.top < band.bottom + 1 && b.bottom > band.top - 1,
-          );
+          ) ||
+          // DESIGN 7.4 (2026-09-04): a gap a bus trunk or a derived channel
+          // runs through is not empty — it is doing work — so it never counts
+          // here, and 2.8's centring never yields to it. The corridor the gap
+          // opens is bounded by the bands above and below it; line work
+          // anywhere in that corridor is what fills the gap. A gap with
+          // nothing running through it is still empty and still fails.
+          channelWorkIn(ctx, {
+            left: l,
+            right: r,
+            top: Math.max(
+              ...bands.filter((o) => o.bottom <= band.top + 1).map((o) => o.bottom),
+              -1e6,
+            ),
+            bottom: Math.min(
+              ...bands.filter((o) => o.top >= band.bottom - 1).map((o) => o.top),
+              1e6,
+            ),
+          });
         if (!between) {
           violations++;
           ids.push(`${prev.id}~${next.id}:${Math.round(gap)}`);

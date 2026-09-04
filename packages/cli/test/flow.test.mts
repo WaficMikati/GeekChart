@@ -309,8 +309,18 @@ describe('routing', () => {
     // segment; placeLabels (draw.ts) now moves a label that would swallow its
     // segment to sit beside it instead. Mirrors gate.mjs's own swallow check,
     // including its corner-rounding-aware segment length.
+    //
+    // Old path only, exactly as the check it mirrors (`6.5-label-swallow`,
+    // labels.ts) has been since 2026-09-03: DESIGN 6.5's rewrite retired
+    // beside-the-line placement, so on a channel-engine chart the pill sits
+    // ON its own exclusive run by construction and `6.5-pill-on-line` is what
+    // measures it. python-or-java joined the channel engine on 2026-09-04 and
+    // is measured there now.
+    let measured = 0;
     for (const name of GRAPH_FIXTURES) {
-      await mount(readFileSync(join(fixtures, name), 'utf8'));
+      const reply = await mount(readFileSync(join(fixtures, name), 'utf8'));
+      if (reply.svg.includes('data-gc-engine="channels"')) continue;
+      measured++;
       const failures = await session.page.evaluate(() => {
         const svg = document.querySelector('svg')!;
         const out: string[] = [];
@@ -360,6 +370,7 @@ describe('routing', () => {
       });
       assert.deepEqual(failures, [], `${name}: ${failures.join('; ')}`);
     }
+    assert.ok(measured >= 5, `only ${measured} old-path fixtures left to measure`);
   });
 
   test('a diagram names itself uniquely, and the same way every render', async () => {

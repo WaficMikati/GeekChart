@@ -1879,15 +1879,42 @@ export function layoutGrid(
     }
 
     // 7.4's even whitespace: no same-row gap over 200 with nothing between.
+    //
+    // DESIGN 7.4 (2026-09-04): a gap a bus trunk or a derived channel runs
+    // through is not empty — it is doing work — so it never counts here, and
+    // 2.8's centring never yields to it. Centring a 160-wide parent over a
+    // 344-wide pair opens a 208 gap to its neighbour, and the old path passed
+    // this rule only by parking the parent 60 off centre. The corridor that
+    // gap opens runs from the row above to the row below; whatever the router
+    // put in it is what fills it. A gap with no line work anywhere in that
+    // corridor is still genuinely empty and still declines.
     const gapCap = RULES['7.4-even-whitespace']!.threshold!;
-    for (const row of rowNodes) {
-      const sorted = [...row].sort((a, b) => anchorU.get(a.id)! - anchorU.get(b.id)!);
+    for (let r = 0; r < rowNodes.length; r++) {
+      const sorted = [...rowNodes[r]!].sort((a, b) => anchorU.get(a.id)! - anchorU.get(b.id)!);
+      const vLo = r > 0 ? rowBottomMax(r - 1) : -Infinity;
+      const vHi = r < rowNodes.length - 1 ? rowTopMin(r + 1) : Infinity;
       for (let i = 1; i < sorted.length; i++) {
         const a = sorted[i - 1]!;
         const b = sorted[i]!;
-        const gap =
-          anchorU.get(b.id)! - su(b) / 2 - (anchorU.get(a.id)! + su(a) / 2);
-        if (gap > gapCap) return decline(`row gap ${a.id}~${b.id} = ${Math.round(gap)}`);
+        const uLo = anchorU.get(a.id)! + su(a) / 2;
+        const uHi = anchorU.get(b.id)! - su(b) / 2;
+        if (uHi - uLo <= gapCap) continue;
+        const worked = planned.some((pe) => {
+          for (let k = 1; k < pe.pts.length; k++) {
+            const p = pe.pts[k - 1]!;
+            const q = pe.pts[k]!;
+            if (
+              Math.min(p.u, q.u) < uHi - 1 &&
+              Math.max(p.u, q.u) > uLo + 1 &&
+              Math.min(p.v, q.v) < vHi - 1 &&
+              Math.max(p.v, q.v) > vLo + 1
+            )
+              return true;
+          }
+          return false;
+        });
+        if (!worked)
+          return decline(`row gap ${a.id}~${b.id} = ${Math.round(uHi - uLo)} with nothing in it`);
       }
     }
 

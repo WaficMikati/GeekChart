@@ -607,6 +607,73 @@ describe('channel engine — the grid planner (phase 3a)', () => {
     );
   });
 
+  for (const [name, file, families] of [
+    [
+      'org-chart',
+      'org-chart.mmd',
+      [
+        ['ADM', ['A1', 'A2']],
+        ['ACA', ['B1', 'B2']],
+        ['CEO', ['ADM', 'ACA', 'CAR']],
+      ],
+    ],
+    [
+      'python-or-java',
+      'blog/python-or-java.mmd',
+      [
+        ['PY', ['PYDATA', 'PYWEB']],
+        ['JAVA', ['JAVAENT', 'JAVAAND']],
+      ],
+    ],
+  ] as [string, string, [string, string[]][]][]) {
+    test(`DESIGN 2.8/7.4: ${name} centres every parent on its children, gaps and all`, async () => {
+      // The defect the user's review flagged ten times: a narrow parent over a
+      // wide pair was parked ~60 off centre, because centring it opened a gap
+      // past 7.4's 200 to the next parent and the planner declined. 7.4's
+      // 2026-09-04 ruling: that gap carries the fan's own trunk, so it is not
+      // empty, and centring never yields to it.
+      const reply = await mount(fixture(file));
+      assert.ok(isChannels(reply.svg), `${name} should route through the channel engine`);
+      const boxes = await session.page.evaluate(() =>
+        [...document.querySelectorAll('svg.gc-chart .gc-node[data-id]')].map((n) => {
+          const b = (n.querySelector('.gc-outline') as SVGGraphicsElement).getBBox();
+          return { id: n.getAttribute('data-id')!, x: b.x, w: b.width };
+        }),
+      );
+      const at = (id: string) => {
+        const b = boxes.find((n) => n.id === id);
+        assert.ok(b, `${name} has no ${id}`);
+        return b;
+      };
+      for (const [parent, kids] of families) {
+        const p = at(parent);
+        const l = Math.min(...kids.map((k) => at(k).x));
+        const r = Math.max(...kids.map((k) => at(k).x + at(k).w));
+        const off = p.x + p.w / 2 - (l + r) / 2;
+        assert.ok(
+          Math.abs(off) <= 1,
+          `${parent} sits ${off.toFixed(1)} off the centre of ${kids.join('/')}`,
+        );
+      }
+      assert.deepEqual(await gateFails(), []);
+    });
+  }
+
+  test('7.4-even-whitespace keeps its teeth: an empty 200+ gap still fails', async () => {
+    // The 7.4 exemption is for a gap DOING work: org-chart's parent row has a
+    // 208 gap between ADM and ACA, and it passes because CEO's fan trunk runs
+    // through it. Take the line work away and the same geometry is genuinely
+    // empty whitespace — which still fails.
+    await mount(fixture('org-chart.mmd'));
+    assert.deepEqual(await gateCheck('7.4-even-whitespace'), []);
+    await session.page.evaluate(() => {
+      for (const e of document.querySelectorAll('svg.gc-chart .gc-edge, svg.gc-chart .gc-edge-label'))
+        e.remove();
+    });
+    const after = await gateCheck('7.4-even-whitespace');
+    assert.ok(after.length > 0, 'a 200+ gap with nothing running through it should fail 7.4');
+  });
+
   test('git-workflow: no node side both receives and emits, labels on their lines', async () => {
     // The user's review: Merge had a line out of the same side one came in.
     const reply = await mount(fixture('git-workflow.mmd'));
