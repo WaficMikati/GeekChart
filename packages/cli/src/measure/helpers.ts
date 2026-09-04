@@ -347,6 +347,58 @@ export function degrees(ctx: Ctx): { parents: Map<string, number>; children: Map
   });
 }
 
+/** A screen-space rectangle, in the same coordinates as `rect()`. */
+export interface Span {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * The line work a chart's channels are made of: every straight run of every
+ * routed edge, plus every label pill's plate.
+ *
+ * Two rules read this. DESIGN 2.3 (2026-09-04) exempts a gutter hosting a
+ * derived channel from its 32-or-8 gutter, because 2.7 sizes that corridor by
+ * what runs through it. DESIGN 7.4 (2026-09-04) rules that a gap a trunk or
+ * channel runs through is not empty — it is doing work.
+ */
+export function channelWork(ctx: Ctx): Span[] {
+  return ctx.memo('channelWork', () => {
+    const out: Span[] = [];
+    for (const { e } of edgeMeta(ctx)) {
+      const ctm = e.getScreenCTM();
+      if (!ctm) continue;
+      const pts = pathPointsHV(e.getAttribute('d'), ctm);
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1]!;
+        const b = pts[i]!;
+        out.push({
+          left: Math.min(a[0], b[0]),
+          right: Math.max(a[0], b[0]),
+          top: Math.min(a[1], b[1]),
+          bottom: Math.max(a[1], b[1]),
+        });
+      }
+    }
+    for (const plate of ctx.svg.querySelectorAll('.gc-edge-label .gc-plate')) {
+      if (!visible(plate, ctx.svg)) continue;
+      const b = rect(plate);
+      if (b.width) out.push({ left: b.left, right: b.right, top: b.top, bottom: b.bottom });
+    }
+    return out;
+  });
+}
+
+/** True when some channel run or pill passes through `r`. */
+export function channelWorkIn(ctx: Ctx, r: Span): boolean {
+  if (r.right - r.left < 2 || r.bottom - r.top < 2) return false;
+  return channelWork(ctx).some(
+    (w) => w.left < r.right - 1 && w.right > r.left + 1 && w.top < r.bottom - 1 && w.bottom > r.top + 1,
+  );
+}
+
 export interface CompositionRows {
   rowsOff: number;
   rowOffIds: string[];
@@ -423,6 +475,11 @@ export function compositionRows(ctx: Ctx): CompositionRows {
       }
     }
     const sorted = rows.map((rw) => [...rw.items].sort((a, b) => a.b.left - b.b.left));
+    // DESIGN 2.3's derived-channel exemption (2026-09-04). On a channel-engine
+    // chart a gutter can be a corridor 2.7 sized for what runs through it — a
+    // 112 gap derived for a 66-wide pill is not arbitrary. Only gutters with
+    // actual channel work in them are exempt; an empty 112 gap still fails.
+    const derived = ctx.svg.dataset.gcEngine === 'channels';
     for (let ri = 0; ri < sorted.length; ri++) {
       const neighbours = [sorted[ri - 1], sorted[ri + 1]].filter(Boolean).flat() as {
         id: string;
@@ -438,6 +495,16 @@ export function compositionRows(ctx: Ctx): CompositionRows {
         const b = row[k]!;
         const gap = (b.b.left - a.b.right) / ctx.unit;
         if (Math.abs(gap - 32) > 8 && !(aligned(a) && aligned(b))) {
+          if (
+            derived &&
+            channelWorkIn(ctx, {
+              left: a.b.right,
+              right: b.b.left,
+              top: rows[ri]!.top,
+              bottom: rows[ri]!.bottom,
+            })
+          )
+            continue;
           result.rowGaps++;
           result.rowGapIds.push(`${a.id}|${b.id}:${Math.round(gap)}`);
         }

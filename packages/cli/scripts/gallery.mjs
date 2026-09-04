@@ -130,6 +130,7 @@ const GROUPS = [
     note: "DESIGN 2.6's panel language and 2.10's one panel row (phase 3b)",
     items: [
       ['subgraph-pair', 'Subgraph pair', 'flowchart + subgraph'],
+      ['labeled-cross-panel', 'Labelled cross-panel edge', 'flowchart + subgraph'],
       ['three-subgraphs', 'Three subgraphs', 'flowchart + subgraph'],
       ['nested-subgraph', 'Nested subgraph', 'flowchart + subgraph'],
       ['nested-depth-3', 'Nested, three deep', 'flowchart + subgraph'],

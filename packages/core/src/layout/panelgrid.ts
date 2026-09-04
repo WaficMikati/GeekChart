@@ -640,22 +640,12 @@ export function layoutPanelChart(
     }
   }
   if (!solution) return null;
-  // 2.3 vs 2.7, unresolved in the spec as of 2026-09-04. 2.7 says a channel
-  // is sized by what lives in it and names the pill as one of those things —
-  // a 66-wide pill with 2×16 of line either side derives a 112 corridor. The
-  // gate's own `2.3-row-gutters` check, which predates 2.7, reads any gap
-  // between two top-level boxes in one composition row as 32 ± 8 unless both
-  // are column-aligned with a neighbour row, so it calls that 112 arbitrary.
-  //
-  // Rather than ship a chart the gate FAILs, this planner declines exactly
-  // the case where the two rules disagree — a widened band lying *across* a
-  // composition row — and hands it back to the old path. Stacked panels (the
-  // band runs down the page, so no composition row is measured) and labels
-  // inside a panel are unaffected and get 2.7's derived corridor.
-  const rootHorizontal = (interiorOf.get(ROOT) ?? flowAxis) === 'x';
-  if (rootHorizontal && BAND > GUTTER.panel + 8 && roots.length > 1) {
-    return decline(`band ${BAND} across a composition row is over 2.3's row gutter`);
-  }
+  // 2.3 vs 2.7 was resolved in the spec on 2026-09-04: a gutter hosting a
+  // derived channel is measured by 2.7's own derivation, so a 112 corridor
+  // carrying a 66-wide pill is not the arbitrary gap 2.3's check used to call
+  // it. This planner used to decline that case — a widened band lying across a
+  // composition row — and hand labelled cross-panel LR charts back to the old
+  // path. With the exemption in `2.3-row-gutters` they stay here.
   const { routes } = solution;
   // A declared display changes nothing here: 2.10 names one packing move for a
   // panel row, and it is the same move either way.

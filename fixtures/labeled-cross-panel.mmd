@@ -1,0 +1,8 @@
+flowchart LR
+  subgraph Frontend
+    A[React] --> B[Vite]
+  end
+  subgraph Backend
+    C[Express]
+  end
+  B -->|builds| C

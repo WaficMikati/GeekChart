@@ -1287,4 +1287,75 @@ describe('channel engine — panels', () => {
       [],
     );
   });
+
+  test('DESIGN 2.3/2.7: a labelled cross-panel edge in LR keeps the channel engine', async () => {
+    // The planner used to decline this exact shape: the corridor 2.7 derives
+    // for the pill is wider than 2.3's 32 gutter, and 2.3's check called that
+    // arbitrary. DESIGN 2.3's derived-channel exemption (2026-09-04) settled
+    // it — a gutter with a channel running through it is measured by 2.7.
+    const reply = await mount(readFileSync(join(fixtures, 'labeled-cross-panel.mmd'), 'utf8'));
+    assert.ok(isChannels(reply.svg), 'labeled-cross-panel should route through the channel engine');
+    assert.deepEqual(await gateFails(), []);
+
+    const seen = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const edge = svg.querySelector<SVGPathElement>('.gc-edge[data-id="L_B_C_0"]');
+      const plate = svg.querySelector<SVGRectElement>(
+        '.gc-edge-label[data-id="L_B_C_0"] .gc-plate',
+      );
+      if (!edge || !plate) return null;
+      const nums = (edge.getAttribute('d') ?? '').match(/-?[\d.]+/g)!.map(Number);
+      return {
+        x1: nums[0]!,
+        y: nums[1]!,
+        x2: nums[nums.length - 2]!,
+        straight: nums.length === 4,
+        pill: {
+          x: Number(plate.getAttribute('x')),
+          width: Number(plate.getAttribute('width')),
+          y: Number(plate.getAttribute('y')),
+          height: Number(plate.getAttribute('height')),
+        },
+      };
+    });
+    assert.ok(seen, 'found the crossing edge and its pill');
+
+    // 6.5: the pill sits ON the run it labels — centred along it, and centred
+    // across it, on a straight horizontal crossing.
+    assert.ok(seen.straight, 'the crossing run should be one straight segment');
+    assert.ok(
+      Math.abs(seen.pill.x + seen.pill.width / 2 - (seen.x1 + seen.x2) / 2) <= 1,
+      `pill centre ${seen.pill.x + seen.pill.width / 2} against run midpoint ${(seen.x1 + seen.x2) / 2}`,
+    );
+    assert.ok(
+      Math.abs(seen.pill.y + seen.pill.height / 2 - seen.y) <= 1,
+      'the pill sits on its line, not beside it',
+    );
+    // 2.7's derivation, measured: 15 or more of drawn line either side.
+    assert.ok(
+      seen.pill.x - Math.min(seen.x1, seen.x2) >= 15,
+      `only ${(seen.pill.x - Math.min(seen.x1, seen.x2)).toFixed(1)} of line before the pill`,
+    );
+    assert.ok(
+      Math.max(seen.x1, seen.x2) - (seen.pill.x + seen.pill.width) >= 15,
+      `only ${(Math.max(seen.x1, seen.x2) - seen.pill.x - seen.pill.width).toFixed(1)} of line after the pill`,
+    );
+
+    // 2.6's panel language, and 2.10's one row: the reason this chart is worth
+    // keeping on the new path at all.
+    const ps = await panels();
+    assert.equal(ps.length, 2);
+    for (const p of ps) {
+      assert.ok(p.kicker, `${p.id} has no kicker`);
+      assert.ok(
+        Math.abs(p.kicker!.x - p.x - 24) <= 1 && Math.abs(p.kicker!.y - p.y - 30) <= 1,
+        `${p.id}'s kicker is at ${(p.kicker!.x - p.x).toFixed(1)}/${(p.kicker!.y - p.y).toFixed(1)}, not 24/30`,
+      );
+      assert.ok(
+        Math.abs(Math.min(...p.kids.map((k) => k.y)) - p.y - 48) <= 1,
+        `${p.id}'s first row is not 48 below its top`,
+      );
+    }
+    assert.ok(Math.abs(ps[0]!.y - ps[1]!.y) <= 1, 'the two panels should share one row (2.10)');
+  });
 });
