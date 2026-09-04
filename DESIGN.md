@@ -244,7 +244,12 @@ and the check that enforces it cannot drift apart.
   channel-engine spike: 13/13 fan-family charts, zero overlaps, derived
   gaps of ~75 where the old pipeline spent up to 224.)
 - **2.8** **Fan symmetry.** A parent sits centred on the geometric extent of
-  its children as a group — measured, within **±1** — and a wrapped
+  its **entire subtree** — measured, within **±1** — not merely its
+  immediate children row: with uneven subtrees the two differ, and the
+  subtree is what the eye weighs (revised 2026-09-04: org-chart's
+  director sat centred on its three leads' midpoint, visibly off the
+  five-leaf row's centre — the user: "Academy director should be aligned
+  to Mentors. they should be in the same column"). A wrapped
   children group centres each row on the same axis; the axis holds through
   a wrap (the far row is fed by one spine down the near row's centre
   corridor, which 2.7's seating keeps free by giving the near row an even
