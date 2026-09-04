@@ -131,9 +131,11 @@ describe('channel engine — routing and scope', () => {
     // flow.mmd is an LR run of six ranks — wider than the undeclared room —
     // so the grid planner declines it and the old path runs unchanged.
     const flow = readFileSync(join(fixtures, 'flow.mmd'), 'utf8');
-    // A panel chart whose edges name the PANEL rather than a shape in it —
-    // the old path's own composition, which phase 3b deliberately declines
-    // (2.10 draws shape to shape, and rewriting those charts is not its job).
+    // A panel endpoint is legal now (2.10), but control-plane's OS carries
+    // four edges on a face against six columns inside it, and 2.10 states no
+    // alignment for a face whose edge count no column count matches — so the
+    // planner declines rather than spreading them by a rule nobody wrote, and
+    // the golden (10.6) keeps the picture it was drawn to.
     const panelEdges = readFileSync(join(fixtures, 'control-plane.mmd'), 'utf8');
     for (const src of [flow, panelEdges]) {
       const reply = await mount(src);
@@ -1677,5 +1679,113 @@ describe('channel engine — panels', () => {
       );
     }
     assert.ok(Math.abs(ps[0]!.y - ps[1]!.y) <= 1, 'the two panels should share one row (2.10)');
+  });
+
+  // DESIGN 2.10's panel endpoint: `EDGE --> APP` names the panels themselves,
+  // which the planner used to decline outright ("edge on a panel"). The author
+  // said "into the system", not "into each of these", so the edge attaches to
+  // the border, perpendicular, with the head stopping on it.
+  test('DESIGN 2.10: an edge naming a panel lands on its border, square, at the face centre', async () => {
+    const reply = await mount(readFileSync(join(fixtures, 'architecture.mmd'), 'utf8'));
+    assert.ok(isChannels(reply.svg), 'architecture should route through the channel engine');
+    assert.deepEqual(await gateCheck('2.10-panel-endpoint'), []);
+    assert.deepEqual(await gateFails(), []);
+
+    const seen = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const sb = svg.getBoundingClientRect();
+      const unit = sb.width / svg.viewBox.baseVal.width;
+      const box = (r: DOMRect) => ({
+        x: (r.left - sb.left) / unit,
+        y: (r.top - sb.top) / unit,
+        w: r.width / unit,
+        h: r.height / unit,
+      });
+      const panel = (id: string) =>
+        box(
+          document
+            .querySelector(`.gc-cluster[data-id="${id}"] .gc-cluster-box`)!
+            .getBoundingClientRect(),
+        );
+      const e = document.querySelector<SVGPathElement>('.gc-edge[data-id="L_EDGE_APP_0"]')!;
+      const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+      const ctm = e.getScreenCTM()!;
+      const pt = (i: number) => ({
+        x: (nums[i]! * ctm.a + ctm.e - sb.left) / unit,
+        y: (nums[i + 1]! * ctm.d + ctm.f - sb.top) / unit,
+      });
+      return {
+        from: panel('EDGE'),
+        to: panel('APP'),
+        start: pt(0),
+        end: pt(nums.length - 2),
+        bends: nums.length / 2 - 2,
+        head: box(
+          document.querySelector('.gc-arrow[data-id="L_EDGE_APP_0"]')!.getBoundingClientRect(),
+        ),
+      };
+    });
+
+    // Perpendicular, and on the face centre of both borders (2.10's sole-edge
+    // case, which is 6.2's midpoint rule at panel scale).
+    assert.equal(seen.bends, 0, 'a panel-to-panel edge on one axis is a straight run');
+    assert.ok(
+      Math.abs(seen.start.x - (seen.from.x + seen.from.w / 2)) <= 1,
+      `EDGE→APP leaves at x ${seen.start.x.toFixed(1)}, not EDGE's bottom-face centre`,
+    );
+    assert.ok(
+      Math.abs(seen.end.x - (seen.to.x + seen.to.w / 2)) <= 1,
+      `EDGE→APP arrives at x ${seen.end.x.toFixed(1)}, not APP's top-face centre`,
+    );
+    // The head stops ON the border — the whole point of the rule, and the one
+    // thing the old path's composition never did (see the next test).
+    assert.ok(
+      Math.abs(seen.head.y + seen.head.h - seen.to.y) <= 1,
+      `the arrowhead ends ${(seen.head.y + seen.head.h - seen.to.y).toFixed(1)} off APP's top border`,
+    );
+
+    // Teeth: an arrowhead nudged off the border fails the check.
+    await session.page.evaluate(() => {
+      const a = document.querySelector('.gc-arrow[data-id="L_EDGE_APP_0"]') as SVGElement;
+      a.setAttribute('transform', 'translate(0 -12)');
+    });
+    assert.ok(
+      (await gateCheck('2.10-panel-endpoint')).some((m) => m.includes('arrowhead')),
+      'an arrowhead off the border should fail 2.10-panel-endpoint',
+    );
+  });
+
+  test('2.10-panel-endpoint has teeth: the old path spreads its arrivals off the columns', async () => {
+    // control-plane is the old path's own panel-endpoint composition — the
+    // geometry 2.10's column clause replaces. Its four inputs are spread
+    // evenly across the panel's width instead of landing on the columns of
+    // the shapes inside, which is exactly what the new check measures; the
+    // chart is only spared because every channel check is keyed on
+    // `data-gc-engine` and control-plane still declines to the old path.
+    const reply = await mount(readFileSync(join(fixtures, 'control-plane.mmd'), 'utf8'));
+    assert.ok(!isChannels(reply.svg), 'control-plane still declines to the old path');
+    const seen = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const unit = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+      const panel = document
+        .querySelector('.gc-cluster[data-id="OS"] .gc-cluster-box')!
+        .getBoundingClientRect();
+      const mid = (r: DOMRect) => (r.left + r.right) / 2 / unit;
+      const columns = [...svg.querySelectorAll('.gc-node[data-id]')]
+        .map((n) => (n.querySelector('.gc-outline') ?? n).getBoundingClientRect())
+        .filter((b) => b.top > panel.top && b.bottom < panel.bottom)
+        .map(mid);
+      const arrivals = ['L_CRM_OS_0', 'L_MKT_OS_0', 'L_BRD_OS_0', 'L_CHN_OS_0'].map((id) =>
+        mid(document.querySelector(`.gc-arrow[data-id="${id}"]`)!.getBoundingClientRect()),
+      );
+      return { columns: [...new Set(columns.map((c) => Math.round(c)))], arrivals };
+    });
+    assert.equal(seen.columns.length, 3, 'OS holds three columns of shapes');
+    for (const a of seen.arrivals) {
+      assert.ok(
+        !seen.columns.some((c) => Math.abs(c - a) <= 2),
+        `an arrival at x ${a.toFixed(0)} would have matched a column after all`,
+      );
+    }
   });
 });

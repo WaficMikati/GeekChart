@@ -1261,6 +1261,149 @@ export const panelRow: Check = {
   },
 };
 
+/**
+ * DESIGN 2.10's panel endpoint: an edge naming the PANEL attaches to the
+ * panel's border, perpendicular, with the arrowhead stopping ON the border —
+ * the author said "into the system", not "into each of these", so it never
+ * fans to the shapes inside. A sole such edge on a face takes the face's
+ * centre (6.2's midpoint rule at panel scale); several on one face align
+ * column-for-column with the shapes inside.
+ *
+ * The border test is what the old path could never hold: its own composition
+ * stops the line short of the panel and leaves the head in the gap (measured
+ * on control-plane: an edge ending 7.5 above OS's top edge).
+ */
+export const panelEndpoint: Check = {
+  id: '2.10-panel-endpoint',
+  rule: '2.10',
+  run(svg, ctx) {
+    if (!isChannels(svg)) return [];
+    const panels = panelBoxes(ctx);
+    if (!panels.length) return [];
+    const byId = new Map(panels.map((p) => [p.id, p] as const));
+    const u = ctx.unit;
+    const tol = RULES['2.6-panel']!.threshold!;
+    const findings: Finding[] = [];
+
+    type Face = 'top' | 'bottom' | 'left' | 'right';
+    interface Touch {
+      edge: string;
+      at: number;
+      arriving: boolean;
+    }
+    const onFace = new Map<string, Touch[]>();
+
+    for (const m of edgeMeta(ctx)) {
+      const ctm = m.e.getScreenCTM();
+      if (!ctm) continue;
+      const pts = pathPointsHV(m.e.getAttribute('d'), ctm);
+      if (pts.length < 2) continue;
+      const ends: { p: PanelBox; arriving: boolean }[] = [];
+      if (m.from && byId.has(m.from)) ends.push({ p: byId.get(m.from)!, arriving: false });
+      if (m.to && byId.has(m.to)) ends.push({ p: byId.get(m.to)!, arriving: true });
+
+      for (const { p, arriving } of ends) {
+        const tip = arriving ? pts[pts.length - 1]! : pts[0]!;
+        const prev = arriving ? pts[pts.length - 2]! : pts[1]!;
+        const d = {
+          top: Math.abs(tip[1] - p.b.top),
+          bottom: Math.abs(tip[1] - p.b.bottom),
+          left: Math.abs(tip[0] - p.b.left),
+          right: Math.abs(tip[0] - p.b.right),
+        };
+        const face = (Object.keys(d) as Face[]).reduce((a, b) => (d[a] <= d[b] ? a : b));
+        // The DRAWN line stands off its own ends — 10.3's `edgeGapStart` at
+        // the source and the arrowhead's own reach at the target — so it is
+        // the head, checked below, that has to land on the border to 1. All
+        // this bound asks is that the end belongs to this face at all.
+        if (d[face] / u > 10) {
+          findings.push({
+            severity: 'fail',
+            message: `2.10 edge ${m.e.dataset.id} stops ${(d[face] / u).toFixed(1)} off panel ${p.id}'s ${face} border`,
+          });
+          continue;
+        }
+        // Perpendicular: the run that meets the border is square to it.
+        const vertical = face === 'top' || face === 'bottom';
+        const askew = vertical
+          ? Math.abs(tip[0] - prev[0]) / u
+          : Math.abs(tip[1] - prev[1]) / u;
+        if (askew > 1)
+          findings.push({
+            severity: 'fail',
+            message: `2.10 edge ${m.e.dataset.id} meets panel ${p.id}'s ${face} border ${askew.toFixed(1)} off square`,
+          });
+        // The arrowhead stops ON the border, never short of it in the gap.
+        if (arriving) {
+          const head = svg.querySelector(`.gc-arrow[data-id="${m.e.dataset.id}"]`);
+          if (head) {
+            const hb = rect(head);
+            const point =
+              face === 'top'
+                ? hb.bottom - p.b.top
+                : face === 'bottom'
+                  ? p.b.bottom - hb.top
+                  : face === 'left'
+                    ? hb.right - p.b.left
+                    : p.b.right - hb.left;
+            if (Math.abs(point) / u > 1)
+              findings.push({
+                severity: 'fail',
+                message: `2.10 edge ${m.e.dataset.id}'s arrowhead is ${(point / u).toFixed(1)} off panel ${p.id}'s ${face} border`,
+              });
+          }
+        }
+        const k = `${p.id}|${face}`;
+        onFace.set(k, [
+          ...(onFace.get(k) ?? []),
+          { edge: m.e.dataset.id ?? '?', at: vertical ? tip[0] : tip[1], arriving },
+        ]);
+      }
+    }
+
+    // Centre, or column for column.
+    for (const [k, touches] of onFace) {
+      const id = k.slice(0, k.lastIndexOf('|'));
+      const face = k.slice(k.lastIndexOf('|') + 1) as Face;
+      const p = byId.get(id)!;
+      const vertical = face === 'top' || face === 'bottom';
+      if (touches.length === 1) {
+        const centre = vertical ? (p.b.left + p.b.right) / 2 : (p.b.top + p.b.bottom) / 2;
+        const off = Math.abs(touches[0]!.at - centre) / u;
+        if (off > tol)
+          findings.push({
+            severity: 'fail',
+            message: `2.10 edge ${touches[0]!.edge} is ${off.toFixed(0)} off the centre of panel ${id}'s ${face} face`,
+          });
+        continue;
+      }
+      const cols: number[] = [];
+      for (const b of directChildren(ctx, p)) {
+        const v = vertical ? (b.left + b.right) / 2 : (b.top + b.bottom) / 2;
+        if (!cols.some((c) => Math.abs(c - v) / u < 1)) cols.push(v);
+      }
+      for (const t of touches) {
+        if (!cols.some((c) => Math.abs(c - t.at) / u <= tol))
+          findings.push({
+            severity: 'fail',
+            message: `2.10 edge ${t.edge} lands on no column of panel ${id}'s ${face} face`,
+          });
+      }
+      const seen = new Set<number>();
+      for (const t of touches) {
+        const key = Math.round(t.at / u);
+        if (seen.has(key))
+          findings.push({
+            severity: 'fail',
+            message: `2.10 two edges share one column on panel ${id}'s ${face} face`,
+          });
+        seen.add(key);
+      }
+    }
+    return findings;
+  },
+};
+
 export const CHANNEL_CHECKS: Check[] = [
   pillOnLine,
   fanSymmetry,
@@ -1272,4 +1415,5 @@ export const CHANNEL_CHECKS: Check[] = [
   returnBus,
   panelGeometry,
   panelRow,
+  panelEndpoint,
 ];

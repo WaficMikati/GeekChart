@@ -599,23 +599,33 @@ describe('routing', () => {
   });
 
   test('a panel centres its children, top gap equal to bottom gap (DESIGN 2.6)', async () => {
-    // architecture.mmd's "Edge" panel: Cloudflare/Rules engine used to sit
-    // right under the header rule with the panel's own bottom padding doubled
-    // below them — the rule was placed half a clusterPad below the header,
-    // but the content started right at that same line, so the gap below the
-    // rule was half the size of the gap above the panel's own floor.
-    await mount(readFileSync(join(fixtures, 'architecture.mmd'), 'utf8'));
+    // The defect: a panel's children sat right under the header rule with the
+    // panel's own bottom padding doubled below them — the rule was placed half
+    // a clusterPad below the header, but the content started right at that
+    // same line, so the gap below the rule was half the size of the gap above
+    // the panel's own floor.
+    //
+    // Measured on control-plane rather than architecture since 2026-09-04:
+    // architecture's panels are the channel engine's now (2.10's panel
+    // endpoints), and a channel panel has a kicker in a reserved strip, no
+    // header rule — its padding is the `2.6-panel` gate check's business.
+    // control-plane still declines to the old path, so this composition is
+    // still shipped and still needs its guard.
+    await mount(readFileSync(join(fixtures, 'control-plane.mmd'), 'utf8'));
     const box = (el: SVGGraphicsElement) => {
       const b = el.getBBox();
       return { y: b.y, height: b.height };
     };
-    const [panel, rule, row] = await Promise.all([
-      session.page.$eval('.gc-cluster[data-id="EDGE"] .gc-cluster-box', box),
-      session.page.$eval('.gc-cluster[data-id="EDGE"] .gc-cluster-rule', box),
-      session.page.$eval('.gc-node[data-id="CDN"] .gc-outline', box),
+    // OS holds two rows, so the gap above its contents is measured on the
+    // first and the gap below on the last.
+    const [panel, rule, firstRow, lastRow] = await Promise.all([
+      session.page.$eval('.gc-cluster[data-id="OS"] .gc-cluster-box', box),
+      session.page.$eval('.gc-cluster[data-id="OS"] .gc-cluster-rule', box),
+      session.page.$eval('.gc-node[data-id="OE"] .gc-outline', box),
+      session.page.$eval('.gc-node[data-id="MF"] .gc-outline', box),
     ]);
-    const topGap = row.y - (rule.y + rule.height);
-    const bottomGap = panel.y + panel.height - (row.y + row.height);
+    const topGap = firstRow.y - (rule.y + rule.height);
+    const bottomGap = panel.y + panel.height - (lastRow.y + lastRow.height);
     assert.ok(
       Math.abs(topGap - bottomGap) < 3,
       `gap above the row is ${topGap.toFixed(1)}, below the panel floor is ${bottomGap.toFixed(1)} — not centred`,

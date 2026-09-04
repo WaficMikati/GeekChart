@@ -160,12 +160,13 @@ export function layoutPanelChart(
   const clusterById = new Map(graph.clusters.map((c) => [c.id, c] as const));
 
   // --- screen -------------------------------------------------------------
+  // DESIGN 2.10: an edge naming the PANEL is a legal endpoint — the author
+  // said "into the system", not "into each of these" — so it attaches to the
+  // panel's own border rather than to a shape inside. An edge naming two
+  // shapes still connects the shapes; the border is never a proxy for those.
+  const known = (id: string): boolean => byId.has(id) || clusterById.has(id);
   for (const e of graph.edges) {
-    // A panel named as an endpoint is the old path's composition (an edge
-    // landing on the border as a proxy); 2.10 draws shape-to-shape instead,
-    // and rewriting those charts is not this phase's business.
-    if (clusterById.has(e.from) || clusterById.has(e.to)) return decline('edge on a panel');
-    if (!byId.has(e.from) || !byId.has(e.to)) return decline('edge endpoint missing');
+    if (!known(e.from) || !known(e.to)) return decline('edge endpoint missing');
     if (e.backward || e.from === e.to) return decline('loop-back');
   }
   if (!graph.clusters.length) return decline('no panels');
@@ -257,10 +258,14 @@ export function layoutPanelChart(
   };
   const roots = build();
 
-  /** Ancestor chain of a node, innermost panel first. */
-  const chainOf = (nodeId: string): string[] => {
+  /** The item an edge endpoint names: a shape, or (2.10) a panel itself. */
+  const itemOf = (id: string): Item => (nodeItems.get(id) ?? panelItems.get(id))!;
+  /** Ancestor chain of an endpoint, innermost panel first — a panel named as
+   *  an endpoint is a member of its OWN parent, not of itself. */
+  const chainOf = (id: string): string[] => {
     const out: string[] = [];
-    for (let cur = ownerOf.get(nodeId); cur; cur = parentOf.get(cur)) out.push(cur);
+    const first = clusterById.has(id) ? parentOf.get(id) : ownerOf.get(id);
+    for (let cur = first; cur; cur = parentOf.get(cur)) out.push(cur);
     return out;
   };
   /** The container that owns an edge, and the two of its items it runs between. */
@@ -275,9 +280,9 @@ export function layoutPanelChart(
       }
     }
     const itemFor = (nodeId: string, chain: string[]): Item => {
-      if (owner === null) return chain.length ? panelItems.get(chain[chain.length - 1]!)! : nodeItems.get(nodeId)!;
+      if (owner === null) return chain.length ? panelItems.get(chain[chain.length - 1]!)! : itemOf(nodeId);
       const i = chain.indexOf(owner);
-      return i === 0 ? nodeItems.get(nodeId)! : panelItems.get(chain[i - 1]!)!;
+      return i === 0 ? itemOf(nodeId) : panelItems.get(chain[i - 1]!)!;
     };
     const from = itemFor(e.from, a);
     const to = itemFor(e.to, b);
@@ -519,7 +524,7 @@ export function layoutPanelChart(
   }
 
   const boxOf = (id: string): { x: number; y: number; w: number; h: number } => {
-    const it = nodeItems.get(id)!;
+    const it = itemOf(id);
     return { x: it.x, y: it.y, w: it.w, h: it.h };
   };
 
@@ -529,7 +534,20 @@ export function layoutPanelChart(
   const solve = (): Solved | null => {
     const seated = attempt();
     if (!seated) return null;
-    const routes: Route[] = [];
+    // Pass 1: every edge's corridor and its two attachment coordinates. A
+    // shape's own face midpoint (6.2); a panel named as an endpoint gets its
+    // border's face centre, which 2.10's own pass below may then move onto a
+    // column when the face carries more than one edge.
+    interface Leg {
+      edge: GraphEdge;
+      horizontal: boolean;
+      a: { x: number; y: number; w: number; h: number };
+      b: { x: number; y: number; w: number; h: number };
+      mid: number;
+      ac: number;
+      bc: number;
+    }
+    const legs: Leg[] = [];
     for (const e of graph.edges) {
       const l = liftedOf(e)!;
       const horizontal = (interiorOf.get(key(l.owner)) ?? flowAxis) === 'x';
@@ -541,11 +559,61 @@ export function layoutPanelChart(
       const gapLo = horizontal ? l.from.x + l.from.w : l.from.y + l.from.h;
       const gapHi = horizontal ? l.to.x : l.to.y;
       if (gapHi - gapLo < 8) return decline(`${e.id} has no corridor`);
-      const mid = (gapLo + gapHi) / 2;
-      const ac = horizontal ? a.y + a.h / 2 : a.x + a.w / 2;
-      const bc = horizontal ? b.y + b.h / 2 : b.x + b.w / 2;
-      // DESIGN 6.2: both ends are the shape's own face midpoint, left
-      // perpendicular — never the panel border standing in for the shape.
+      legs.push({
+        edge: e,
+        horizontal,
+        a,
+        b,
+        mid: (gapLo + gapHi) / 2,
+        ac: horizontal ? a.y + a.h / 2 : a.x + a.w / 2,
+        bc: horizontal ? b.y + b.h / 2 : b.x + b.w / 2,
+      });
+    }
+
+    // Pass 2, DESIGN 2.10: a sole edge on a panel face takes the face centre
+    // (6.2's midpoint rule at panel scale); several on one face align
+    // column-for-column with the shapes inside — the Lyzr pattern the rule
+    // always described. A face carrying a number of edges the panel has no
+    // matching number of columns for has no stated alignment, so it declines
+    // rather than being spread by a rule nobody wrote.
+    const columnsOf = (pid: string, horizontal: boolean): number[] => {
+      const vals: number[] = [];
+      for (const c of panelItems.get(pid)!.items) {
+        const v = horizontal ? c.y + c.h / 2 : c.x + c.w / 2;
+        if (!vals.some((u) => Math.abs(u - v) < 1)) vals.push(v);
+      }
+      return vals.sort((u, v) => u - v);
+    };
+    const faces = new Map<string, { leg: Leg; end: 'a' | 'b'; far: number }[]>();
+    for (const leg of legs) {
+      const add = (pid: string, side: Side, end: 'a' | 'b'): void => {
+        const k = `${pid}|${side}`;
+        faces.set(k, [
+          ...(faces.get(k) ?? []),
+          { leg, end, far: end === 'a' ? leg.bc : leg.ac },
+        ]);
+      };
+      if (panelItems.has(leg.edge.from)) add(leg.edge.from, leg.horizontal ? 'right' : 'bottom', 'a');
+      if (panelItems.has(leg.edge.to)) add(leg.edge.to, leg.horizontal ? 'left' : 'top', 'b');
+    }
+    for (const [k, group] of faces) {
+      if (group.length < 2) continue;
+      const pid = k.slice(0, k.lastIndexOf('|'));
+      const cols = columnsOf(pid, group[0]!.leg.horizontal);
+      if (cols.length !== group.length)
+        return decline(
+          `${group.length} edges on ${pid}'s ${k.slice(k.lastIndexOf('|') + 1)} face against ${cols.length} columns inside`,
+        );
+      const order = [...group].sort((p, q) => p.far - q.far);
+      order.forEach((entry, i) => {
+        if (entry.end === 'a') entry.leg.ac = cols[i]!;
+        else entry.leg.bc = cols[i]!;
+      });
+    }
+
+    // Pass 3: coordinates, derived last (2.7).
+    const routes: Route[] = [];
+    for (const { edge, horizontal, a, b, mid, ac, bc } of legs) {
       const start: Pt = horizontal ? { x: a.x + a.w, y: ac } : { x: ac, y: a.y + a.h };
       const end: Pt = horizontal ? { x: b.x, y: bc } : { x: bc, y: b.y };
       const pts: Pt[] =
@@ -555,7 +623,7 @@ export function layoutPanelChart(
             ? [start, { x: mid, y: ac }, { x: mid, y: bc }, end]
             : [start, { x: ac, y: mid }, { x: bc, y: mid }, end];
       routes.push({
-        edge: e,
+        edge,
         pts,
         startSide: horizontal ? 'right' : 'bottom',
         endSide: horizontal ? 'left' : 'top',
@@ -573,6 +641,13 @@ export function layoutPanelChart(
     for (const r of routes) {
       if (kids.get(r.edge.from) !== 1 || dads.get(r.edge.to) !== 1) continue;
       if (r.pts.length === 2) continue;
+      // Not between panels (2.10): a panel's cross position is 2.6's shared
+      // row, flush at the top so children of sibling panels land on exact
+      // rows, and its attachment is 2.10's own face centre. Neither end has
+      // the placement freedom this clause polices, so two panels of different
+      // heights meeting in the corridor is the geometry the rules ask for —
+      // platform-layers' CONTENT (two stacked shapes) into LP (one).
+      if (panelItems.has(r.edge.from) || panelItems.has(r.edge.to)) continue;
       const a = boxOf(r.edge.from);
       const b = boxOf(r.edge.to);
       const horizontal = r.startSide === 'right';
@@ -601,13 +676,33 @@ export function layoutPanelChart(
   const depthSorted = [...panelItems.values()].sort((a, b) => depthOf(b.id) - depthOf(a.id));
   const packOrder: string[] = [...depthSorted.map((p) => p.id), ROOT];
 
+  /**
+   * `interiorOf` names the axis a container's RANKS advance on, and a rank's
+   * own items sit side by side across the other one. So which axis makes the
+   * contents run top to bottom depends on whether the container has ranks at
+   * all: a panel whose children are joined by edges stacks along `y`, while a
+   * panel of unconnected children is one rank — prompt-anatomy's five prompt
+   * parts, control-plane's six layers — and its shapes lie along the CROSS
+   * axis, so the same stack is asked for as `x`. Read the wrong way round, a
+   * one-rank panel answered 2.10's packing move by not moving at all.
+   */
+  const ranked = (id: string): boolean => {
+    const items = id === ROOT ? roots : panelItems.get(id)!.items;
+    return (liftedIn.get(id) ?? []).some((l) => items.includes(l.from) && items.includes(l.to));
+  };
+  const stackAxis = (id: string): Axis => (ranked(id) ? 'y' : 'x');
+  const spreadAxis = (id: string): Axis => (ranked(id) ? 'x' : 'y');
+
   let solution = solve();
   if (solution && overWide(solution.seated)) {
     // DESIGN 2.10: a panel row too wide for the display does not wrap — the
     // panels' CONTENTS stack top-to-bottom instead, and the row stands.
-    for (const p of depthSorted) interiorOf.set(p.id, 'y');
+    for (const p of depthSorted) interiorOf.set(p.id, stackAxis(p.id));
     const packed = solve();
-    if (packed && packed.seated.w < solution.seated.w) solution = packed;
+    // A packing move that buys width with a 1.4 violation has not packed the
+    // chart, it has broken it: 1.1's own remedy for a chart packing cannot
+    // reach is to draw it wide (a WARN), never to make it two screens tall.
+    if (packed && packed.seated.w < solution.seated.w && !overTall(packed.seated)) solution = packed;
     else {
       interiorOf.clear();
       solution = solve();
@@ -618,7 +713,7 @@ export function layoutPanelChart(
     // panel first, stopping as soon as the chart fits.
     for (const id of packOrder) {
       if (!solution || !overTall(solution.seated)) break;
-      interiorOf.set(id, 'x');
+      interiorOf.set(id, spreadAxis(id));
       const flatter = solve();
       if (flatter && !overWide(flatter.seated) && !overTall(flatter.seated)) solution = flatter;
       else interiorOf.delete(id);

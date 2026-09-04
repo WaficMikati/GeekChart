@@ -59,6 +59,7 @@ import {
   pillOnLine,
   fanLegsMirror,
   fanSymmetry,
+  panelEndpoint,
   panelGeometry,
   panelRow,
   returnBus,
@@ -145,6 +146,7 @@ export const ALL_CHECKS: Check[] = [
   returnBus,
   panelGeometry,
   panelRow,
+  panelEndpoint,
 ];
 
 export interface MeasureResult {
