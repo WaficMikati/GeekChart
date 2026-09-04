@@ -128,7 +128,120 @@ export const pillOnLine: Check = {
         message: `6.5 pill overlaps: ${pillPill} pill/pill, ${pillNode} pill/node`,
       });
     }
+
+    // DESIGN 6.5/10.3: the centre is the midpoint of the run's DRAWN extent —
+    // the line as painted, which stops short of the arrowhead — not of the
+    // vertex-to-face span. Measured on the end legs of a path, the two the
+    // stub and the head shorten; a middle leg is a shared corridor or band,
+    // where 6.5's own bus clause and 6.14 place the pill deliberately. A pill
+    // the engine had to slide (6.5's one allowed movement) is measured for
+    // being on its line, above, and not for centring: something is in the way
+    // of the midpoint by construction.
+    const offCentre: string[] = [];
+    for (const p of all) {
+      const e = svg.querySelector<SVGGeometryElement>(`.gc-edge[data-id="${p.id}"]`);
+      const ctm = e?.getScreenCTM();
+      if (!e || !ctm) continue;
+      const pts = pathPointsHV(e.getAttribute('d'), ctm);
+      if (pts.length < 2) continue;
+      const cx = (p.b.left + p.b.right) / 2;
+      const cy = (p.b.top + p.b.bottom) / 2;
+      let best = -1;
+      let bestD = Infinity;
+      for (let i = 1; i < pts.length; i++) {
+        const d = distPointSeg(cx, cy, pts[i - 1]![0], pts[i - 1]![1], pts[i]![0], pts[i]![1]);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      if (best !== 1 && best !== pts.length - 1) continue;
+      const a = pts[best - 1]!;
+      const b = pts[best]!;
+      const vertical = Math.abs(a[0] - b[0]) < 1;
+      const half = (vertical ? p.b.height : p.b.width) / 2;
+      const lo = Math.min(vertical ? a[1] : a[0], vertical ? b[1] : b[0]);
+      const hi = Math.max(vertical ? a[1] : a[0], vertical ? b[1] : b[0]);
+      // Crowded: another pill, or a foreign edge riding the same run, is what
+      // the slide exists for.
+      const band = (vertical ? p.b.width : p.b.height) / 2 + 2 * ctx.unit;
+      let crowded = all.some(
+        (q) =>
+          q !== p &&
+          q.b.left < p.b.right + band &&
+          p.b.left < q.b.right + band &&
+          q.b.top < p.b.bottom + band &&
+          p.b.top < q.b.bottom + band,
+      );
+      for (const other of svg.querySelectorAll<SVGGeometryElement>('.gc-edge[data-id]')) {
+        if (crowded) break;
+        if (other.dataset.id === p.id) continue;
+        const octm = other.getScreenCTM();
+        if (!octm) continue;
+        const opts = pathPointsHV(other.getAttribute('d'), octm);
+        for (let i = 1; i < opts.length && !crowded; i++) {
+          const s1 = opts[i - 1]!;
+          const s2 = opts[i]!;
+          const near =
+            distPointSeg((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, s1[0], s1[1], s2[0], s2[1]) < band ||
+            distPointSeg(cx, cy, s1[0], s1[1], s2[0], s2[1]) < band;
+          if (near) crowded = true;
+        }
+      }
+      if (crowded) continue;
+      const centre = vertical ? cy : cx;
+      const drawnMid = (lo + hi) / 2;
+      // A run with no slack cannot centre anything; that is 2.7's job, and
+      // 2.9's own check measures the flank runs where it matters.
+      if (hi - lo < 2 * half) continue;
+      if (Math.abs(centre - drawnMid) > ctx.unit) {
+        offCentre.push(`${p.id}:${((centre - drawnMid) / ctx.unit).toFixed(1)}`);
+      }
+    }
+    if (offCentre.length) {
+      findings.push({
+        severity: 'fail',
+        message:
+          `6.5 ${offCentre.length} pills off the midpoint of their run's drawn extent ` +
+          `(${offCentre.slice(0, 3).join(' ')})`,
+      });
+    }
     return findings;
+  },
+};
+
+/**
+ * DESIGN 2.4: one diamond size per chart. A decision solved from its own
+ * label alone gives a chart two diamonds of different sizes — two-diamonds
+ * drew First? at 120×64 beside Second? at 136×72 — which breaks 2.3's shared
+ * column as well as the look, since a leaf beside the narrower one sits
+ * further in.
+ */
+export const uniformDiamond: Check = {
+  id: '2.4-uniform-diamond',
+  rule: '2.4',
+  run(svg, ctx) {
+    if (!isChannels(svg)) return [];
+    const sizes: { id: string; w: number; h: number }[] = [];
+    for (const [id, n] of nodeById(ctx)) {
+      if (!n.classList.contains('gc-shape-diamond')) continue;
+      const b = rect(outline(n));
+      if (b.width) sizes.push({ id, w: b.width / ctx.unit, h: b.height / ctx.unit });
+    }
+    if (sizes.length < 2) return [];
+    const w = sizes[0]!.w;
+    const h = sizes[0]!.h;
+    const odd = sizes.filter((s) => Math.abs(s.w - w) > 1 || Math.abs(s.h - h) > 1);
+    return odd.length
+      ? [
+          {
+            severity: 'fail',
+            message:
+              `2.4 ${odd.length + 1} diamonds at different sizes ` +
+              `(${sizes.map((s) => `${s.id} ${Math.round(s.w)}×${Math.round(s.h)}`).join(', ')})`,
+          },
+        ]
+      : [];
   },
 };
 
@@ -310,6 +423,7 @@ export const sameRowLeaf: Check = {
     const spare = (display || ctx.vb.width) - ctx.vb.width; // canvas units left
     const plateOf = new Map(plates(ctx).map((p) => [p.id, p.b] as const));
     const findings: Finding[] = [];
+    const flankLeaves: { dir: -1 | 1; id: string; box: DOMRect }[] = [];
 
     for (const [id, node] of ids) {
       if (!node.classList.contains('gc-shape-diamond') || loopy.has(id)) continue;
@@ -361,6 +475,7 @@ export const sameRowLeaf: Check = {
             message: `2.9 the run ${id}→${m.to} does not join the side vertex to the near face`,
           });
         }
+        flankLeaves.push({ dir: rightward ? 1 : -1, id: m.to!, box: lb });
         const plate = plateOf.get(m.e.dataset.id ?? '');
         if (plate) {
           const pcy = (plate.top + plate.bottom) / 2;
@@ -374,7 +489,46 @@ export const sameRowLeaf: Check = {
               message: `2.9 the label on ${id}→${m.to} is not centred on its run`,
             });
           }
+          // The gutter is derived from the pill plus 16 of visible line
+          // either side (2.9's geometry), so a run always reads as a line
+          // with a label on it, never as two nubs — and the pill sits on the
+          // midpoint of the DRAWN extent, so the two stubs match.
+          const before = (plate.left - x1) / ctx.unit;
+          const after = (x2 - plate.right) / ctx.unit;
+          if (before < 15 || after < 15) {
+            findings.push({
+              severity: 'fail',
+              message:
+                `2.9 the run ${id}→${m.to} shows ${before.toFixed(1)}/${after.toFixed(1)} ` +
+                `of line either side of its pill (16 each)`,
+            });
+          } else if (Math.abs(before - after) > 1) {
+            findings.push({
+              severity: 'fail',
+              message:
+                `2.9 the pill on ${id}→${m.to} is off the drawn midpoint: ` +
+                `${before.toFixed(1)} of line one side, ${after.toFixed(1)} the other`,
+            });
+          }
         }
+      }
+    }
+
+    // DESIGN 2.3 applied to flanks: one chart-wide gutter, so every leaf on
+    // one flank shares an exact x however many rows apart they sit —
+    // two-diamonds' Beta and Gamma, diamond-cascade's two Rejects.
+    for (const dir of [-1, 1] as const) {
+      const side = flankLeaves.filter((f) => f.dir === dir);
+      if (side.length < 2) continue;
+      const near = (f: (typeof side)[number]) => (dir === 1 ? f.box.left : f.box.right);
+      const spread = Math.max(...side.map(near)) - Math.min(...side.map(near));
+      if (spread > ctx.unit) {
+        findings.push({
+          severity: 'fail',
+          message:
+            `2.9 ${side.length} leaves on one flank sit at ${(spread / ctx.unit).toFixed(1)} ` +
+            `different x (${side.map((f) => f.id).join(' ')})`,
+        });
       }
     }
     return findings;
@@ -629,6 +783,7 @@ export const CHANNEL_CHECKS: Check[] = [
   pillOnLine,
   fanSymmetry,
   sameRowLeaf,
+  uniformDiamond,
   ribbon,
   sideExclusivity,
   returnBus,

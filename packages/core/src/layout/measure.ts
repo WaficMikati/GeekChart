@@ -160,6 +160,12 @@ export function fitShape(
   const pad = scene.padShape;
   switch (m.node.shape) {
     case 'diamond':
+      // A diamond solved from its own label, which is why one chart can hold
+      // two diamonds of different sizes. DESIGN 2.4 asks for one size per
+      // chart; the channel engine levels them to the largest after this runs
+      // (`layout/index.ts`). The old path still ships them as they come out
+      // here — five of its charts, python-or-java at 968 of a 1000 canvas
+      // among them, are laid out around exactly these sizes.
       return diamondSize(label.width, label.height, pad);
     case 'circle': {
       // The corner of the label box is the furthest point from the centre.

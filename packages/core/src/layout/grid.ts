@@ -57,6 +57,9 @@ const LOOP_CLEAR = 24;
 const TRACK = 16;
 /** DESIGN 6.1/6.8: an edge keeps this clear of a node it does not connect. */
 const EDGE_NODE_CLEAR = 16;
+/** DESIGN 2.9: visible line either side of a flank pill, before the stub and
+ *  the arrowhead — what makes the run read as a line rather than two nubs. */
+const FLANK_STUB = 16;
 
 /** Development aid: `GC_GRID_DEBUG=1` logs why a chart fell back. Browser
  *  bundles have no `process`, so the read is through `globalThis`. */
@@ -345,26 +348,38 @@ export function layoutGrid(
     flipShallow: boolean,
   ): { anchor: Map<string, number>; width: number } | null => {
     const exts = new Map<string, SubExt>();
+    // DESIGN 2.9's geometry: the flank gutter is one CHART-WIDE value, so
+    // same-flank leaves on different rows share an exact x (2.3 applied to
+    // flanks) — two-diamonds' Beta and Gamma line up, and so do
+    // diamond-cascade's two Rejects. Derived the way 2.7 derives any channel,
+    // from what has to live in the gap: the widest flank pill, 16 of visible
+    // line either side of it (so no pill is left with 7-unit nubs), the
+    // arrowhead at the leaf's face and the stub at the decision's vertex.
+    // Never less than a sibling gutter.
+    const flankGap = sideRow.size
+      ? Math.max(
+          GUTTER.sibling,
+          roundUp(
+            Math.max(
+              0,
+              ...[...sideRow.values()].map((s) => {
+                const pill = pills.get(s.edge.id);
+                return pill ? pu(pill) : 0;
+              }),
+            ) +
+              2 * FLANK_STUB +
+              scene.edgeGap +
+              scene.edgeGapStart,
+            GRID,
+          ),
+        )
+      : 0;
     const build = (id: string): SubExt => {
       const cached = exts.get(id);
       if (cached) return cached;
       const node = byId.get(id)!;
       const w = su(node);
-      // DESIGN 2.9: the flanks a decision's own row-mates need. The gap is
-      // derived from what lives on the run (2.7): the pill plus its node
-      // clearance, never less than a sibling gutter.
       const flanks = kidsOf.get(id)!.filter((e) => sideRow.has(e.to));
-      // DESIGN 2.3: one gutter for the row, so a decision holding a leaf on
-      // each side is symmetric — the wider of the two runs sets both.
-      const flankGap = flanks.length
-        ? Math.max(
-            GUTTER.sibling,
-            ...flanks.map((e) => {
-              const pill = pills.get(e.id);
-              return pill ? pu(pill) + 2 * PILL_NODE_CLEAR : 0;
-            }),
-          )
-        : 0;
       const flankOf = (dir: -1 | 1): { edge: GraphEdge; gap: number; width: number } | null => {
         for (const e of flanks) {
           if (sideRow.get(e.to)!.dir !== dir) continue;
@@ -1476,13 +1491,68 @@ export function layoutGrid(
     const realPts = new Map<string, { x: number; y: number }[]>();
     for (const pe of planned) realPts.set(pe.edge.id, pe.pts.map(X));
 
+    /**
+     * DESIGN 6.5/10.3: a run's DRAWN extent — the line as painted. `draw.ts`
+     * stops the path `scene.edgeGapStart` after its first point and
+     * `scene.edgeGap` before its last, which is where the arrowhead lives, so
+     * a pill centred on the vertex-to-face span sits visibly off centre on
+     * the ink. Clipped here, once, for every pill the engine seats.
+     */
+    const drawnRun = (
+      pts: { x: number; y: number }[],
+      a: { x: number; y: number },
+      b: { x: number; y: number },
+    ): [{ x: number; y: number }, { x: number; y: number }] => {
+      if (pts.length < 2) return [a, b];
+      const drawn = pts.map((p) => ({ ...p }));
+      const pull = (i: number, j: number, by: number): void => {
+        const dx = drawn[j]!.x - drawn[i]!.x;
+        const dy = drawn[j]!.y - drawn[i]!.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 0.01) return;
+        const t = Math.min(by, len) / len;
+        drawn[i] = { x: drawn[i]!.x + dx * t, y: drawn[i]!.y + dy * t };
+      };
+      pull(0, 1, scene.edgeGapStart);
+      pull(drawn.length - 1, drawn.length - 2, scene.edgeGap);
+      const vertical = Math.abs(a.x - b.x) < 0.01;
+      const mid = vertical ? (a.y + b.y) / 2 : (a.x + b.x) / 2;
+      for (let i = 1; i < drawn.length; i++) {
+        const p = drawn[i - 1]!;
+        const q = drawn[i]!;
+        const segVertical = Math.abs(p.x - q.x) < 0.01;
+        if (segVertical !== vertical) continue;
+        if (Math.abs((vertical ? p.x : p.y) - (vertical ? a.x : a.y)) > 1) continue;
+        const lo = Math.min(vertical ? p.y : p.x, vertical ? q.y : q.x);
+        const hi = Math.max(vertical ? p.y : p.x, vertical ? q.y : q.x);
+        // The plan's own run sits on this segment: clip it to the ink.
+        const aAt = vertical ? a.y : a.x;
+        const bAt = vertical ? b.y : b.x;
+        if (mid < Math.min(lo, hi) - 1 || mid > Math.max(lo, hi) + 1) continue;
+        const clamp = (v: number): number => Math.min(hi, Math.max(lo, v));
+        return vertical
+          ? [
+              { x: a.x, y: clamp(aAt) },
+              { x: b.x, y: clamp(bAt) },
+            ]
+          : [
+              { x: clamp(aAt), y: a.y },
+              { x: clamp(bAt), y: b.y },
+            ];
+      }
+      return [a, b];
+    };
+
     // Pills, seated on their runs in real coordinates, then slid apart.
     const seatedPills: SeatedPill[] = [];
     for (const pe of planned) {
       const pill = pills.get(pe.edge.id);
       if (!pill || !pe.pillRun) continue;
-      const a = X(pe.pillRun[0]);
-      const b = X(pe.pillRun[1]);
+      const [a, b] = drawnRun(
+        realPts.get(pe.edge.id)!,
+        X(pe.pillRun[0]),
+        X(pe.pillRun[1]),
+      );
       const at = pe.pillAt ? X(pe.pillAt) : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       seatedPills.push({
         edge: pe.edge,

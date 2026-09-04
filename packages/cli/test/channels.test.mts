@@ -351,6 +351,92 @@ describe('channel engine — the grid planner (phase 3a)', () => {
     assert.equal(await rowsOf(), 3, 'the leaf costs no rank of its own');
   });
 
+  /** A pill's plate and the drawn run under it, in canvas units. */
+  const runAndPill = async (edgeId: string) =>
+    session.page.evaluate((eid) => {
+      // Everything here is read in the chart's own user space: the path's
+      // numbers and the plate's own x/width, so no screen scale enters.
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const path = svg.querySelector(`.gc-edge[data-id="${eid}"]`)!;
+      const nums = (path.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+      const plate = svg.querySelector(`.gc-edge-label[data-id="${eid}"] .gc-plate`)!;
+      const px = Number(plate.getAttribute('x'));
+      const pw = Number(plate.getAttribute('width'));
+      const xs = nums.filter((_, i) => i % 2 === 0);
+      return {
+        x1: Math.min(...xs),
+        x2: Math.max(...xs),
+        plateLeft: px,
+        plateRight: px + pw,
+      };
+    }, edgeId);
+
+  test('DESIGN 2.9/6.5: two-diamonds’ flanks share one gutter, and each pill rides the middle of the line it labels', async () => {
+    // The mockup the geometry was approved from: one chart-wide gutter, so
+    // Beta and Gamma share an exact x however many rows apart; 16 of visible
+    // line either side of every pill instead of 7-unit nubs; and the pill on
+    // the midpoint of the DRAWN extent — the line minus the arrowhead — not
+    // of the vertex-to-face span, which sat it 1.7 off.
+    await mount(fixture('two-diamonds.mmd'));
+    const [b, c, q1, q2] = await Promise.all(['B', 'C', 'Q1', 'Q2'].map(nodeBox));
+    assert.ok(
+      Math.abs(b!.x - c!.x) <= 1 && Math.abs(b!.w - c!.w) <= 1,
+      `Beta at x=${b!.x} and Gamma at x=${c!.x} do not share a flank column`,
+    );
+    // DESIGN 2.4: one diamond size per chart, so the two flanks start from
+    // the same vertex — the sizes were 120×64 and 136×72.
+    assert.ok(
+      Math.abs(q1!.w - q2!.w) <= 1 && Math.abs(q1!.h - q2!.h) <= 1,
+      `First? is ${q1!.w}×${q1!.h} beside Second? at ${q2!.w}×${q2!.h}`,
+    );
+    for (const id of ['L_Q1_B_0', 'L_Q2_C_0', 'L_Q2_D_0']) {
+      const r = await runAndPill(id);
+      const before = r.plateLeft - r.x1;
+      const after = r.x2 - r.plateRight;
+      assert.ok(before >= 15 && after >= 15, `${id} shows ${before}/${after} of line either side`);
+      assert.ok(
+        Math.abs(before - after) <= 1,
+        `${id}'s pill sits off the drawn midpoint: ${before} one side, ${after} the other`,
+      );
+    }
+    assert.deepEqual(await gateCheck('2.4-uniform-diamond'), []);
+    assert.deepEqual(await gateCheck('2.9-same-row-leaf'), []);
+    assert.deepEqual(await gateCheck('6.5-pill-on-line'), []);
+  });
+
+  test('DESIGN 2.9: diamond-cascade’s Rejects share one x, three rows apart', async () => {
+    // Same-flank leaves on different rows are 2.3 applied to flanks: the
+    // gutter is one chart-wide value, so the column holds down the cascade.
+    await mount(fixture('diamond-cascade.mmd'));
+    const [e1, e2, e3, q1, q2, q3] = await Promise.all(
+      ['E1', 'E2', 'E3', 'Q1', 'Q2', 'Q3'].map(nodeBox),
+    );
+    const lefts = [e1!.x, e2!.x, e3!.x];
+    assert.ok(
+      Math.max(...lefts) - Math.min(...lefts) <= 1,
+      `the three Rejects sit at x=${lefts.join(', ')}`,
+    );
+    for (const d of [q2, q3]) {
+      assert.ok(
+        Math.abs(d!.w - q1!.w) <= 1 && Math.abs(d!.h - q1!.h) <= 1,
+        `the cascade's diamonds differ: ${q1!.w}×${q1!.h} vs ${d!.w}×${d!.h}`,
+      );
+    }
+    for (const id of ['L_Q1_E1_0', 'L_Q2_E2_0', 'L_Q3_E3_0', 'L_Q3_OK_0']) {
+      const r = await runAndPill(id);
+      const before = r.plateLeft - r.x1;
+      const after = r.x2 - r.plateRight;
+      assert.ok(before >= 15 && after >= 15, `${id} shows ${before}/${after} of line either side`);
+      assert.ok(
+        Math.abs(before - after) <= 1,
+        `${id}'s pill sits off the drawn midpoint: ${before} one side, ${after} the other`,
+      );
+    }
+    assert.deepEqual(await gateCheck('2.4-uniform-diamond'), []);
+    assert.deepEqual(await gateCheck('2.9-same-row-leaf'), []);
+    assert.deepEqual(await gateCheck('6.5-pill-on-line'), []);
+  });
+
   test('diamond-cascade: every label on its own line, every run orthogonal', async () => {
     // The user's review flagged bare diagonal-ish runs with labels floating
     // beside them; a channel chart draws neither.

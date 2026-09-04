@@ -62,6 +62,7 @@ import {
   ribbon,
   sameRowLeaf,
   sideExclusivity,
+  uniformDiamond,
 } from './channels.ts';
 import { holdsFinished, speedInRange, validCss } from './motion.ts';
 import { createCtx, type Check, type Finding, type MeasureOptions } from './helpers.ts';
@@ -129,10 +130,12 @@ export const ALL_CHECKS: Check[] = [
   validCss,
   // Channel-engine charts only (keyed on data-gc-engine, never firing on the
   // old path): DESIGN 6.5's pill-on-line, 2.8's fan symmetry, 2.9's same-row
-  // leaves, 1.9's ribbon, 6.2's side exclusivity, 6.14's return bus.
+  // leaves, 2.4's one diamond size, 1.9's ribbon, 6.2's side exclusivity,
+  // 6.14's return bus.
   pillOnLine,
   fanSymmetry,
   sameRowLeaf,
+  uniformDiamond,
   ribbon,
   sideExclusivity,
   returnBus,

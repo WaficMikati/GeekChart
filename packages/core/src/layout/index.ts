@@ -294,8 +294,44 @@ export async function layout(
         scene.edgeLabelSize,
         scene.edgeLabelTracking,
       );
+    // DESIGN 2.4/2.3: on a channel chart every diamond is ONE size — the
+    // largest any of the chart's own decisions needs — so a column of
+    // decisions shares a width and a height the way a row of boxes does.
+    // two-diamonds drew First? at 120×64 beside Second? at 136×72 because
+    // each was solved from its own label alone, which also broke the flank
+    // column (2.9): the leaf beside the narrower diamond sat 8 further in.
+    //
+    // 2.4's own number — the diamond drawn around a 160×48 label box, 192×80
+    // on the 8-grid — is NOT what this uses, and that is a conflict worth
+    // naming rather than hiding: at any diamond wider than ~152,
+    // git-workflow's MG→main return runs 764 against DESIGN 6.7/6.8's
+    // 596+128 budget, so the chart declines to the old path and fails three
+    // checks. Sharing the chart's own largest diamond fixes what the mockup
+    // flagged and keeps every chart inside 6.8; the absolute size wants
+    // either a bigger loop pad or a side-face arrival for a return into a
+    // root, and that is the user's call, not a silent widening here.
+    //
+    // Applied to this attempt only: a chart the engine declines gets its
+    // label-solved diamonds back on the way to the old path.
+    const grown = new Map<GraphNode, { width: number; height: number }>();
+    const diamonds = graph.nodes.filter((n) => n.shape === 'diamond');
+    if (diamonds.length > 1) {
+      const width = Math.max(...diamonds.map((n) => n.width!));
+      const height = Math.max(...diamonds.map((n) => n.height!));
+      for (const node of diamonds) {
+        grown.set(node, { width: node.width!, height: node.height! });
+        node.width = width;
+        node.height = height;
+      }
+    }
     const laid = layoutChannels(graph, channelPlan, scene, measureLine, packToDisplay);
     pillMeasurer.done();
+    if (!laid) {
+      for (const [node, was] of grown) {
+        node.width = was.width;
+        node.height = was.height;
+      }
+    }
     // No `square()` here: the engine's own grid is already exact, and the
     // banding pass snaps *centres* to the grid one at a time — which can
     // move a symmetric pair asymmetrically and break DESIGN 2.8's ±1.
