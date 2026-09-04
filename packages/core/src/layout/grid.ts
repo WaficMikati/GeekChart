@@ -215,12 +215,19 @@ export function layoutGrid(
   }
   const sideLeafCandidates: SideLeaf[] = [];
   {
-    const outDeg = new Map<string, number>(graph.nodes.map((n) => [n.id, 0]));
-    for (const e of graph.edges) outDeg.set(e.from, outDeg.get(e.from)! + 1);
-    // Terminal: nothing leaves it, and its only arrival is its own tree edge
-    // — a target with downstream order to keep still ranks down.
+    // DESIGN 2.9's first guard is about FORWARD exits. An edge that only
+    // loops back to an earlier rank orders nothing downstream — the ranker
+    // ignores back edges outright — so a leaf whose single exit is such a
+    // loop is still terminal for seating purposes. A branch that continues
+    // *forward* does have downstream order to keep, and still ranks down.
+    const fwdOutDeg = new Map<string, number>(graph.nodes.map((n) => [n.id, 0]));
+    for (const e of forward) fwdOutDeg.set(e.from, fwdOutDeg.get(e.from)! + 1);
+    // Arrivals are unchanged: the leaf's only way in is its own tree edge, so
+    // no join or loop lands on it and asks for a face the run wants.
+    const arrivedAt = new Set<string>();
+    for (const e of [...joins, ...loops]) arrivedAt.add(e.to);
     const terminal = (id: string): boolean =>
-      outDeg.get(id) === 0 && !touched.has(id) && treeEdge.has(id);
+      fwdOutDeg.get(id) === 0 && !arrivedAt.has(id) && treeEdge.has(id);
     if (TB) {
       for (const p of graph.nodes) {
         if (p.shape !== 'diamond' || loopTouched.has(p.id)) continue;

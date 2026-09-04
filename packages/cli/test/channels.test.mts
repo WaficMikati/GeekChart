@@ -404,14 +404,81 @@ describe('channel engine — the grid planner (phase 3a)', () => {
     assert.deepEqual(await gateCheck('6.5-pill-on-line'), []);
   });
 
-  test('DESIGN 2.9 guard: login-flow’s Show error continues, so it still ranks down', async () => {
-    // The target has an outgoing edge (back to the login form), so it keeps
-    // its downstream order and the rule does not apply.
+  test('DESIGN 2.9: login-flow seats Show error on Credentials valid?’s row, loop and all', async () => {
+    // The guard is about FORWARD exits. Show error's only exit loops back to
+    // the login form — an edge the ranker ignores — so it orders nothing
+    // downstream and belongs beside the decision, one straight NO run.
     await mount(fixture('login-flow.mmd'));
-    const [v, e] = await Promise.all(['V', 'E'].map(nodeBox));
+    const [v, e, u] = await Promise.all(['V', 'E', 'U'].map(nodeBox));
     const cy = (n: NonNullable<typeof v>) => n.y + n.h / 2;
-    assert.ok(cy(e!) > cy(v!) + 8, 'Show error keeps its own rank below the decision');
+    assert.ok(
+      Math.abs(cy(e!) - cy(v!)) <= 1,
+      `Show error is ${Math.abs(cy(e!) - cy(v!)).toFixed(1)} off Credentials valid?'s row`,
+    );
+    assert.ok(cy(u!) < cy(v!), 'the login form still stands a rank above the decision');
+
+    // The NO run: one straight bendless segment off the side vertex, carrying
+    // its own pill.
+    const no = await edgeD('L_V_E_0');
+    assert.ok(isStraightRun(no), `V→E is not one straight run: ${no}`);
+    const hasPill = await session.page.evaluate(
+      () =>
+        !!document.querySelector('svg.gc-chart .gc-edge-label[data-id="L_V_E_0"] .gc-plate'),
+    );
+    assert.ok(hasPill, 'the NO label lost its pill');
+
+    // DESIGN 6.7/6.14: the loop-back still routes from the leaf's new
+    // same-row seat — up the flank corridor, 24 clear of everything it
+    // passes, arriving on the login form's one arrowhead.
+    const loop = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const box = (el: Element) => el.getBoundingClientRect();
+      const path = svg.querySelector('.gc-edge[data-id="L_E_U_0"]') as SVGPathElement;
+      const ctm = path.getScreenCTM()!;
+      const nums = (path.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+      const pts: [number, number][] = [];
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        const p = new DOMPoint(nums[i]!, nums[i + 1]!).matrixTransform(ctm);
+        pts.push([p.x, p.y]);
+      }
+      // The corridor is the loop's longest vertical run.
+      let best = { x: 0, y1: 0, y2: 0, len: -1 };
+      for (let i = 1; i < pts.length; i++) {
+        const [x1, y1] = pts[i - 1]!;
+        const [x2, y2] = pts[i]!;
+        if (Math.abs(x1 - x2) > 1) continue;
+        const len = Math.abs(y2 - y1);
+        if (len > best.len) best = { x: x1, y1: Math.min(y1, y2), y2: Math.max(y1, y2), len };
+      }
+      const mid = (box(svg).left + box(svg).right) / 2;
+      const side = Math.sign(best.x - mid) || 1;
+      let content = Infinity;
+      for (const n of svg.querySelectorAll('.gc-node')) {
+        const r = box(n.querySelector('.gc-outline')!);
+        if (r.bottom < best.y1 - 1 || r.top > best.y2 + 1) continue;
+        const gap = side < 0 ? r.left - best.x : best.x - r.right;
+        if (gap < content) content = gap;
+      }
+      const unit = box(svg).width / svg.viewBox.baseVal.width;
+      return {
+        back: path.classList.contains('gc-back'),
+        side,
+        content: content / unit,
+        heads: svg.querySelectorAll('.gc-arrow[data-id="L_E_U_0"]').length,
+      };
+    });
+    assert.ok(loop.back, 'E→U must draw as a loop-back');
+    assert.equal(loop.side, 1, 'the loop leaves Show error on the right flank, away from the spine');
+    assert.ok(
+      loop.content >= 23,
+      `the loop corridor stands ${loop.content.toFixed(1)} off what it passes, not 24`,
+    );
+    assert.equal(loop.heads, 1, 'the loop-back draws exactly one arrowhead');
+
     assert.deepEqual(await gateCheck('2.9-same-row-leaf'), []);
+    assert.deepEqual(await gateCheck('6.2-side-exclusivity'), []);
+    assert.deepEqual(await gateCheck('6.5-pill-on-line'), []);
+    assert.deepEqual(await gateCheck('6.7-source-clear'), []);
   });
 
   test('ternary-tree: the root centres on the widest row, the branch row on the same axis', async () => {

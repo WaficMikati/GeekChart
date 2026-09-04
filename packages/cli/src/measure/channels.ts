@@ -269,9 +269,11 @@ export const sideExclusivity: Check = {
  * no rank drop, no bends, the pill on the run (6.5).
  *
  * The pattern is re-detected from the DOM, never assumed: a diamond, a child
- * nothing leaves and only that decision enters, and at most one other child
- * — the branch that continues, which holds the axis and leaves through the
- * flow face, so the side vertex the leaf uses is free (6.2).
+ * nothing goes *forward* out of and only that decision enters, and at most
+ * one other child — the branch that continues, which holds the axis and
+ * leaves through the flow face, so the side vertex the leaf uses is free
+ * (6.2). A leaf whose only exit is a loop-back to an earlier rank still
+ * counts: the ranker ignores back edges, so that exit orders nothing.
  *
  * The rule's second guard is width: too narrow a flank and the leaf ranks
  * down instead of forcing a scale. Measured here as the room the chart's own
@@ -287,15 +289,20 @@ export const sameRowLeaf: Check = {
     if (svg.dataset.flow === 'LR' || svg.dataset.flow === 'RL') return [];
     const ids = nodeById(ctx);
     const meta = edgeMeta(ctx).filter((m) => m.from && m.to && ids.has(m.from) && ids.has(m.to));
-    const outDeg = new Map<string, number>();
+    // Forward out-degree only: a leaf whose single exit loops back to an
+    // earlier rank orders nothing downstream, so it is still terminal for
+    // 2.9. Arrivals stay counted in full — the leaf's only way in must be
+    // the decision's own run.
+    const fwdOut = new Map<string, number>();
     const inDeg = new Map<string, number>();
     const loopy = new Set<string>();
     for (const m of meta) {
-      outDeg.set(m.from!, (outDeg.get(m.from!) ?? 0) + 1);
       inDeg.set(m.to!, (inDeg.get(m.to!) ?? 0) + 1);
       if (m.e.classList.contains('gc-back')) {
         loopy.add(m.from!);
         loopy.add(m.to!);
+      } else {
+        fwdOut.set(m.from!, (fwdOut.get(m.from!) ?? 0) + 1);
       }
     }
     const tol = RULES['2.9']!.threshold! * ctx.unit;
@@ -306,8 +313,8 @@ export const sameRowLeaf: Check = {
 
     for (const [id, node] of ids) {
       if (!node.classList.contains('gc-shape-diamond') || loopy.has(id)) continue;
-      const kids = meta.filter((m) => m.from === id);
-      const term = kids.filter((m) => !outDeg.get(m.to!) && inDeg.get(m.to!) === 1);
+      const kids = meta.filter((m) => m.from === id && !m.e.classList.contains('gc-back'));
+      const term = kids.filter((m) => !fwdOut.get(m.to!) && inDeg.get(m.to!) === 1);
       const cont = kids.filter((m) => !term.includes(m));
       if (!term.length || term.length > 2 || cont.length > 1) continue;
       if (!cont.length && term.length !== 2) continue;
