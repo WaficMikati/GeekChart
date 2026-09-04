@@ -2361,3 +2361,54 @@ describe('type case, DESIGN 3', () => {
     }
   });
 });
+
+describe('box-to-text sizing, DESIGN 2.2', () => {
+  test('a label too long for the box wraps or is shortened, never overhangs', async () => {
+    // DESIGN 2.2 gives a label two outs — "shortened or wrapped to a second
+    // line, never given a wider box" — and only the wrap was implemented. A
+    // title with no two-line split that fits fell through the wrap and drew one
+    // line straight out of both sides of a box that kept its shared width.
+    await mount(
+      `flowchart TB
+  A["A deliberately long node title that will need wrapping to fit"] --> B["Another very long label testing the measurement of text at width"]
+`,
+      { motion: false },
+    );
+    const runs = await session.page.evaluate(() => {
+      const out: { id: string; text: string; textWidth: number; inner: number }[] = [];
+      for (const node of document.querySelectorAll<SVGGElement>('.gc-node')) {
+        const outline = node.querySelector<SVGPathElement>('.gc-outline');
+        if (!outline) continue;
+        const box = outline.getBBox();
+        for (const run of node.querySelectorAll<SVGTextElement>('.gc-label text')) {
+          out.push({
+            id: node.dataset.id!,
+            text: run.textContent ?? '',
+            textWidth: run.getBBox().width,
+            // The 16 side padding a box keeps around its label (DESIGN 2.2's
+            // sizing list is drawn with `scene.padX`), measured off the drawn
+            // outline so this reads the same box the chart actually has.
+            inner: box.width - 32,
+          });
+        }
+      }
+      return out;
+    });
+    assert.ok(runs.length >= 3, 'both nodes drew, and at least one wrapped');
+    for (const run of runs) {
+      assert.ok(
+        run.textWidth <= run.inner,
+        `${run.id}: "${run.text}" is ${run.textWidth.toFixed(1)} wide inside ${run.inner}`,
+      );
+    }
+    // At least one of the two titles has no two-line split that fits, so the
+    // shorten path has to have run — without it that label overhangs instead.
+    // Which of the two it is depends on the measurer, so this counts rather
+    // than naming a node.
+    const shortened = runs.filter((r) => r.text.endsWith('…'));
+    assert.ok(shortened.length >= 1, 'an un-splittable title must be shortened, not left to run');
+    for (const run of runs) {
+      assert.notEqual(run.text.trim(), '', 'a wrapped label never draws an empty line');
+    }
+  });
+});

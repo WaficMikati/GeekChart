@@ -102,6 +102,66 @@ export function wrapTitle(
   return best?.lines ?? null;
 }
 
+/**
+ * The longest head of `text` that fits `maxWidth` once an ellipsis is added.
+ *
+ * Binary search on the character count rather than a per-glyph walk: the
+ * measurer is the expensive part (a canvas call in the browser, a fontkit
+ * lookup in Node), and a 60-character label settles in six measurements
+ * instead of sixty. Trailing spaces and a trailing separator dot are trimmed
+ * off the head so the ellipsis never follows a gap.
+ */
+export function shortenToWidth(
+  text: string,
+  measure: (s: string) => number,
+  maxWidth: number,
+): string {
+  if (measure(text) <= maxWidth) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (measure(`${text.slice(0, mid).trimEnd()}…`) <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return `${text.slice(0, lo).replace(/[\s·]+$/, '')}…`;
+}
+
+/**
+ * DESIGN 2.2's second half: a label that cannot be split into two lines that
+ * both fit is **shortened**, never left to overhang the box.
+ *
+ * `wrapTitle` above finds the balanced split and is still the first choice —
+ * it is the better-looking result and loses nothing. This is what happens when
+ * no split fits at all: the first line takes as many whole words as the box
+ * holds, the rest goes on the second, and the second is cut with an ellipsis if
+ * it is still too long. Greedy rather than balanced on purpose — clipping the
+ * tail of a title reads as a title that continues, while balancing first and
+ * then clipping both lines drops the middle of the sentence and reads as
+ * garbled.
+ */
+export function clampTitle(
+  title: string,
+  measure: (s: string) => number,
+  maxWidth: number,
+): [string] | [string, string] {
+  const words = title.split(/\s+/).filter(Boolean);
+  let first = '';
+  let i = 0;
+  while (i < words.length) {
+    const next = first ? `${first} ${words[i]}` : words[i]!;
+    if (first && measure(next) > maxWidth) break;
+    first = next;
+    i++;
+  }
+  // One word wider than the whole box: cut that word and stop. A second line
+  // holding the tail of a broken word is worse than the ellipsis.
+  if (i === 0) return [shortenToWidth(words[0] ?? title, measure, maxWidth)];
+  const rest = words.slice(i).join(' ');
+  const head = measure(first) > maxWidth ? shortenToWidth(first, measure, maxWidth) : first;
+  return rest ? [head, shortenToWidth(rest, measure, maxWidth)] : [head];
+}
+
 /** What a node's own content demands, before any shared sizing is applied. */
 export interface Metrics {
   node: GraphNode;

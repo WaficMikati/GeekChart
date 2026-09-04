@@ -7,6 +7,7 @@ import type { ElkNode } from './elk.ts';
 import { getElk } from './elk.ts';
 import { fold } from './fold.ts';
 import {
+  clampTitle,
   diamondLabelBudget,
   extentOf,
   fitShape,
@@ -177,16 +178,17 @@ export async function layout(
     const { node } = item;
     if (node.caption || ownShape.includes(node.shape)) continue;
     if (item.label.width + scene.padX * 2 <= baseWidth) continue;
-    const wrapped = wrapTitle(
-      node.title,
-      (s) => measurer.measure(s, scene.titleFont, scene.titleSize),
-      baseWidth - scene.padX * 2,
-    );
-    if (!wrapped) continue;
-    node.titleLines = wrapped;
-    item.label.width = Math.max(
-      ...wrapped.map((l) => measurer.measure(l, scene.titleFont, scene.titleSize)),
-    );
+    const measureTitle = (s: string) => measurer.measure(s, scene.titleFont, scene.titleSize);
+    const inner = baseWidth - scene.padX * 2;
+    // DESIGN 2.2 offers two outs, and until 2026-09-04 only the first was
+    // taken: a title with no two-line split that fits — "Another very long
+    // label testing the measurement of text at width" — fell through and drew
+    // one line straight out of both sides of its box. `clampTitle` is the
+    // other out, "shortened", and it always returns something that fits.
+    const lines = wrapTitle(node.title, measureTitle, inner) ?? clampTitle(node.title, measureTitle, inner);
+    if (lines.length === 2) node.titleLines = lines;
+    else node.title = lines[0];
+    item.label.width = Math.max(...lines.map(measureTitle));
   }
 
   // DESIGN 2.2: the same "wrap rather than widen" for a caption that will
@@ -205,19 +207,18 @@ export async function layout(
       scene.captionTracking,
     );
     if (captionWidth + scene.padX * 2 <= baseWidth) continue;
-    const wrapped = wrapTitle(
-      node.caption,
-      (s) => measurer.measure(s, scene.captionFont, scene.captionSize, scene.captionTracking),
-      baseWidth - scene.padX * 2,
-    );
-    if (!wrapped) continue;
-    node.captionLines = wrapped;
-    item.label.width = Math.max(
-      item.label.width,
-      ...wrapped.map((l) =>
-        measurer.measure(l, scene.captionFont, scene.captionSize, scene.captionTracking),
-      ),
-    );
+    const measureCaption = (s: string) =>
+      measurer.measure(s, scene.captionFont, scene.captionSize, scene.captionTracking);
+    const inner = baseWidth - scene.padX * 2;
+    // Same pair of outs as the title above (DESIGN 2.2): wrap if a split fits,
+    // otherwise shorten. A caption in its own mono face runs longer per
+    // character than a title, so it reaches the un-splittable case sooner.
+    const lines =
+      wrapTitle(node.caption, measureCaption, inner) ??
+      clampTitle(node.caption, measureCaption, inner);
+    if (lines.length === 2) node.captionLines = lines;
+    else node.caption = lines[0];
+    item.label.width = Math.max(item.label.width, ...lines.map(measureCaption));
   }
 
   // DESIGN 1.1/1.6: a diamond solves its own geometry from its label (it is
