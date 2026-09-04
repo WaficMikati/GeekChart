@@ -270,6 +270,7 @@ export const panelEscape: Check = {
   id: '2.6-panel-escape',
   rule: '2.6',
   run(svg, ctx) {
+    if (svg.dataset.gcEngine === 'channels') return [];
     const { panelEscapes } = panelStats(ctx);
     return panelEscapes
       ? [{ severity: 'fail', message: `2.6 ${panelEscapes} texts/boxes escaping their panel` }]
@@ -281,6 +282,12 @@ export const panelHug: Check = {
   id: '2.6-panel-hug',
   rule: '2.6',
   run(svg, ctx) {
+    // DESIGN 2.6 was rewritten on 2026-09-04: on a channel-engine chart the
+    // padding is exact rather than ±8, the strip above the first row is
+    // reserved, and a nested panel's own padding accumulates — none of which
+    // this check's flat "contents + 24 on three sides" can read. `2.6-panel`
+    // (channels.ts) is its replacement there.
+    if (svg.dataset.gcEngine === 'channels') return [];
     const { panelSlack, slackIds } = panelStats(ctx);
     return panelSlack
       ? [

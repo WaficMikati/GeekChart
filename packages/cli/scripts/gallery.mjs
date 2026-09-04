@@ -125,6 +125,18 @@ const GROUPS = [
   },
   {
     section: 'Catalog',
+    name: 'Panels (channel engine)',
+    dir: fixturesRoot,
+    note: "DESIGN 2.6's panel language and 2.10's one panel row (phase 3b)",
+    items: [
+      ['subgraph-pair', 'Subgraph pair', 'flowchart + subgraph'],
+      ['three-subgraphs', 'Three subgraphs', 'flowchart + subgraph'],
+      ['nested-subgraph', 'Nested subgraph', 'flowchart + subgraph'],
+      ['nested-depth-3', 'Nested, three deep', 'flowchart + subgraph'],
+    ],
+  },
+  {
+    section: 'Catalog',
     name: 'Panels',
     dir: fixturesRoot,
     note: 'a subgraph drawn as a container — the composition family',

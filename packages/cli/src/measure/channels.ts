@@ -4,7 +4,7 @@
  * none of them ever fires on an old-path chart. Modeled on `ringLayout`
  * (canvas.ts): the shape is re-detected from the DOM itself, never assumed.
  */
-import { RULES } from '@geekchart/core';
+import { RULES, tokens } from '@geekchart/core';
 import {
   edgeMeta,
   nodeById,
@@ -574,6 +574,9 @@ export const ribbon: Check = {
   rule: '1.9',
   run(svg, ctx) {
     if (!isChannels(svg)) return [];
+    // A panel chart is a composition, not 1.9's wrapped run: a chain read
+    // straight through its panels has turns the ribbon shape never had.
+    if (ctx.svg.querySelector('.gc-cluster')) return [];
     const order = detectChain(ctx);
     if (!order) return [];
     const ids = nodeById(ctx);
@@ -779,6 +782,258 @@ export const returnBus: Check = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Panels — DESIGN 2.6's approved geometry and 2.10's one panel row (phase 3b).
+// ---------------------------------------------------------------------------
+
+const { pad: PANEL_PAD, head: PANEL_HEAD, kicker: PANEL_KICKER } = tokens.PANEL;
+
+interface PanelBox {
+  id: string;
+  g: Element;
+  b: DOMRect;
+}
+
+/** Every drawn panel, with its own border box. */
+function panelBoxes(ctx: Ctx): PanelBox[] {
+  return ctx.memo('channelPanels', () => {
+    const out: PanelBox[] = [];
+    for (const g of ctx.svg.querySelectorAll('.gc-cluster[data-id]')) {
+      const box = g.querySelector('.gc-cluster-box');
+      if (!box) continue;
+      const b = rect(box);
+      if (b.width) out.push({ id: g.getAttribute('data-id')!, g, b });
+    }
+    return out;
+  });
+}
+
+const contains = (outer: DOMRect, inner: DOMRect): boolean =>
+  inner.left >= outer.left - 1 &&
+  inner.right <= outer.right + 1 &&
+  inner.top >= outer.top - 1 &&
+  inner.bottom <= outer.bottom + 1;
+
+/** The boxes a panel holds directly: a node or a panel inside it that no
+ *  deeper panel of its own already holds (2.6's "a nested panel is a child
+ *  like any other"). */
+function directChildren(ctx: Ctx, p: PanelBox): DOMRect[] {
+  const panels = panelBoxes(ctx);
+  const deeper = panels.filter((q) => q.id !== p.id && contains(p.b, q.b));
+  const out: DOMRect[] = [];
+  const claimed = (b: DOMRect): boolean =>
+    deeper.some((q) => q.b !== b && contains(q.b, b));
+  for (const q of deeper) if (!claimed(q.b)) out.push(q.b);
+  for (const [, n] of nodeById(ctx)) {
+    const b = rect(outline(n));
+    if (!b.width || !contains(p.b, b)) continue;
+    if (!claimed(b)) out.push(b);
+  }
+  return out;
+}
+
+/** The parent panel of a panel: the smallest one that contains it. */
+function panelParent(ctx: Ctx, p: PanelBox): string | null {
+  let best: PanelBox | null = null;
+  for (const q of panelBoxes(ctx)) {
+    if (q.id === p.id || !contains(q.b, p.b)) continue;
+    if (!best || q.b.width * q.b.height < best.b.width * best.b.height) best = q;
+  }
+  return best?.id ?? null;
+}
+
+/** Rows of a panel's own direct children, top-first — 2.3 inside the panel.
+ *  A row is the top edge its shapes share: two shapes of different heights on
+ *  one row share that edge, never a centre line. */
+function childRows(kids: DOMRect[]): number[] {
+  const rows: number[] = [];
+  for (const b of [...kids].sort((a, c) => a.top - c.top)) {
+    if (!rows.some((r) => Math.abs(r - b.top) < 2)) rows.push(b.top);
+  }
+  return rows;
+}
+
+/**
+ * DESIGN 2.6, the approved panel language: 24 of padding on every side and no
+ * more, a 48-unit title strip reserved across the top with the panel's own
+ * 11-unit mono caps kicker at the left padding edge on a baseline 30 below the
+ * panel top, children centred inside, and children of sibling panels on exact
+ * shared rows.
+ *
+ * The strip clause is measured as "nothing travels ALONG the strip, and no
+ * foreign edge enters it at all": an edge that ends on a child of the panel
+ * crosses the top border perpendicular the way 2.10 asks every cross-panel
+ * edge to, and a perpendicular crossing occupies none of the strip's own
+ * width. See docs/rewrite/README.md — this is the one place 2.6 and 2.10 pull
+ * against each other and the reading had to be written down.
+ */
+export const panelGeometry: Check = {
+  id: '2.6-panel',
+  rule: '2.6',
+  run(svg, ctx) {
+    if (!isChannels(svg)) return [];
+    const panels = panelBoxes(ctx);
+    if (!panels.length) return [];
+    const u = ctx.unit;
+    const tol = RULES['2.6-panel']!.threshold!;
+    const findings: Finding[] = [];
+
+    for (const p of panels) {
+      const kids = directChildren(ctx, p);
+      if (!kids.length) {
+        findings.push({ severity: 'fail', message: `2.6 panel ${p.id} holds nothing` });
+        continue;
+      }
+      const left = Math.min(...kids.map((b) => b.left));
+      const right = Math.max(...kids.map((b) => b.right));
+      const top = Math.min(...kids.map((b) => b.top));
+      const bottom = Math.max(...kids.map((b) => b.bottom));
+      const padL = (left - p.b.left) / u;
+      const padR = (p.b.right - right) / u;
+      const padT = (top - p.b.top) / u;
+      const padB = (p.b.bottom - bottom) / u;
+      if (Math.abs(padT - PANEL_HEAD) > tol)
+        findings.push({
+          severity: 'fail',
+          message: `2.6 panel ${p.id}'s first row is ${padT.toFixed(0)} below its top, not ${PANEL_HEAD}`,
+        });
+      if (Math.abs(padB - PANEL_PAD) > tol)
+        findings.push({
+          severity: 'fail',
+          message: `2.6 panel ${p.id} has ${padB.toFixed(0)} under its contents, not ${PANEL_PAD}`,
+        });
+      if (padL < PANEL_PAD - tol || padR < PANEL_PAD - tol)
+        findings.push({
+          severity: 'fail',
+          message: `2.6 panel ${p.id} pads ${padL.toFixed(0)}/${padR.toFixed(0)} at the sides, under ${PANEL_PAD}`,
+        });
+      else if (Math.abs(padL - padR) > tol)
+        findings.push({
+          severity: 'fail',
+          message: `2.6 panel ${p.id}'s children are ${Math.abs(padL - padR).toFixed(0)} off centre`,
+        });
+
+      // The kicker: at the left padding edge, on a baseline 30 below the top.
+      const kicker = p.g.querySelector<SVGTextElement>('.gc-panel-kicker');
+      const ctm = kicker?.getScreenCTM();
+      if (!kicker || !ctm) {
+        findings.push({ severity: 'fail', message: `2.6 panel ${p.id} has no kicker` });
+      } else {
+        const kx = Number(kicker.getAttribute('x')) * ctm.a + ctm.e;
+        const ky = Number(kicker.getAttribute('y')) * ctm.d + ctm.f;
+        const dx = (kx - p.b.left) / u;
+        const dy = (ky - p.b.top) / u;
+        if (Math.abs(dx - PANEL_PAD) > tol || Math.abs(dy - PANEL_KICKER) > tol)
+          findings.push({
+            severity: 'fail',
+            message: `2.6 panel ${p.id}'s kicker sits at ${dx.toFixed(0)}/${dy.toFixed(0)}, not ${PANEL_PAD}/${PANEL_KICKER}`,
+          });
+      }
+
+      // The strip is reserved: nothing runs along it, and no edge that has no
+      // business inside the panel enters it.
+      const strip = {
+        left: p.b.left,
+        right: p.b.right,
+        top: p.b.top,
+        bottom: p.b.top + PANEL_HEAD * u,
+      };
+      const mine = new Set<string>();
+      for (const [id, n] of nodeById(ctx)) if (contains(p.b, rect(outline(n)))) mine.add(id);
+      for (const m of edgeMeta(ctx)) {
+        const c = m.e.getScreenCTM();
+        if (!c) continue;
+        const pts = pathPointsHV(m.e.getAttribute('d'), c);
+        const ends = (m.from && mine.has(m.from)) || (m.to && mine.has(m.to));
+        for (let i = 1; i < pts.length; i++) {
+          const x1 = Math.min(pts[i - 1]![0], pts[i]![0]);
+          const x2 = Math.max(pts[i - 1]![0], pts[i]![0]);
+          const y1 = Math.min(pts[i - 1]![1], pts[i]![1]);
+          const y2 = Math.max(pts[i - 1]![1], pts[i]![1]);
+          if (x2 < strip.left || x1 > strip.right || y2 < strip.top || y1 > strip.bottom) continue;
+          const along = (x2 - x1) / u;
+          if (along > 1 || !ends) {
+            findings.push({
+              severity: 'fail',
+              message: `2.6 edge ${m.e.dataset.id} crosses panel ${p.id}'s title strip`,
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    // 2.6: children of sibling panels share exact rows.
+    const byParent = new Map<string, PanelBox[]>();
+    for (const p of panels) {
+      const k = panelParent(ctx, p) ?? '';
+      byParent.set(k, [...(byParent.get(k) ?? []), p]);
+    }
+    for (const group of byParent.values()) {
+      if (group.length < 2) continue;
+      const rows = group.map((p) => childRows(directChildren(ctx, p)));
+      for (let i = 1; i < group.length; i++) {
+        const n = Math.min(rows[0]!.length, rows[i]!.length);
+        for (let k = 0; k < n; k++) {
+          const off = Math.abs(rows[0]![k]! - rows[i]![k]!) / u;
+          if (off > tol)
+            findings.push({
+              severity: 'fail',
+              message: `2.6 row ${k + 1} of ${group[i]!.id} is ${off.toFixed(0)} off the same row of ${group[0]!.id}`,
+            });
+        }
+      }
+    }
+    return findings;
+  },
+};
+
+/**
+ * DESIGN 2.10: sibling panels keep one row. Measured on the axis the rule was
+ * written for — a left-to-right chart, where a row of panels is what the
+ * source states and a panel sent to a row of its own reads as a tier the
+ * source never named. In a top-to-bottom chart sibling panels legitimately sit
+ * at different ranks, so there is no row to hold and nothing is measured.
+ */
+export const panelRow: Check = {
+  id: '2.10-panel-row',
+  rule: '2.10',
+  run(svg, ctx) {
+    if (!isChannels(svg)) return [];
+    if (svg.dataset.flow !== 'LR' && svg.dataset.flow !== 'RL') return [];
+    const panels = panelBoxes(ctx);
+    if (panels.length < 2) return [];
+    const tol = RULES['2.6-panel']!.threshold!;
+    const findings: Finding[] = [];
+    const byParent = new Map<string, PanelBox[]>();
+    for (const p of panels) {
+      const k = panelParent(ctx, p) ?? '';
+      byParent.set(k, [...(byParent.get(k) ?? []), p]);
+    }
+    for (const group of byParent.values()) {
+      if (group.length < 2) continue;
+      const top = group[0]!.b.top;
+      for (const p of group) {
+        const off = Math.abs(p.b.top - top) / ctx.unit;
+        if (off > tol)
+          findings.push({
+            severity: 'fail',
+            message: `2.10 panel ${p.id} sits ${off.toFixed(0)} below the row its siblings share`,
+          });
+      }
+      const sorted = [...group].sort((a, b) => a.b.left - b.b.left);
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i]!.b.left < sorted[i - 1]!.b.right - 1)
+          findings.push({
+            severity: 'fail',
+            message: `2.10 panels ${sorted[i - 1]!.id}/${sorted[i]!.id} overlap in the row`,
+          });
+      }
+    }
+    return findings;
+  },
+};
+
 export const CHANNEL_CHECKS: Check[] = [
   pillOnLine,
   fanSymmetry,
@@ -787,4 +1042,6 @@ export const CHANNEL_CHECKS: Check[] = [
   ribbon,
   sideExclusivity,
   returnBus,
+  panelGeometry,
+  panelRow,
 ];

@@ -367,10 +367,29 @@ export function compositionRows(ctx: Ctx): CompositionRows {
     const cls = clusters(ctx);
     if (!cls.length) return result;
     const boxes: { id: string; b: DOMRect }[] = [];
+    const panelBoxes: DOMRect[] = [];
     for (const c of cls) {
       const bx = c.querySelector('.gc-cluster-box, rect');
-      if (bx && visible(bx, ctx.svg))
-        boxes.push({ id: (c as HTMLElement).dataset.id || 'panel', b: rect(bx) });
+      if (bx && visible(bx, ctx.svg)) panelBoxes.push(rect(bx));
+    }
+    // A nested panel is a child of the panel around it, not a box standing in
+    // the composition's own rows — only the outermost panels are top-level
+    // here (DESIGN 2.6's "a nested panel is a child like any other").
+    let ci = -1;
+    for (const c of cls) {
+      const bx = c.querySelector('.gc-cluster-box, rect');
+      if (!bx || !visible(bx, ctx.svg)) continue;
+      ci++;
+      const b = panelBoxes[ci]!;
+      const nested = panelBoxes.some(
+        (o) =>
+          o !== b &&
+          b.left >= o.left - 1 &&
+          b.right <= o.right + 1 &&
+          b.top >= o.top - 1 &&
+          b.bottom <= o.bottom + 1,
+      );
+      if (!nested) boxes.push({ id: (c as HTMLElement).dataset.id || 'panel', b });
     }
     for (const n of ctx.svg.querySelectorAll('.gc-node')) {
       const nb = rect(n);

@@ -146,6 +146,10 @@ export function sceneCss(scene: Scene): string {
   text-anchor: middle; text-transform: uppercase; }
 .gc-cluster-rule { fill: none; stroke: var(--gc-quiet, ${scene.quiet}); stroke-width: ${scene.dividerStroke}px;
   opacity: .5; }
+/* DESIGN 2.6's approved panel language: the panel's name is a mono caps
+   kicker at the left padding edge of the reserved title strip, not a centred
+   heading in a band of its own. Channel-engine charts only. */
+.gc-panel-kicker { text-anchor: start; }
 
 /* Figure and ground swap inside a panel. The cards there are filled rather than
    outlined, so the hierarchy is carried by weight instead of by another colour —

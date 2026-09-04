@@ -1,0 +1,12 @@
+flowchart LR
+  subgraph Edge
+    CDN[CDN] --> WAF[WAF]
+  end
+  subgraph App
+    LB[Load balancer] --> S1[Server]
+  end
+  subgraph Data
+    PG[Postgres] --> RD[Redis]
+  end
+  WAF --> LB
+  S1 --> PG

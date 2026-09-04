@@ -1,0 +1,8 @@
+flowchart TB
+  subgraph Cloud
+    subgraph VPC
+      A[API] --> B[DB]
+    end
+    C[CDN] --> A
+  end
+  U[User] --> C

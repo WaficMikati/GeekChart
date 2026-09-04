@@ -127,13 +127,16 @@ describe('channel engine — routing and scope', () => {
     assert.ok(isChannels(reply.svg), `expected channels engine for:\n${tbChain}`);
   });
 
-  test('everything else keeps the old path: a too-wide LR decision flow, a 3-node fan, a cluster', async () => {
+  test('everything else keeps the old path: a too-wide LR decision flow, a 3-node fan, a panel-to-panel chart', async () => {
     // flow.mmd is an LR run of six ranks — wider than the undeclared room —
     // so the grid planner declines it and the old path runs unchanged.
     const flow = readFileSync(join(fixtures, 'flow.mmd'), 'utf8');
     const twoLeaves = `flowchart TB\n  Q{Pick}\n  A[Left]\n  B[Right]\n  Q -->|yes| A\n  Q -->|no| B`;
-    const clustered = readFileSync(join(fixtures, 'subgraphs.mmd'), 'utf8');
-    for (const src of [flow, twoLeaves, clustered]) {
+    // A panel chart whose edges name the PANEL rather than a shape in it —
+    // the old path's own composition, which phase 3b deliberately declines
+    // (2.10 draws shape to shape, and rewriting those charts is not its job).
+    const panelEdges = readFileSync(join(fixtures, 'control-plane.mmd'), 'utf8');
+    for (const src of [flow, twoLeaves, panelEdges]) {
       const reply = await mount(src);
       assert.ok(!isChannels(reply.svg), `expected old path for:\n${src}`);
     }
@@ -873,4 +876,312 @@ describe('channel engine — the whole gate still applies', () => {
       assert.deepEqual(fails, [], `${name}: ${fails.join('; ')}`);
     }
   });
+});
+
+/**
+ * Phase 3b: DESIGN 2.6's approved panel language and 2.10's one panel row.
+ * One assertion per thing the old path got wrong in the user's 201-chart
+ * review — tall panels, floating centred titles, left-aligned children, and a
+ * panel exiled to a row of its own.
+ */
+describe('channel engine — panels', () => {
+  const pair = `flowchart LR
+  subgraph Frontend
+    A[React] --> B[Vite]
+  end
+  subgraph Backend
+    C[Express] --> D[Postgres]
+  end
+  B --> C`;
+
+  const three = `flowchart LR
+  subgraph Edge
+    CDN[CDN] --> WAF[WAF]
+  end
+  subgraph App
+    LB[Load balancer] --> S1[Server]
+  end
+  subgraph Data
+    PG[Postgres] --> RD[Redis]
+  end
+  WAF --> LB
+  S1 --> PG`;
+
+  const nested = `flowchart TB
+  subgraph Cloud
+    subgraph VPC
+      A[API] --> B[DB]
+    end
+    C[CDN] --> A
+  end
+  U[User] --> C`;
+
+  const deep = `flowchart TB
+  subgraph Region
+    subgraph AZ
+      subgraph Pod
+        A[Container] --> B[Sidecar]
+      end
+      C[Node agent] --> A
+    end
+    D[Control plane] --> C
+  end
+  U[kubectl] --> D`;
+
+  /** Panels, their children and their kickers, in chart units. */
+  async function panels(): Promise<
+    {
+      id: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      kicker: { x: number; y: number } | null;
+      kids: { x: number; y: number; w: number; h: number }[];
+    }[]
+  > {
+    return session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const unit = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+      const sb = svg.getBoundingClientRect();
+      const box = (r: DOMRect) => ({
+        x: (r.left - sb.left) / unit,
+        y: (r.top - sb.top) / unit,
+        w: r.width / unit,
+        h: r.height / unit,
+      });
+      const all = [...svg.querySelectorAll('.gc-cluster[data-id]')].map((g) => ({
+        g,
+        id: g.getAttribute('data-id')!,
+        b: g.querySelector('.gc-cluster-box')!.getBoundingClientRect(),
+      }));
+      const holds = (o: DOMRect, i: DOMRect) =>
+        i.left >= o.left - 1 && i.right <= o.right + 1 && i.top >= o.top - 1 && i.bottom <= o.bottom + 1;
+      return all.map((p) => {
+        const deeper = all.filter((q) => q.id !== p.id && holds(p.b, q.b));
+        const claimed = (b: DOMRect) => deeper.some((q) => q.b !== b && holds(q.b, b));
+        const kids: DOMRect[] = [];
+        for (const q of deeper) if (!claimed(q.b)) kids.push(q.b);
+        for (const n of svg.querySelectorAll('.gc-node')) {
+          const nb = (n.querySelector('.gc-outline') ?? n).getBoundingClientRect();
+          if (holds(p.b, nb) && !claimed(nb)) kids.push(nb);
+        }
+        const k = p.g.querySelector('.gc-panel-kicker') as SVGTextElement | null;
+        const ctm = k?.getScreenCTM();
+        return {
+          id: p.id,
+          ...box(p.b),
+          kicker:
+            k && ctm
+              ? {
+                  x: (Number(k.getAttribute('x')) * ctm.a + ctm.e - sb.left) / unit,
+                  y: (Number(k.getAttribute('y')) * ctm.d + ctm.f - sb.top) / unit,
+                }
+              : null,
+          kids: kids.map(box),
+        };
+      });
+    });
+  }
+
+  /** One edge's drawn points and the boxes of its two ends, in chart units. */
+  async function edge(id: string) {
+    return session.page.evaluate((edgeId) => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const sb = svg.getBoundingClientRect();
+      const unit = sb.width / svg.viewBox.baseVal.width;
+      const e = [...svg.querySelectorAll('.gc-edge')].find(
+        (el) => (el as HTMLElement).dataset.id === edgeId,
+      ) as SVGPathElement;
+      const ctm = e.getScreenCTM()!;
+      const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+      const pts: { x: number; y: number }[] = [];
+      for (let i = 0; i + 1 < nums.length; i += 2)
+        pts.push({
+          x: (nums[i]! * ctm.a + ctm.e - sb.left) / unit,
+          y: (nums[i + 1]! * ctm.d + ctm.f - sb.top) / unit,
+        });
+      const nodeBox = (nid: string) => {
+        const n = [...svg.querySelectorAll('.gc-node')].find(
+          (el) => (el as HTMLElement).dataset.id === nid,
+        )!;
+        const r = (n.querySelector('.gc-outline') ?? n).getBoundingClientRect();
+        return {
+          x: (r.left - sb.left) / unit,
+          y: (r.top - sb.top) / unit,
+          w: r.width / unit,
+          h: r.height / unit,
+        };
+      };
+      const from = e.dataset.from!;
+      const to = e.dataset.to!;
+      return { pts, a: nodeBox(from), b: nodeBox(to) };
+    }, id);
+  }
+
+  test('subgraph-pair: 24/48/24 padding exactly, kicker on the +30 baseline, children centred, B leaves its own face', async () => {
+    const reply = await mount(pair);
+    assert.ok(isChannels(reply.svg), 'subgraph-pair should route through the channel engine');
+    assert.deepEqual(await gateCheck('2.6-panel'), []);
+    assert.deepEqual(await gateCheck('2.10-panel-row'), []);
+
+    for (const p of await panels()) {
+      const top = Math.min(...p.kids.map((k) => k.y));
+      const bottom = Math.max(...p.kids.map((k) => k.y + k.h));
+      const left = Math.min(...p.kids.map((k) => k.x));
+      const right = Math.max(...p.kids.map((k) => k.x + k.w));
+      // The height IS the contents plus 48 above and 24 below — the tall
+      // panel with a floating title was the review's own complaint.
+      assert.ok(
+        Math.abs(p.h - (bottom - top + 48 + 24)) <= 1,
+        `${p.id} is ${p.h.toFixed(0)} tall, not contents+72 (${(bottom - top + 72).toFixed(0)})`,
+      );
+      assert.ok(Math.abs(top - p.y - 48) <= 1, `${p.id}'s first row is ${(top - p.y).toFixed(1)} down`);
+      assert.ok(
+        Math.abs(p.y + p.h - bottom - 24) <= 1,
+        `${p.id} has ${(p.y + p.h - bottom).toFixed(1)} under its contents`,
+      );
+      // Centred, not left-aligned.
+      assert.ok(
+        Math.abs(left - p.x - (p.x + p.w - right)) <= 1,
+        `${p.id}'s children are off centre (${(left - p.x).toFixed(1)} vs ${(p.x + p.w - right).toFixed(1)})`,
+      );
+      assert.ok(p.kicker, `${p.id} has no kicker`);
+      assert.ok(
+        Math.abs(p.kicker!.y - p.y - 30) <= 1 && Math.abs(p.kicker!.x - p.x - 24) <= 1,
+        `${p.id}'s kicker sits at ${(p.kicker!.x - p.x).toFixed(1)}/${(p.kicker!.y - p.y).toFixed(1)}, not 24/30`,
+      );
+    }
+
+    // 6.2/2.10: the cross-panel edge starts on B's own right face, not on the
+    // Frontend panel's border.
+    const { pts, a, b } = await edge('L_B_C_0');
+    assert.ok(
+      Math.abs(pts[0]!.x - (a.x + a.w)) <= 10 && Math.abs(pts[0]!.y - (a.y + a.h / 2)) <= 1,
+      `B→C starts at ${pts[0]!.x.toFixed(0)},${pts[0]!.y.toFixed(0)}, not on B's right face`,
+    );
+    assert.ok(
+      Math.abs(pts[pts.length - 1]!.x - b.x) <= 10 &&
+        Math.abs(pts[pts.length - 1]!.y - (b.y + b.h / 2)) <= 1,
+      `B→C ends off C's left face`,
+    );
+  });
+
+  test('2.6-panel has teeth: nudging one child off centre fails the check', async () => {
+    await mount(pair);
+    assert.deepEqual(await gateCheck('2.6-panel'), []);
+    await session.page.evaluate(() => {
+      const n = document.querySelector('svg.gc-chart .gc-node') as SVGGElement;
+      n.setAttribute('transform', 'translate(-20 0)');
+    });
+    const after = await gateCheck('2.6-panel');
+    assert.ok(after.length > 0, 'moving a child off centre should fail 2.6-panel');
+  });
+
+  test('three-subgraphs: three panels on ONE row, contents stacked to fit, edges off the shapes', async () => {
+    const reply = await mount(three);
+    assert.ok(isChannels(reply.svg), 'three-subgraphs should route through the channel engine');
+    assert.deepEqual(await gateCheck('2.10-panel-row'), []);
+    assert.deepEqual(await gateCheck('2.6-panel'), []);
+
+    const ps = await panels();
+    assert.equal(ps.length, 3);
+    for (const p of ps) {
+      assert.ok(
+        Math.abs(p.y - ps[0]!.y) <= 1,
+        `${p.id} sits ${(p.y - ps[0]!.y).toFixed(0)} off the row its siblings share`,
+      );
+    }
+    // 2.10's packing move: the row would not fit, so the CONTENTS stacked
+    // top-to-bottom inside each panel rather than a panel wrapping away.
+    for (const p of ps) {
+      const rows = new Set(p.kids.map((k) => Math.round(k.y)));
+      assert.equal(rows.size, 2, `${p.id}'s two shapes should be stacked, not side by side`);
+    }
+    // The cross-panel edges leave the shapes, not the borders.
+    for (const [id] of [['L_WAF_LB_0'], ['L_S1_PG_0']]) {
+      const { pts, a, b } = await edge(id!);
+      assert.ok(
+        Math.abs(pts[0]!.x - (a.x + a.w)) <= 10 && Math.abs(pts[0]!.y - (a.y + a.h / 2)) <= 1,
+        `${id} does not start on its source's right face`,
+      );
+      assert.ok(
+        Math.abs(pts[pts.length - 1]!.x - b.x) <= 10 &&
+          Math.abs(pts[pts.length - 1]!.y - (b.y + b.h / 2)) <= 1,
+        `${id} does not end on its target's left face`,
+      );
+    }
+  });
+
+  for (const [name, src, levels] of [
+    ['nested-subgraph', nested, 2],
+    ['nested-depth-3', deep, 3],
+  ] as const) {
+    test(`${name}: nothing runs along a title strip, 24 of padding per level, every shape centred in its own panel`, async () => {
+      const reply = await mount(src);
+      assert.ok(isChannels(reply.svg), `${name} should route through the channel engine`);
+      assert.deepEqual(await gateCheck('2.6-panel'), []);
+      assert.deepEqual(await gateFails(), []);
+
+      const ps = await panels();
+      assert.equal(ps.length, levels, `${name} should draw ${levels} panels`);
+
+      // Padding accumulates 24 a level: the innermost panel's own left edge is
+      // 24 × depth inside the outermost's.
+      const sorted = [...ps].sort((a, b) => b.w - a.w);
+      for (let i = 1; i < sorted.length; i++) {
+        const gap = sorted[i]!.x - sorted[i - 1]!.x;
+        assert.ok(
+          gap >= 24 - 1,
+          `${sorted[i]!.id} is only ${gap.toFixed(0)} inside ${sorted[i - 1]!.id}`,
+        );
+      }
+
+      for (const p of ps) {
+        const left = Math.min(...p.kids.map((k) => k.x));
+        const right = Math.max(...p.kids.map((k) => k.x + k.w));
+        assert.ok(
+          Math.abs(left - p.x - (p.x + p.w - right)) <= 1,
+          `${p.id}'s children are not centred in it`,
+        );
+        assert.ok(
+          Math.abs(Math.min(...p.kids.map((k) => k.y)) - p.y - 48) <= 1,
+          `${p.id}'s first row is not 48 below its top`,
+        );
+      }
+
+      // The strip is reserved: no drawn segment travels along one. An edge
+      // that ends on a shape inside the panel crosses the top border
+      // perpendicular, which occupies none of the strip's own width.
+      const trespass = await session.page.evaluate(() => {
+        const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+        const sb = svg.getBoundingClientRect();
+        const unit = sb.width / svg.viewBox.baseVal.width;
+        const strips = [...svg.querySelectorAll('.gc-cluster .gc-cluster-box')].map((b) => {
+          const r = b.getBoundingClientRect();
+          return { left: r.left, right: r.right, top: r.top, bottom: r.top + 48 * unit };
+        });
+        const bad: string[] = [];
+        for (const e of svg.querySelectorAll('.gc-edge')) {
+          const ctm = (e as SVGGraphicsElement).getScreenCTM()!;
+          const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+          const pts: [number, number][] = [];
+          for (let i = 0; i + 1 < nums.length; i += 2)
+            pts.push([nums[i]! * ctm.a + ctm.e, nums[i + 1]! * ctm.d + ctm.f]);
+          for (let i = 1; i < pts.length; i++) {
+            const x1 = Math.min(pts[i - 1]![0], pts[i]![0]);
+            const x2 = Math.max(pts[i - 1]![0], pts[i]![0]);
+            const y1 = Math.min(pts[i - 1]![1], pts[i]![1]);
+            const y2 = Math.max(pts[i - 1]![1], pts[i]![1]);
+            for (const s of strips) {
+              if (x2 < s.left || x1 > s.right || y2 < s.top || y1 > s.bottom) continue;
+              if ((x2 - x1) / unit > 1) bad.push((e as HTMLElement).dataset.id!);
+            }
+          }
+        }
+        return bad;
+      });
+      assert.deepEqual(trespass, [], `edges running along a title strip: ${trespass.join(' ')}`);
+    });
+  }
 });

@@ -175,6 +175,18 @@ export const BOX_SIZES: {
  */
 export const GUTTER = { sibling: 24, panel: 32 } as const;
 
+/**
+ * DESIGN 2.6's panel geometry, as the channel engine draws it (approved
+ * 2026-09-04). `pad` is the inner padding on every side — and no more, so a
+ * panel's height is its contents plus `head` above and `pad` below. `head` is
+ * the reserved title strip: the first child row sits that far below the panel
+ * top, and no edge routes along the strip. `kicker` is the baseline of the
+ * 11-unit mono caps kicker, measured from the panel top, drawn at the left
+ * padding edge. Layout and drawing both read these, so the strip the layout
+ * reserves and the text the painter puts in it cannot drift apart.
+ */
+export const PANEL = { pad: 24, head: 48, kicker: 30 } as const;
+
 /** DESIGN 4.1: hairline stroke weights. Node outlines, edges, cluster/panel
  *  boxes and the dividers inside a record row each get their own weight, and
  *  nothing else is allowed to invent a fifth. */

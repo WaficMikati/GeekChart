@@ -1,0 +1,11 @@
+flowchart TB
+  subgraph Region
+    subgraph AZ
+      subgraph Pod
+        A[Container] --> B[Sidecar]
+      end
+      C[Node agent] --> A
+    end
+    D[Control plane] --> C
+  end
+  U[kubectl] --> D

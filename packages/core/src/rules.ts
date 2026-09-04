@@ -64,6 +64,12 @@ export const RULES: Record<string, Rule> = {
   '6.2-side-exclusivity': {
     title: 'On a channel chart, a node side that receives an edge never emits one',
   },
+  '2.6-panel': {
+    title:
+      "A panel's padding, reserved title strip, kicker baseline, centred children and shared sibling rows, within this many units",
+    threshold: 1,
+    token: 'PANEL',
+  },
   '2.9': {
     title:
       "A terminal side-leaf shares its decision's centre line within this, joined by one straight run",

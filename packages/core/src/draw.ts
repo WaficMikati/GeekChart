@@ -1,4 +1,11 @@
-import type { EdgeStroke, EdgeTip, Graph, GraphEdge, GraphNode } from './graph.ts';
+import {
+  panelKicker,
+  type EdgeStroke,
+  type EdgeTip,
+  type Graph,
+  type GraphEdge,
+  type GraphNode,
+} from './graph.ts';
 import { clusterHeadroom, type Scene } from './scene.ts';
 import {
   ellipseShape,
@@ -15,7 +22,7 @@ import {
 import { planRoutes, type Extent, type OrthoRoute } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
 import { isBoxyShape, TRUNK_OFFSET } from './layout/stack.ts';
-import { GRID, GUTTER } from './tokens.ts';
+import { GRID, GUTTER, PANEL } from './tokens.ts';
 import { RULES } from './rules.ts';
 
 /**
@@ -734,10 +741,25 @@ function attemptDraw(
   // its name at title weight, an optional kicker under it, and a rule separating
   // the heading from the contents. A group is usually the most important thing
   // in a diagram that has one, and a faint dashed rectangle says the opposite.
+  //
+  // DESIGN 2.6, approved 2026-09-04: on a channel-engine chart that heading
+  // is one 11-unit mono caps kicker at the left padding edge, on a baseline
+  // 30 below the panel top, inside the strip layout already reserved — no
+  // centred name in a band of its own, and no rule under it. The old path
+  // keeps the composition it was measured for, byte for byte.
   const headroom = clusterHeadroom(scene);
   for (const cluster of graph.clusters) {
     if (cluster.x === undefined || cluster.width === undefined) continue;
     drawnClusters.push(cluster.id);
+    if (graph.engine === 'channels') {
+      parts.push(
+        `<g class="gc-cluster" data-id="${esc(cluster.id)}">` +
+          `<path class="gc-cluster-box" pathLength="1" d="${roundedRect(cluster.x, cluster.y!, cluster.width, cluster.height!, scene.panelRadius)}"/>` +
+          `<text class="gc-cluster-kicker gc-panel-kicker" x="${round(cluster.x + PANEL.pad)}" y="${round(cluster.y! + PANEL.kicker)}">${esc(panelKicker(cluster))}</text>` +
+          `</g>`,
+      );
+      continue;
+    }
     const cx = round(cluster.x + cluster.width / 2);
     // Cap height, not the em box: an Archivo cap is about 0.72em, so a 22 title
     // sitting 24 below the panel's top edge has its cap centred on the padding.

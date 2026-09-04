@@ -1,4 +1,4 @@
-import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
+import { panelKicker, type Graph, type GraphEdge, type GraphNode } from '../graph.ts';
 import { clusterHeadroom, type Scene } from '../scene.ts';
 import { tipReach } from '../tips.ts';
 import { BOX_SIZES, CLEARANCE, GRID } from '../tokens.ts';
@@ -141,6 +141,14 @@ export async function layout(
         )
       : 0;
     cluster.headerWidth = Math.max(t, k);
+    // DESIGN 2.6's approved language puts one mono caps kicker in the strip
+    // instead, so the channel engine hugs a different number.
+    cluster.panelHeaderWidth = measurer.measure(
+      panelKicker(cluster),
+      scene.clusterFont,
+      scene.type.kicker,
+      scene.type.kickerTracking,
+    );
   }
 
   // The common box is sized by the widest ordinary label, so plain nodes share

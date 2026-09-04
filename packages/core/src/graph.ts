@@ -285,11 +285,27 @@ export interface GraphCluster {
    * (DESIGN 2.6) same as its children.
    */
   headerWidth?: number;
+  /**
+   * The same measurement for DESIGN 2.6's approved panel language, where the
+   * header is one 11-unit mono caps kicker rather than a title over a kicker.
+   * The channel engine hugs this; the old path keeps `headerWidth`.
+   */
+  panelHeaderWidth?: number;
   x?: number;
   y?: number;
   width?: number;
   height?: number;
 }
+
+/**
+ * DESIGN 2.6: the one line of text a channel-engine panel carries — its name,
+ * and the quieter second line the `Title | kicker` syntax allows, joined into
+ * the single mono caps kicker the approved language draws in the title strip.
+ * Layout measures this and drawing writes it, so the strip the layout reserves
+ * always holds the text the painter puts there.
+ */
+export const panelKicker = (cluster: GraphCluster): string =>
+  (cluster.kicker ? `${cluster.title} · ${cluster.kicker}` : cluster.title).toUpperCase();
 
 export interface Graph {
   direction: 'TB' | 'BT' | 'LR' | 'RL';
