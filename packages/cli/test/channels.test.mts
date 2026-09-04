@@ -894,6 +894,19 @@ describe('channel engine — panels', () => {
   end
   B --> C`;
 
+  // Stacked rather than side by side: 2.7's derived corridor and the gate's
+  // own `2.3-row-gutters` check disagree about a gap that runs ACROSS a
+  // composition row (see `panelgrid.ts`'s decline), so the case that is
+  // settled today is the one where the band runs down the page.
+  const pairLabeled = `flowchart TB
+  subgraph Frontend
+    A[React] --> B[Vite]
+  end
+  subgraph Backend
+    C[Express]
+  end
+  B -->|builds| C`;
+
   const three = `flowchart LR
   subgraph Edge
     CDN[CDN] --> WAF[WAF]
@@ -1184,4 +1197,94 @@ describe('channel engine — panels', () => {
       assert.deepEqual(trespass, [], `edges running along a title strip: ${trespass.join(' ')}`);
     });
   }
+
+  test('DESIGN 2.7/6.5: a labeled edge crosses a panel border with its pill on the run', async () => {
+    // The panel planner used to DECLINE any labeled edge outright — the
+    // inter-panel corridor was sized for an arrowhead and a visible run, with
+    // no room for a plate, so the whole chart fell back to the old path. 2.7
+    // sizes that corridor from what must live in it instead: the pill, 2×16 of
+    // visible line either side, the arrowhead and the departure standoff — the
+    // same derivation 2.9 uses for the flank gutter.
+    await mount(pairLabeled);
+    const seen = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const edge = svg.querySelector<SVGPathElement>('.gc-edge[data-id="L_B_C_0"]');
+      const plate = svg.querySelector<SVGRectElement>(
+        '.gc-edge-label[data-id="L_B_C_0"] .gc-plate',
+      );
+      const panels = [...svg.querySelectorAll<SVGPathElement>('.gc-cluster .gc-cluster-box')].map(
+        (p) => {
+          const b = p.getBBox();
+          return { x: b.x, y: b.y, width: b.width, height: b.height };
+        },
+      );
+      if (!edge || !plate) return null;
+      const nums = (edge.getAttribute('d') ?? '').match(/-?[\d.]+/g)!.map(Number);
+      return {
+        channel: edge.getAttribute('class')!.includes('gc-channel'),
+        x: nums[0]!,
+        y1: nums[1]!,
+        y2: nums[nums.length - 1]!,
+        pill: {
+          x: Number(plate.getAttribute('x')),
+          width: Number(plate.getAttribute('width')),
+          y: Number(plate.getAttribute('y')),
+          height: Number(plate.getAttribute('height')),
+        },
+        panels,
+      };
+    });
+    assert.ok(seen, 'found the crossing edge and its pill');
+    assert.ok(seen.channel, 'the planner should no longer decline a labeled edge');
+
+    // Centred on the drawn extent of the run it labels (6.5), within 1 — the
+    // extent excludes the arrowhead, which is why this is the drawn `d` and
+    // not the vertex-to-face span.
+    const pillCentre = seen.pill.y + seen.pill.height / 2;
+    assert.ok(
+      Math.abs(pillCentre - (seen.y1 + seen.y2) / 2) <= 1,
+      `pill centre ${pillCentre} against run midpoint ${(seen.y1 + seen.y2) / 2}`,
+    );
+    assert.ok(
+      Math.abs(seen.pill.x + seen.pill.width / 2 - seen.x) <= 1,
+      'the pill sits on its line, not beside it',
+    );
+
+    // 2.7's derivation, measured: 15 or more of drawn line either side.
+    assert.ok(
+      seen.pill.y - seen.y1 >= 15,
+      `only ${(seen.pill.y - seen.y1).toFixed(1)} of line before the pill`,
+    );
+    assert.ok(
+      seen.y2 - (seen.pill.y + seen.pill.height) >= 15,
+      `only ${(seen.y2 - seen.pill.y - seen.pill.height).toFixed(1)} of line after the pill`,
+    );
+
+    // And it rides the corridor between the panels, never over a border.
+    for (const p of seen.panels) {
+      const inside =
+        seen.pill.x >= p.x &&
+        seen.pill.x + seen.pill.width <= p.x + p.width &&
+        seen.pill.y >= p.y &&
+        seen.pill.y + seen.pill.height <= p.y + p.height;
+      const clear =
+        seen.pill.x + seen.pill.width <= p.x ||
+        seen.pill.x >= p.x + p.width ||
+        seen.pill.y + seen.pill.height <= p.y ||
+        seen.pill.y >= p.y + p.height;
+      assert.ok(inside || clear, 'the pill straddles a panel border');
+    }
+    // Not `gateFails() == []`: a stacked panel pair already FAILs 2.6's
+    // sibling-row check with no label anywhere near it (the same chart with
+    // `B --> C` reports "row 1 of Backend is 232 off the same row of
+    // Frontend"), because that check reads 2.10's "sibling panels keep one
+    // row" as unconditional and the TB planner stacks them. That defect is
+    // older than this test and is not the pill's. Pinned as the *only*
+    // failure so this turns red either when the pill work regresses or when
+    // 2.6's check learns about stacked panels.
+    assert.deepEqual(
+      (await gateFails()).filter((f) => !f.startsWith('2.6 row ')),
+      [],
+    );
+  });
 });

@@ -2,7 +2,17 @@ import type { Graph, GraphCluster, GraphEdge, GraphNode } from '../graph.ts';
 import { RULES } from '../rules.ts';
 import type { Scene } from '../scene.ts';
 import { CLEARANCE, GRID, GUTTER, PANEL } from '../tokens.ts';
-import { roundUp, STANDOFF, TURN, type ChannelLayout } from './channels.ts';
+import {
+  PILL_PAD_X,
+  pillHeight,
+  roundUp,
+  slidePills,
+  STANDOFF,
+  TURN,
+  type ChannelLayout,
+  type Pill,
+  type SeatedPill,
+} from './channels.ts';
 
 /**
  * DESIGN 2.6 + 2.10, phase 3b: flowcharts with subgraphs, planned by the
@@ -44,6 +54,23 @@ const bandStraight = (scene: Scene): number =>
   Math.max(GUTTER.panel, roundUp(RULES['2.3']!.threshold! + scene.edgeGap + scene.edgeGapStart, GRID));
 const bandTurn = (scene: Scene): number =>
   Math.max(GUTTER.panel, roundUp(2 * TURN + STANDOFF + scene.edgeGap + 4, GRID));
+
+/**
+ * DESIGN 2.7's third size: a band that has to host a label pill.
+ *
+ * Derived the way 2.9 derives the flank gutter, because it is the same
+ * arithmetic — the pill's own along-axis size, 2×16 of visible line either
+ * side of it, the arrowhead at the far end and the standoff at the near one.
+ * Nothing here is a minimum picked to look right: a band that came out
+ * narrower would leave the pill with nubs instead of line, which is exactly
+ * what 2.9 says never to ship.
+ */
+const PILL_RUN_CLEAR = 16;
+const bandLabel = (scene: Scene, pillAlong: number): number =>
+  Math.max(
+    GUTTER.panel,
+    roundUp(pillAlong + 2 * PILL_RUN_CLEAR + scene.edgeGap + scene.edgeGapStart, GRID),
+  );
 
 /** DESIGN 6.1/6.8: an edge keeps this clear of a node it does not connect. */
 const EDGE_NODE_CLEAR = CLEARANCE.node;
@@ -108,7 +135,26 @@ export function layoutPanelChart(
 ): ChannelLayout | null {
   const TB = graph.direction === 'TB';
   const flowAxis: Axis = TB ? 'y' : 'x';
-  let BAND = bandStraight(scene);
+
+  // DESIGN 6.5: a pill is 11 mono caps with 8 of side padding, wrapped at 28
+  // characters. Both numbers are already measured — `layout()` sizes every
+  // edge label while its measurer is live and leaves `labelWidth`/`labelLines`
+  // on the edge — so this planner derives the plate rather than measuring one.
+  const pills = new Map<string, Pill>();
+  for (const e of graph.edges) {
+    if (!e.label) continue;
+    const lines = e.labelLines ?? [e.label];
+    pills.set(e.id, {
+      lines,
+      width: (e.labelWidth ?? 0) + PILL_PAD_X * 2,
+      height: pillHeight(scene, lines.length),
+    });
+  }
+  // 2.7: the band is sized for what must live in it, before anything is
+  // placed. A pill on a straight cross-panel run lies along the flow axis, so
+  // that is the extent the band has to hold.
+  const widestPill = Math.max(0, ...[...pills.values()].map((p) => p.width));
+  let BAND = Math.max(bandStraight(scene), widestPill ? bandLabel(scene, widestPill) : 0);
 
   const byId = new Map(graph.nodes.map((n) => [n.id, n] as const));
   const clusterById = new Map(graph.clusters.map((c) => [c.id, c] as const));
@@ -121,9 +167,6 @@ export function layoutPanelChart(
     if (clusterById.has(e.from) || clusterById.has(e.to)) return decline('edge on a panel');
     if (!byId.has(e.from) || !byId.has(e.to)) return decline('edge endpoint missing');
     if (e.backward || e.from === e.to) return decline('loop-back');
-    // Phase 3b seats no pills: a labeled cross-panel edge needs a corridor
-    // sized for its plate, which is phase 4's work.
-    if (e.label) return decline('labeled edge');
   }
   if (!graph.clusters.length) return decline('no panels');
 
@@ -584,17 +627,35 @@ export function layoutPanelChart(
   }
 
   // 2.7's fixed point: derive with the straight-run band, and re-derive once
-  // if a turn actually turned up in the plan.
+  // if a turn actually turned up in the plan. A band already widened for a
+  // pill never narrows here — a turn asks for more room, never less.
+  const bandFloor = widestPill ? bandLabel(scene, widestPill) : 0;
   if (solution?.routes.some((r) => r.pts.length > 2)) {
-    BAND = bandTurn(scene);
+    BAND = Math.max(bandTurn(scene), bandFloor);
     const wider = solve();
     if (wider) solution = wider;
     else {
-      BAND = bandStraight(scene);
+      BAND = Math.max(bandStraight(scene), bandFloor);
       solution = solve();
     }
   }
   if (!solution) return null;
+  // 2.3 vs 2.7, unresolved in the spec as of 2026-09-04. 2.7 says a channel
+  // is sized by what lives in it and names the pill as one of those things —
+  // a 66-wide pill with 2×16 of line either side derives a 112 corridor. The
+  // gate's own `2.3-row-gutters` check, which predates 2.7, reads any gap
+  // between two top-level boxes in one composition row as 32 ± 8 unless both
+  // are column-aligned with a neighbour row, so it calls that 112 arbitrary.
+  //
+  // Rather than ship a chart the gate FAILs, this planner declines exactly
+  // the case where the two rules disagree — a widened band lying *across* a
+  // composition row — and hands it back to the old path. Stacked panels (the
+  // band runs down the page, so no composition row is measured) and labels
+  // inside a panel are unaffected and get 2.7's derived corridor.
+  const rootHorizontal = (interiorOf.get(ROOT) ?? flowAxis) === 'x';
+  if (rootHorizontal && BAND > GUTTER.panel + 8 && roots.length > 1) {
+    return decline(`band ${BAND} across a composition row is over 2.3's row gutter`);
+  }
   const { routes } = solution;
   // A declared display changes nothing here: 2.10 names one packing move for a
   // panel row, and it is the same move either way.
@@ -728,6 +789,84 @@ export function layoutPanelChart(
     }
   }
 
+  // --- SEAT THE PILLS (DESIGN 6.5) ----------------------------------------
+  // A panel route is its own path end to end — this planner has no buses and
+  // no shared trunks — so an edge's longest exclusive run is simply the
+  // longest segment of its own path. The centre goes on the midpoint of that
+  // segment's DRAWN extent: the line as painted, which stands off its source
+  // by `edgeGapStart` and stops short of the arrowhead by `edgeGap`, so the
+  // head never counts toward the centring.
+  const seatedPills: SeatedPill[] = [];
+  for (const r of routes) {
+    const pill = pills.get(r.edge.id);
+    if (!pill) continue;
+    const drawn = r.pts.map((p) => ({ ...p }));
+    const pull = (i: number, j: number, by: number): void => {
+      const dx = drawn[j]!.x - drawn[i]!.x;
+      const dy = drawn[j]!.y - drawn[i]!.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 0.01) return;
+      const t = Math.min(by, len) / len;
+      drawn[i] = { x: drawn[i]!.x + dx * t, y: drawn[i]!.y + dy * t };
+    };
+    pull(0, 1, scene.edgeGapStart);
+    pull(drawn.length - 1, drawn.length - 2, scene.edgeGap);
+    let best: [Pt, Pt] | null = null;
+    let bestLen = -1;
+    for (let i = 1; i < drawn.length; i++) {
+      const p = drawn[i - 1]!;
+      const q = drawn[i]!;
+      const len = Math.hypot(q.x - p.x, q.y - p.y);
+      if (len > bestLen) {
+        bestLen = len;
+        best = [p, q];
+      }
+    }
+    if (!best) return decline(`${r.edge.id} has no run for its pill`);
+    const vertical = Math.abs(best[0].x - best[1].x) < 0.01;
+    const along = vertical ? pill.height : pill.width;
+    // 2.7 sized the band for exactly this, so a pill that still cannot keep
+    // 2.9's 16 of visible line either side means the plan is wrong, not that
+    // the pill should be nudged somewhere it does not belong.
+    if (bestLen < along + 2 * PILL_RUN_CLEAR)
+      return decline(
+        `${r.edge.id}'s run is ${Math.round(bestLen)} for a ${Math.round(along)} pill`,
+      );
+    seatedPills.push({
+      edge: r.edge,
+      pill,
+      cx: (best[0].x + best[1].x) / 2,
+      cy: (best[0].y + best[1].y) / 2,
+      run: { x1: best[0].x, y1: best[0].y, x2: best[1].x, y2: best[1].y },
+    });
+  }
+  // 6.5's one allowed movement: a pill slides along its own run, never off it.
+  slidePills(seatedPills);
+  // 6.9: a pill never covers a node. A panel is checked on its BORDER, not
+  // its area — a pill belonging to an edge between two children sits inside
+  // the panel by construction and is not covering anything; what it may not
+  // do is straddle the border, or sit in 2.6's reserved title strip.
+  for (const sp of seatedPills) {
+    const box = {
+      x: sp.cx - sp.pill.width / 2,
+      y: sp.cy - sp.pill.height / 2,
+      w: sp.pill.width,
+      h: sp.pill.height,
+    };
+    const hits = (b: { x: number; y: number; w: number; h: number }): boolean =>
+      box.x < b.x + b.w && b.x < box.x + box.w && box.y < b.y + b.h && b.y < box.y + box.h;
+    for (const n of nodeBoxes) {
+      if (hits(n)) return decline(`${sp.edge.id}'s pill covers ${n.id}`);
+    }
+    for (const p of allPanels) {
+      if (!hits(p)) continue;
+      const inside =
+        box.x >= p.x && box.y >= p.y && box.x + box.w <= p.x + p.w && box.y + box.h <= p.y + p.h;
+      if (!inside) return decline(`${sp.edge.id}'s pill straddles ${p.id}'s border`);
+      if (box.y < p.y + PANEL.head) return decline(`${sp.edge.id}'s pill sits in ${p.id}'s title strip`);
+    }
+  }
+
   // Extent and the canvas budgets (1.1, 1.4).
   let minX = Infinity;
   let minY = Infinity;
@@ -748,6 +887,10 @@ export function layoutPanelChart(
     grow(p.x + p.w, p.y + p.h);
   }
   for (const r of routes) for (const p of r.pts) grow(p.x, p.y);
+  for (const sp of seatedPills) {
+    grow(sp.cx - sp.pill.width / 2, sp.cy - sp.pill.height / 2);
+    grow(sp.cx + sp.pill.width / 2, sp.cy + sp.pill.height / 2);
+  }
   const totalW = maxX - minX;
   const totalH = maxY - minY;
   if (totalW > room) return decline(`too wide (${Math.round(totalW)} > ${room})`);
@@ -771,11 +914,22 @@ export function layoutPanelChart(
     c.width = it.w;
     c.height = it.h;
   }
+  const pillOf = new Map(seatedPills.map((sp) => [sp.edge.id, sp] as const));
   for (const r of routes) {
+    const sp = pillOf.get(r.edge.id);
     r.edge.channel = {
       points: r.pts.map((p) => ({ x: p.x - minX, y: p.y - minY })),
       startSide: r.startSide,
       endSide: r.endSide,
+      label: sp
+        ? {
+            x: sp.cx - sp.pill.width / 2 - minX,
+            y: sp.cy - sp.pill.height / 2 - minY,
+            width: sp.pill.width,
+            height: sp.pill.height,
+            lines: sp.pill.lines,
+          }
+        : undefined,
     };
   }
   graph.engine = 'channels';
