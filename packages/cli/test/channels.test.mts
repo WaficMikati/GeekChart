@@ -127,19 +127,45 @@ describe('channel engine — routing and scope', () => {
     assert.ok(isChannels(reply.svg), `expected channels engine for:\n${tbChain}`);
   });
 
-  test('everything else keeps the old path: a too-wide LR decision flow, a 3-node fan, a panel-to-panel chart', async () => {
+  test('everything else keeps the old path: a too-wide LR decision flow, a panel-to-panel chart', async () => {
     // flow.mmd is an LR run of six ranks — wider than the undeclared room —
     // so the grid planner declines it and the old path runs unchanged.
     const flow = readFileSync(join(fixtures, 'flow.mmd'), 'utf8');
-    const twoLeaves = `flowchart TB\n  Q{Pick}\n  A[Left]\n  B[Right]\n  Q -->|yes| A\n  Q -->|no| B`;
     // A panel chart whose edges name the PANEL rather than a shape in it —
     // the old path's own composition, which phase 3b deliberately declines
     // (2.10 draws shape to shape, and rewriting those charts is not its job).
     const panelEdges = readFileSync(join(fixtures, 'control-plane.mmd'), 'utf8');
-    for (const src of [flow, twoLeaves, panelEdges]) {
+    for (const src of [flow, panelEdges]) {
       const reply = await mount(src);
       assert.ok(!isChannels(reply.svg), `expected old path for:\n${src}`);
     }
+  });
+
+  // The detector's floor used to be four nodes, which left the smallest
+  // charts of all on the old path — a two-box arrow, a three-box run, a bare
+  // decision. None of them is hard: they are one or two bands with no
+  // corridor to find, and the general planner (phase 3a) already draws every
+  // bigger version of them. The floor is two now; one node has no rank
+  // structure and stays behind.
+  test('small charts (2 and 3 nodes) go to the channel engine too', async () => {
+    const cases = [
+      'flowchart TB\n  A[One] --> B[Two]',
+      'flowchart LR\n  A[One] --> B[Two]',
+      'flowchart TB\n  A[One] --> B[Two] --> C[Three]',
+      'flowchart LR\n  A[One] --> B[Two] --> C[Three]',
+      // A bare decision with a terminal leaf on each side — DESIGN 2.9's own
+      // picture, and the shape python-or-java-short.mmd is.
+      'flowchart TB\n  Q{Pick}\n  A[Left]\n  B[Right]\n  Q -->|yes| A\n  Q -->|no| B',
+    ];
+    for (const src of cases) {
+      const reply = await mount(src);
+      assert.ok(isChannels(reply.svg), `expected channels engine for:\n${src}`);
+    }
+  });
+
+  test('a single node has no rank structure and keeps the old path', async () => {
+    const reply = await mount('flowchart TB\n  A[Only]');
+    assert.ok(!isChannels(reply.svg), 'a one-node chart should stay on the old path');
   });
 });
 

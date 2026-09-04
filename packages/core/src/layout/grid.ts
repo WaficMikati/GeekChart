@@ -314,7 +314,13 @@ export function layoutGrid(
         )
       : kidsOf;
     const used = [...new Set(graph.nodes.map((n) => rank.get(n.id)!))].sort((a, b) => a - b);
-    if (used.length < 2) return false;
+    // One rank left is a real chart when 2.9 is what emptied the others: a
+    // bare decision with a terminal leaf on each side is exactly the row the
+    // rule describes, and python-or-java-short is nothing else. Without a
+    // flank, one rank means the ranker found no order at all — still a
+    // decline (the `single rank` guard above says the same for the base
+    // ranking).
+    if (used.length < 2 && !(on && sideRow.size)) return false;
     const remap = new Map(used.map((r, i) => [r, i] as const));
     for (const n of graph.nodes) rank.set(n.id, remap.get(rank.get(n.id)!)!);
     maxRank = used.length - 1;
