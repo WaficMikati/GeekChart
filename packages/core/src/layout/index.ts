@@ -17,7 +17,7 @@ import {
   type Measurer,
   type Metrics,
 } from './measure.ts';
-import { detectChannelChart, layoutChannels } from './channels.ts';
+import { detectChannelChart, layoutChannels, wrapLabelToCap } from './channels.ts';
 import { detectRing, layoutRing, layoutRingColumn, ringWidth, wrapLabelLines } from './ring.ts';
 import { identifySatellites, placeSatellites } from './satellites.ts';
 import { expandFan, findFans, planFan, type FanPlan } from './stack.ts';
@@ -115,14 +115,26 @@ export async function layout(
   // Edge labels are measured here too, because this is the only place with a
   // live measurer. Drawing previously estimated the plate from the character
   // count, which is wrong by enough to clip a label or to overhang its line.
-  for (const edge of graph.edges) {
-    if (!edge.label) continue;
-    edge.labelWidth = measurer.measure(
-      scene.edgeLabelUpper ? edge.label.toUpperCase() : edge.label,
+  // DESIGN 6.5's 28-character cap, applied here so it holds on every path.
+  // The channel engine has enforced it since phase 2, through `wrapPill`; the
+  // old path drew a 70-character label as one 600-wide plate across the chart
+  // and said nothing. Same helper, same warning text, same rule threshold —
+  // only the plate differs, because the old path estimates one rather than
+  // deriving a pill.
+  const labelWarnings: string[] = [];
+  const measureLabel = (s: string) =>
+    measurer.measure(
+      scene.edgeLabelUpper ? s.toUpperCase() : s,
       scene.edgeLabelFont,
       scene.edgeLabelSize,
       scene.edgeLabelTracking,
     );
+  for (const edge of graph.edges) {
+    if (!edge.label) continue;
+    const lines = wrapLabelToCap(edge, labelWarnings);
+    if (lines.length > 1) edge.labelLines = lines;
+    else edge.label = lines[0]!;
+    edge.labelWidth = Math.max(...lines.map(measureLabel));
   }
   // A panel's title and kicker are content it has to hug too (DESIGN 2.6) —
   // measured here, alongside everything else, while the measurer is live.
@@ -462,7 +474,11 @@ export async function layout(
     }
     square(graph, scene);
     const bounds = extentOf(graph);
-    return { width: Math.max(bounds.width, corridorWidth), height: bounds.height };
+    return {
+      width: Math.max(bounds.width, corridorWidth),
+      height: bounds.height,
+      warnings: labelWarnings,
+    };
   }
 
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -1070,5 +1086,5 @@ export async function layout(
 
   square(graph, scene);
   const bounds = extentOf(graph);
-  return { width: bounds.width, height: bounds.height };
+  return { width: bounds.width, height: bounds.height, warnings: labelWarnings };
 }

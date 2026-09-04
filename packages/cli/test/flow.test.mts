@@ -2412,3 +2412,50 @@ describe('box-to-text sizing, DESIGN 2.2', () => {
     }
   });
 });
+
+describe('edge-label length, DESIGN 6.5', () => {
+  test('the old path caps a long label at two pill lines and warns', async () => {
+    // The channel engine has enforced 6.5's 28-character cap since phase 2, in
+    // `wrapPill`. The old path had nothing: a 70-character label drew as one
+    // 600-wide plate straight across the chart, with no warning to the writer.
+    // The plate is still estimated rather than derived here — the warning is
+    // what both paths owe.
+    const reply = await mount(
+      `flowchart TB
+  A[Start] -->|this is an extremely long edge label that runs on and on past two lines| B[Finish]
+`,
+      { motion: false },
+    );
+    assert.ok(
+      reply.warnings.some((w) => w.startsWith('6.5-label-length')),
+      `expected a 6.5-label-length warning, got: ${JSON.stringify(reply.warnings)}`,
+    );
+    const rows = await session.page.evaluate(() =>
+      [...document.querySelectorAll<SVGTextElement>('.gc-edge-label[data-id="L_A_B_0"] text')].map(
+        (t) => t.textContent ?? '',
+      ),
+    );
+    assert.equal(rows.length, 2, 'past two lines the render keeps the first two');
+    for (const row of rows) {
+      assert.ok(row.length <= 28, `"${row}" is over 6.5's 28-character line`);
+    }
+  });
+
+  test('the warning is raised once, not once per engine', async () => {
+    // Both the cap in `layout()` and `wrapPill` see the same edge on a channel
+    // chart; only one of them may report it.
+    const reply = await mount(
+      `flowchart TB
+  D[Dispatcher]
+  A[Alpha]
+  B[Beta]
+  C[Gamma]
+  D -->|this label is far too long to fit on one pill line at all| A
+  D -->|wraps to a second pill line| B
+  D -->|ok| C
+`,
+      { motion: false },
+    );
+    assert.equal(reply.warnings.filter((w) => w.startsWith('6.5-label-length')).length, 1);
+  });
+});
