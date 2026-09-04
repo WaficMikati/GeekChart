@@ -326,7 +326,13 @@ the renderer keeps what was written and writers own their casing.)
 - **6.6** Dashed = return / async / optional (`5 4`). Dotted (`1.5 6`) = the
   Lyzr style of a channel along which a dot travels. Solid = the main call.
 - **6.7** Loops back go **around** the content, with a 24 clearance, as one
-  rounded orthogonal path — not a free-form arc under the diagram. A return
+  rounded orthogonal path — not a free-form arc under the diagram. The 24
+  applies to the loop's **own source too**, measured from the shape's
+  widest point on that flank: a corridor that hugs the diamond vertex it
+  just left while clearing everything else by 24 reads as an error, not an
+  exit. (Clarified 2026-09-03: connected-shape exemption let git-workflow's
+  CHANGES corridor turn up at Review?'s vertex while the other flank's
+  loop stood properly off Merge.) A return
   that several loop-backs share (6.14) is **one** path, so it is measured
   once — on the branch that starts the trunk, against the half perimeter of
   the box the bus's own nodes span, plus the same 128 corridor pad. 6.8's
