@@ -535,6 +535,124 @@ export const sameRowLeaf: Check = {
   },
 };
 
+/**
+ * DESIGN 2.7's fan clause: a fan's horizontal branch legs are one shared
+ * derived length, sized for the widest pill any branch carries plus its 16
+ * stubs — so the branch labels mirror each other across the trunk. The tell
+ * this catches is exactly the one that wrote the rule: python-or-java's YES
+ * riding its leg while the 224-wide NO hung below the bus on Java's drop,
+ * because that branch's leg happened to be 24 too short for it.
+ *
+ * Measured, never assumed: for every parent with two or more forward
+ * branches, take the branches whose own drawn path HAS a horizontal leg (a
+ * Z — a straight drop has no leg to sit on and is not part of this) and
+ * that carry a pill. If any one of them puts its pill on the horizontal
+ * leg, they all must. The ones that do are then held to the same geometry
+ * 2.9 holds a flank run to: at least 15 of visible line either side of the
+ * pill, and the pill on the midpoint of that drawn extent.
+ */
+export const fanLegsMirror: Check = {
+  id: '2.7-fan-legs-mirror',
+  rule: '2.7',
+  run(svg, ctx) {
+    if (!isChannels(svg)) return [];
+    const ids = nodeById(ctx);
+    const plateOf = new Map(plates(ctx).map((p) => [p.id, p.b] as const));
+    const findings: Finding[] = [];
+    const meta = edgeMeta(ctx).filter(
+      (m) =>
+        m.from &&
+        m.to &&
+        ids.has(m.from) &&
+        ids.has(m.to) &&
+        !m.e.classList.contains('gc-back'),
+    );
+    const byParent = new Map<string, typeof meta>();
+    for (const m of meta) {
+      const list = byParent.get(m.from!);
+      if (list) list.push(m);
+      else byParent.set(m.from!, [m]);
+    }
+
+    for (const [parent, kids] of byParent) {
+      if (kids.length < 2) continue;
+      interface Branch {
+        to: string;
+        plate: DOMRect;
+        /** The horizontal leg of this branch's path, in screen coords. */
+        leg: [number, number, number]; // lo x, hi x, y
+        onLeg: boolean;
+      }
+      const branches: Branch[] = [];
+      for (const m of kids) {
+        const plate = plateOf.get(m.e.dataset.id ?? '');
+        if (!plate) continue;
+        const ctm = m.e.getScreenCTM();
+        if (!ctm) continue;
+        const pts = pathPointsHV(m.e.getAttribute('d'), ctm);
+        // The longest horizontal segment is the branch leg; with none, this
+        // branch is a straight drop and owes the fan no mirroring.
+        let leg: [number, number, number] | null = null;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1]!;
+          const b = pts[i]!;
+          if (Math.abs(a[1] - b[1]) > 1) continue;
+          const span = Math.abs(a[0] - b[0]);
+          if (span < ctx.unit) continue;
+          if (!leg || span > leg[1] - leg[0])
+            leg = [Math.min(a[0], b[0]), Math.max(a[0], b[0]), a[1]];
+        }
+        if (!leg) continue;
+        const pcy = (plate.top + plate.bottom) / 2;
+        const pcx = (plate.left + plate.right) / 2;
+        const onLeg =
+          Math.abs(pcy - leg[2]) <= ctx.unit && pcx > leg[0] - ctx.unit && pcx < leg[1] + ctx.unit;
+        branches.push({ to: m.to!, plate, leg, onLeg });
+      }
+      if (branches.length < 2) continue;
+      if (!branches.some((b) => b.onLeg)) continue;
+      const hanging = branches.filter((b) => !b.onLeg);
+      if (hanging.length) {
+        findings.push({
+          severity: 'fail',
+          message:
+            `2.7 ${hanging.length} of ${branches.length} branch labels off ${parent} hang ` +
+            `below the bus while a sibling's sits on its leg ` +
+            `(${hanging.map((b) => b.to).join(' ')}) — the legs share one derived length`,
+        });
+      }
+      for (const b of branches) {
+        if (!b.onLeg) continue;
+        const before = (b.plate.left - b.leg[0]) / ctx.unit;
+        const after = (b.leg[1] - b.plate.right) / ctx.unit;
+        if (before < 15 || after < 15) {
+          findings.push({
+            severity: 'fail',
+            message:
+              `2.7 the leg ${parent}→${b.to} shows ${before.toFixed(1)}/${after.toFixed(1)} ` +
+              `of line either side of its pill (16 each)`,
+          });
+        } else {
+          // Centred on the DRAWN extent, the same way 6.5 measures it: the
+          // two turns a leg spends are drawn at their own radii, so the two
+          // stubs need not match to the unit — the centre does.
+          const off =
+            ((b.plate.left + b.plate.right) / 2 - (b.leg[0] + b.leg[1]) / 2) / ctx.unit;
+          if (Math.abs(off) > 1) {
+            findings.push({
+              severity: 'fail',
+              message:
+                `2.7 the pill on ${parent}→${b.to} sits ${off.toFixed(1)} off the midpoint ` +
+                `of its leg's drawn extent`,
+            });
+          }
+        }
+      }
+    }
+    return findings;
+  },
+};
+
 /** A chain re-detected from the DOM: unique forward next-map covering every
  *  node once, start to end. */
 function detectChain(ctx: Ctx): string[] | null {
@@ -1055,6 +1173,7 @@ export const CHANNEL_CHECKS: Check[] = [
   pillOnLine,
   fanSymmetry,
   sameRowLeaf,
+  fanLegsMirror,
   uniformDiamond,
   ribbon,
   sideExclusivity,

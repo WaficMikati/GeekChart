@@ -225,7 +225,17 @@ and the check that enforces it cannot drift apart.
   of one hanging on its drop because its own leg happened to be short.
   (Added 2026-09-04: python-or-java's 224-wide NO pill hung below the bus
   beside a 200 leg while YES sat on its run; the user: "it should mirror
-  YES.") Band heights are uniform per chart (7.4's
+  YES.") When that derived length costs more width than the canvas has,
+  the **label wraps** to a second line (6.5's own second line, bought for
+  fit rather than for reading length) and the length is derived again —
+  a second line is far cheaper than the width, and it keeps every branch
+  label on a run. Only when no label can wrap any further does the fan
+  give up the mirror, and then its labels hang on their drops *together*,
+  never one up and one down. (Added 2026-09-04, same measurement: at 280
+  a leg python-or-java seats 984 wide against a room of 904 and the
+  planner declined the whole chart to the old path; wrapped, the NO pill
+  is 132 and every branch label sits on its leg at the chart's own 968.)
+  Band heights are uniform per chart (7.4's
   even whitespace); the uniform value is the largest any band needs.
   (Replaces the grow-8-retry-12-times loop of 2026-08-28 on 2026-09-03:
   growth-as-repair fixed the label that asked and starved the next one —

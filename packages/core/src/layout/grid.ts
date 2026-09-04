@@ -3,6 +3,7 @@ import { RULES } from '../rules.ts';
 import type { Scene } from '../scene.ts';
 import { GRID, GUTTER } from '../tokens.ts';
 import {
+  narrowPill,
   PILL_CLEAR,
   PILL_EDGE_CLEAR,
   PILL_NODE_CLEAR,
@@ -60,6 +61,9 @@ const EDGE_NODE_CLEAR = 16;
 /** DESIGN 2.9: visible line either side of a flank pill, before the stub and
  *  the arrowhead — what makes the run read as a line rather than two nubs. */
 const FLANK_STUB = 16;
+/** DESIGN 2.7: visible line either side of a branch pill on a fan's
+ *  horizontal leg — the same 16 a flank run shows, for the same reason. */
+const BRANCH_STUB = 16;
 
 /** Development aid: `GC_GRID_DEBUG=1` logs why a chart fell back. Browser
  *  bundles have no `process`, so the read is through `globalThis`. */
@@ -346,6 +350,7 @@ export function layoutGrid(
   const seatAll = (
     stacked: Set<string>,
     flipShallow: boolean,
+    mirrorLegs = true,
   ): { anchor: Map<string, number>; width: number } | null => {
     const exts = new Map<string, SubExt>();
     // DESIGN 2.9's geometry: the flank gutter is one CHART-WIDE value, so
@@ -457,16 +462,68 @@ export function layoutGrid(
           const anchorKids = allEqual
             ? ordered.map((_, i) => i)
             : ordered.map((_, i) => i).filter((i) => subHeight(ordered[i]!.to) === deepest);
-          const boxLo = Math.min(
-            ...anchorKids.map((i) => anchorsRel[i]! - su(byId.get(ordered[i]!.to)!) / 2),
+          const centreOfKids = (): number => {
+            const boxLo = Math.min(
+              ...anchorKids.map((i) => anchorsRel[i]! - su(byId.get(ordered[i]!.to)!) / 2),
+            );
+            const boxHi = Math.max(
+              ...anchorKids.map((i) => anchorsRel[i]! + su(byId.get(ordered[i]!.to)!) / 2),
+            );
+            return (boxLo + boxHi) / 2;
+          };
+          let anchor = centreOfKids();
+          // DESIGN 2.7: a fan's horizontal branch legs are ONE shared derived
+          // length — the widest pill any branch carries, 16 of visible line
+          // either side of it, and the two turns the leg spends getting off
+          // the trunk and onto the drop. Derived once and applied to every
+          // off-axis branch, so the labels mirror across the trunk instead of
+          // one hanging below the bus because its own leg came up short. The
+          // push travels outward (an outer branch moves with the branch that
+          // asked), so every packing gap this loop just derived survives it,
+          // and it is symmetric where the branches are, so 2.8's centring
+          // holds — the anchor is re-derived after each pass all the same.
+          const branchPill = Math.max(
+            0,
+            ...ordered.map((e) => {
+              const pill = pills.get(e.id);
+              return pill ? pu(pill) : 0;
+            }),
           );
-          const boxHi = Math.max(
-            ...anchorKids.map((i) => anchorsRel[i]! + su(byId.get(ordered[i]!.to)!) / 2),
+          // Two branches only: three or more ride one bus (6.12), where the
+          // pills share a single horizontal line and the packing gap above
+          // already keeps them apart.
+          const legNeed =
+            branchPill && mirrorLegs && ordered.length === 2
+              ? roundUp(branchPill + 2 * BRANCH_STUB + 2 * TURN, GRID)
+              : 0;
+          for (let pass = 0; legNeed && pass < 4; pass++) {
+            let moved = false;
+            for (const side of [-1, 1] as const) {
+              const outward = ordered
+                .map((_, i) => i)
+                .filter((i) => Math.sign(anchorsRel[i]! - anchor) === side)
+                .filter((i) => Math.abs(anchorsRel[i]! - anchor) >= 1)
+                .sort((a, b) => Math.abs(anchorsRel[a]! - anchor) - Math.abs(anchorsRel[b]! - anchor));
+              let cum = 0;
+              for (const i of outward) {
+                const d = Math.abs(anchorsRel[i]! - anchor) + cum;
+                if (d < legNeed - 0.5) cum += legNeed - d;
+                if (!cum) continue;
+                anchorsRel[i]! += side * cum;
+                kidAt.set(ordered[i]!.to, kidAt.get(ordered[i]!.to)! + side * cum);
+                moved = true;
+              }
+            }
+            if (!moved) break;
+            anchor = centreOfKids();
+          }
+          const childLo = Math.min(...ordered.map((e) => kidAt.get(e.to)!));
+          const childHi = Math.max(
+            ...ordered.map((e, i) => kidAt.get(e.to)! + kidExts[i]!.hi - kidExts[i]!.lo),
           );
-          const anchor = (boxLo + boxHi) / 2;
           seatFlanks(kidAt, anchor);
-          const lo = Math.min(0, anchor - w / 2 - padLo);
-          const hi = Math.max(cur, anchor + w / 2 + padHi);
+          const lo = Math.min(childLo, anchor - w / 2 - padLo);
+          const hi = Math.max(childHi, anchor + w / 2 + padHi);
           ext = { lo, hi, anchor, kidAt };
         }
       }
@@ -492,10 +549,50 @@ export function layoutGrid(
 
   const room = scene.canvas.width - scene.canvas.margin * 2;
 
+  /**
+   * DESIGN 2.7 + 6.5: give the widest one-line branch label a second line.
+   *
+   * The shared branch-leg length is derived from that label, so it can ask
+   * for more width than the canvas has. A second pill line is much the
+   * cheaper way to pay for it — the layout keeps its width and every branch
+   * label keeps its place on a run — so the derivation buys it before it
+   * gives up on the placement. Returns false when nothing can wrap further.
+   */
+  const narrowWidestBranchPill = (): boolean => {
+    let best: { id: string; pill: Pill; was: number } | null = null;
+    for (const n of graph.nodes) {
+      const kids = rowKidsOf.get(n.id)!;
+      if (kids.length !== 2) continue;
+      for (const e of kids) {
+        const pill = pills.get(e.id);
+        if (!pill || (best && pill.width <= best.was)) continue;
+        const narrower = narrowPill(pill, scene, measureLine);
+        if (narrower) best = { id: e.id, pill: narrower, was: pill.width };
+      }
+    }
+    if (!best) return false;
+    pills.set(best.id, best.pill);
+    return true;
+  };
+
   const attempt = (flipShallow: boolean, sameRow: boolean): ChannelLayoutPlan | null => {
     if (!applySameRow(sameRow)) return decline('same-row ranks');
     let stacked = new Set<string>();
     let seated = seatAll(stacked, flipShallow);
+    if (!seated) return null;
+    if (seated.width > room && !packToDisplay) {
+      // The derived legs (2.7) are what overflowed if the same seating fits
+      // without them: wrap the branch label and derive again. Only when no
+      // label can wrap any further does the fan seat as if the rule were not
+      // there — and then its pills hang below the bus together (`legHosts`),
+      // mirrored on the drops rather than one up and one down.
+      const plain = seatAll(stacked, flipShallow, false);
+      if (plain && plain.width <= room) {
+        while (seated && seated.width > room && narrowWidestBranchPill())
+          seated = seatAll(stacked, flipShallow);
+        if (!seated || seated.width > room) seated = plain;
+      }
+    }
     if (!seated) return null;
     if (seated.width > room) {
       // Under a declared display the old path owns packing — its widest-
@@ -598,6 +695,34 @@ export function layoutGrid(
       }
     }
     const modeOf = (e: GraphEdge): TreeMode => treeMode.get(e.id) ?? { kind: 'straight' };
+
+    /**
+     * DESIGN 2.7: the horizontal branch legs of one fan share a derived
+     * length, so their labels mirror across the trunk. The answer is
+     * therefore the fan's, not the branch's: either every branch pill fits
+     * its own leg — the seating is derived so that it does — or none of them
+     * rides one and they hang below the bus together. A pill on its run
+     * beside a sibling's hanging off its drop is exactly the tell the rule
+     * names.
+     */
+    const legRoom = (from: number, kU: number, pill: Pill): boolean =>
+      Math.abs(kU - from) - 2 * TURN - 2 >= pu(pill);
+    const fanLegs = new Map<string, boolean>();
+    const legHosts = (pid: string): boolean => {
+      const cached = fanLegs.get(pid);
+      if (cached !== undefined) return cached;
+      let all = true;
+      for (const e of rowKidsOf.get(pid)!) {
+        const pill = pills.get(e.id);
+        if (!pill) continue;
+        const mode = modeOf(e);
+        if (mode.kind !== 'port' && mode.kind !== 'trunk') continue;
+        const from = mode.kind === 'port' ? mode.portU : anchorU.get(pid)!;
+        if (!legRoom(from, anchorU.get(e.to)!, pill)) all = false;
+      }
+      fanLegs.set(pid, all);
+      return all;
+    };
 
     // Lane allocation per band (band b sits between rows b and b+1). Same-
     // band joins ride a lane below the buses; a multi-rank join takes one
@@ -979,8 +1104,6 @@ export function layoutGrid(
             // line — the band must hold it in that half (bus is centred).
             straightNeed = Math.max(straightNeed, 2 * (PILL_CLEAR + pv(pill) + PILL_NODE_CLEAR));
           };
-          const hFits = (from: number): boolean =>
-            Math.abs(kU - from) - 2 * TURN - 2 >= pu(pill);
           switch (mode.kind) {
             case 'straight': {
               const shared = kids.some(
@@ -996,7 +1119,7 @@ export function layoutGrid(
               if (Math.abs(kU - mode.faceU) - TURN - PILL_CLEAR < pu(pill)) onLine();
               break;
             case 'port':
-              if (hFits(mode.portU)) onLine();
+              if (legHosts(p.id)) onLine();
               else {
                 fanPillBelow = Math.max(
                   fanPillBelow,
@@ -1005,7 +1128,7 @@ export function layoutGrid(
               }
               break;
             case 'trunk':
-              if (hFits(pU0)) onLine();
+              if (legHosts(p.id)) onLine();
               else {
                 fanPillBelow = Math.max(
                   fanPillBelow,
@@ -1229,7 +1352,6 @@ export function layoutGrid(
           ]).map((q) => ({ u: q.x, v: q.y }));
           if (pill) {
             const busRun = mode.kind === 'bus' ? busRunFor(p.id, e) : null;
-            const hFits = Math.abs(kU - fromU) - 2 * TURN - 2 >= pu(pill);
             const sharedStraight =
               mode.kind === 'straight' &&
               kids.some((o) => o !== e && (modeOf(o).kind === 'trunk' || modeOf(o).kind === 'bus'));
@@ -1243,7 +1365,7 @@ export function layoutGrid(
                 { u: kU, v: pBottom + STANDOFF },
                 { u: kU, v: kTop - scene.edgeGap },
               ];
-            } else if ((mode.kind === 'port' || mode.kind === 'trunk') && hFits) {
+            } else if ((mode.kind === 'port' || mode.kind === 'trunk') && legHosts(p.id)) {
               pillRun = [
                 { u: Math.min(fromU, kU) + TURN, v: busV },
                 { u: Math.max(fromU, kU) - TURN, v: busV },

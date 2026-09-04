@@ -659,6 +659,81 @@ describe('channel engine — the grid planner (phase 3a)', () => {
     });
   }
 
+  test("DESIGN 2.7: python-or-java's two branch labels mirror on their legs", async () => {
+    // The user's report: YES rode the left horizontal leg while the 224-wide
+    // "NO, ENTERPRISE OR ANDROID" hung below the bus on Java's drop, because
+    // that branch's leg was 200 long and its own pill did not fit. "It should
+    // mirror YES." The legs are one derived length now, and the label buys
+    // its second line (6.5) when the canvas cannot pay for the width.
+    const reply = await mount(fixture('blog/python-or-java.mmd'));
+    assert.ok(isChannels(reply.svg), 'python-or-java should route through the channel engine');
+    const legs = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const unit = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+      const points = (d: string): [number, number][] => {
+        const out: [number, number][] = [];
+        for (const m of d.matchAll(/([MLQ])([-\d.,\s]+)/g)) {
+          const n = m[2]!.trim().split(/[\s,]+/).map(Number);
+          for (let i = m[1] === 'Q' ? 2 : 0; i + 1 < n.length; i += 2) out.push([n[i]!, n[i + 1]!]);
+        }
+        return out;
+      };
+      return ['L_Q1_PY_0', 'L_Q1_JAVA_0'].map((id) => {
+        const plate = document.querySelector(
+          `svg.gc-chart .gc-edge-label[data-id="${id}"] .gc-plate`,
+        ) as SVGGraphicsElement;
+        const edge = document.querySelector(
+          `svg.gc-chart .gc-edge[data-id="${id}"]`,
+        ) as SVGPathElement;
+        const b = plate.getBoundingClientRect();
+        const ctm = edge.getScreenCTM()!;
+        const pts = points(edge.getAttribute('d')!).map(([x, y]) => {
+          const p = new DOMPoint(x, y).matrixTransform(ctm);
+          return [p.x, p.y] as [number, number];
+        });
+        // The longest horizontal stretch of this edge is its branch leg.
+        let leg: [number, number, number] | null = null;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1]!;
+          const c = pts[i]!;
+          if (Math.abs(a[1] - c[1]) > 1) continue;
+          const span = Math.abs(a[0] - c[0]);
+          if (!leg || span > leg[1] - leg[0])
+            leg = [Math.min(a[0], c[0]), Math.max(a[0], c[0]), a[1]];
+        }
+        return {
+          id,
+          unit,
+          cy: (b.top + b.bottom) / 2,
+          left: b.left,
+          right: b.right,
+          leg,
+        };
+      });
+    });
+    const unit = legs[0]!.unit;
+    for (const l of legs) {
+      assert.ok(l.leg, `${l.id} has no horizontal leg to carry its label`);
+      const off = Math.abs(l.cy - l.leg![2]) / unit;
+      assert.ok(off <= 1, `${l.id}'s pill sits ${off.toFixed(1)} off its horizontal leg`);
+      const before = (l.left - l.leg![0]) / unit;
+      const after = (l.leg![1] - l.right) / unit;
+      assert.ok(
+        before >= 15 && after >= 15,
+        `${l.id} shows ${before.toFixed(1)}/${after.toFixed(1)} of line either side of its pill`,
+      );
+      const centre = ((l.left + l.right) / 2 - (l.leg![0] + l.leg![1]) / 2) / unit;
+      assert.ok(
+        Math.abs(centre) <= 1,
+        `${l.id}'s pill is ${centre.toFixed(1)} off the midpoint of its leg`,
+      );
+    }
+    const gapY = Math.abs(legs[0]!.cy - legs[1]!.cy) / unit;
+    assert.ok(gapY <= 1, `the two branch labels sit ${gapY.toFixed(1)} apart in y — they mirror`);
+    assert.deepEqual(await gateCheck('2.7-fan-legs-mirror'), []);
+    assert.deepEqual(await gateFails(), []);
+  });
+
   test('7.4-even-whitespace keeps its teeth: an empty 200+ gap still fails', async () => {
     // The 7.4 exemption is for a gap DOING work: org-chart's parent row has a
     // 208 gap between ADM and ACA, and it passes because CEO's fan trunk runs
