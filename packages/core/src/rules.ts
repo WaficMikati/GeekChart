@@ -117,6 +117,11 @@ export const RULES: Record<string, Rule> = {
     title: "A loop-back is no longer than its nearest corridor's Manhattan distance plus this",
     threshold: 128,
   },
+  '6.7-source-clear': {
+    title: "A loop corridor keeps this clear of its own source's widest point on the flank it exits",
+    threshold: CLEARANCE.loop,
+    token: 'CLEARANCE',
+  },
   '6.8': {
     title: 'Clearance an edge keeps from a node it does not connect to',
     threshold: CLEARANCE.node,

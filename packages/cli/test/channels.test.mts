@@ -607,6 +607,90 @@ describe('channel engine — the grid planner (phase 3a)', () => {
       a.x1 <= b.x1 - 1 && a.y1 <= b.y1 - 1 && a.x2 >= b.x2 + 1 && a.y2 >= b.y2 + 1;
     assert.ok(!nests(rc, mgm) && !nests(mgm, rc), 'the two loop routes must not nest');
   });
+
+  /**
+   * DESIGN 6.7, clarified 2026-09-03. Before the fix the CHANGES corridor
+   * turned up 8 from Review?'s right vertex — a diamond's widest point —
+   * because the corridor exempted the loop's own source, while the Merge
+   * loop on the other flank stood the full 24 off. The pair read as a
+   * mistake. Both flanks now derive the same way, so the standoffs match.
+   */
+  test('git-workflow: both loop corridors stand 24 off the content, and off each other by the same amount', async () => {
+    await mount(fixture('git-workflow.mmd'));
+    assert.deepEqual(await gateCheck('6.7-source-clear'), []);
+    const stand = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const box = (el: Element) => el.getBoundingClientRect();
+      const nodes = [...svg.querySelectorAll('.gc-node')].map((n) => ({
+        id: (n as SVGGElement).dataset.id!,
+        r: box(n.querySelector('.gc-outline')!),
+      }));
+      // The corridor is the loop's longest vertical run; its own source is
+      // the shape it exits.
+      const measure = (edgeId: string, sourceId: string) => {
+        const e = svg.querySelector(`.gc-edge[data-id="${edgeId}"]`) as SVGPathElement;
+        const ctm = e.getScreenCTM()!;
+        const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+        const pts: [number, number][] = [];
+        for (let i = 0; i + 1 < nums.length; i += 2) {
+          const p = new DOMPoint(nums[i]!, nums[i + 1]!).matrixTransform(ctm);
+          pts.push([p.x, p.y]);
+        }
+        let best = { x: 0, y1: 0, y2: 0, len: -1 };
+        for (let i = 1; i < pts.length; i++) {
+          const [x1, y1] = pts[i - 1]!;
+          const [x2, y2] = pts[i]!;
+          if (Math.abs(x1 - x2) > 1) continue;
+          const len = Math.abs(y2 - y1);
+          if (len > best.len) best = { x: x1, y1: Math.min(y1, y2), y2: Math.max(y1, y2), len };
+        }
+        const side = Math.sign(best.x - (box(svg).left + box(svg).right) / 2) || 1;
+        // The standoff the rule derives: distance to the widest lateral
+        // extent of every shape the corridor passes, on the side it stands.
+        let content = Infinity;
+        for (const n of nodes) {
+          if (n.r.bottom < best.y1 - 1 || n.r.top > best.y2 + 1) continue;
+          const gap = side < 0 ? n.r.left - best.x : best.x - n.r.right;
+          if (gap < content) content = gap;
+        }
+        const src = nodes.find((n) => n.id === sourceId)!.r;
+        const own = side < 0 ? src.left - best.x : best.x - src.right;
+        return { content, own };
+      };
+      const unit = box(svg).width / svg.viewBox.baseVal.width;
+      const changes = measure('L_R_C_0', 'R');
+      const merge = measure('L_MG_M_0', 'MG');
+      return {
+        changesOwn: changes.own / unit,
+        mergeOwn: merge.own / unit,
+        changesContent: changes.content / unit,
+        mergeContent: merge.content / unit,
+      };
+    });
+
+    // Each corridor clears the shape it exits — the CHANGES loop leaves
+    // Review?'s side vertex, which is the diamond at its widest.
+    assert.ok(
+      stand.changesOwn >= 23,
+      `the CHANGES corridor stands ${stand.changesOwn.toFixed(1)} off Review?, not 24`,
+    );
+    assert.ok(
+      stand.mergeOwn >= 23,
+      `the Merge corridor stands ${stand.mergeOwn.toFixed(1)} off Merge, not 24`,
+    );
+    // The user's actual ask: the two loops look like each other. Both are
+    // derived against the content they pass, so both land on the same number.
+    assert.ok(
+      Math.abs(stand.changesContent - stand.mergeContent) <= 2,
+      `the two corridors stand off by different amounts: ` +
+        `${stand.changesContent.toFixed(1)} vs ${stand.mergeContent.toFixed(1)}`,
+    );
+    assert.ok(
+      stand.changesContent >= 23 && stand.mergeContent >= 23,
+      `a corridor is closer than 24 to the content it passes: ` +
+        `${stand.changesContent.toFixed(1)} / ${stand.mergeContent.toFixed(1)}`,
+    );
+  });
 });
 
 describe('channel engine — the whole gate still applies', () => {

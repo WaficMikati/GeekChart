@@ -57,8 +57,6 @@ const LOOP_CLEAR = 24;
 const TRACK = 16;
 /** DESIGN 6.1/6.8: an edge keeps this clear of a node it does not connect. */
 const EDGE_NODE_CLEAR = 16;
-/** Shortest leg the 6.1 short-jog rule tolerates, with a little margin. */
-const MIN_JOG = 8;
 
 /** Development aid: `GC_GRID_DEBUG=1` logs why a chart fell back. Browser
  *  bundles have no `process`, so the read is through `globalThis`. */
@@ -647,11 +645,20 @@ export function layoutGrid(
     const loopPlans: LoopPlan[] = [];
     const corridorLegs: { u: number; rLo: number; rHi: number; pillU: number }[] = [];
 
-    const rowSpanBoxes = (rLo: number, rHi: number, exempt: Set<string>) => {
+    /**
+     * Every shape's widest lateral extent in the rows a corridor spans.
+     *
+     * DESIGN 6.7 (clarified 2026-09-03): nothing is exempt — the loop's own
+     * source and target are shapes the corridor passes just like any other,
+     * and a diamond's `su` is its side-vertex width, so the extent used is
+     * the vertex, not the label box. The old connected-shape exemption is
+     * what let git-workflow's CHANGES corridor turn up 8 from Review?'s
+     * right vertex while the same chart's other loop stood 24 off Merge.
+     */
+    const rowSpanBoxes = (rLo: number, rHi: number) => {
       const boxes: { lo: number; hi: number }[] = [];
       for (let r = rLo; r <= rHi && r <= lastRow; r++) {
         for (const n of rowNodes[r]!) {
-          if (exempt.has(n.id)) continue;
           const a = anchorU.get(n.id)!;
           boxes.push({ lo: a - su(n) / 2, hi: a + su(n) / 2 });
         }
@@ -661,7 +668,7 @@ export function layoutGrid(
       // it clears a box.
       for (const [leafId, s] of sideRow) {
         const r = rank.get(leafId)!;
-        if (r < rLo || r > rHi || exempt.has(leafId) || exempt.has(s.parent)) continue;
+        if (r < rLo || r > rHi) continue;
         const p = byId.get(s.parent)!;
         const faceU = anchorU.get(s.parent)! + (s.dir * su(p)) / 2;
         const nearU = anchorU.get(leafId)! - (s.dir * su(byId.get(leafId)!)) / 2;
@@ -669,7 +676,6 @@ export function layoutGrid(
       }
       if (rHi >= maxRank && stackedLeaves.size) {
         for (const id of stackedLeaves) {
-          if (exempt.has(id)) continue;
           const n = byId.get(id)!;
           const a = anchorU.get(id)!;
           boxes.push({ lo: a - su(n) / 2, hi: a + su(n) / 2 });
@@ -678,23 +684,24 @@ export function layoutGrid(
       return boxes;
     };
 
-    /** Push a corridor outward until it clears every box (16) in its rows and
+    /** Push a corridor outward until it clears every box in its rows by
+     *  `clear` — 6.7's 24 for a return, 6.1's 16 for a forward join — and
      *  every already-placed leg (track pitch, pill widths included). */
     const settleCorridor = (
       side: -1 | 1,
       start: number,
       rLo: number,
       rHi: number,
-      exempt: Set<string>,
       myPillU: number,
+      clear: number,
     ): number => {
-      const boxes = rowSpanBoxes(rLo, rHi, exempt);
+      const boxes = rowSpanBoxes(rLo, rHi);
       let u = start;
       for (let guard = 0; guard < 64; guard++) {
         let moved = false;
         for (const b of boxes) {
-          if (u > b.lo - EDGE_NODE_CLEAR && u < b.hi + EDGE_NODE_CLEAR) {
-            u = side === -1 ? b.lo - EDGE_NODE_CLEAR : b.hi + EDGE_NODE_CLEAR;
+          if (u > b.lo - clear && u < b.hi + clear) {
+            u = side === -1 ? b.lo - clear : b.hi + clear;
             moved = true;
           }
         }
@@ -738,14 +745,13 @@ export function layoutGrid(
       const rsMax = Math.max(...g.edges.map((e) => rank.get(e.from)!));
       const bus = g.edges.length > 1;
       const members = [t, ...g.edges.map((e) => byId.get(e.from)!)];
-      const exempt = new Set(members.map((n) => n.id));
       const myPillU = Math.max(
         0,
         ...g.edges.map((e) => (pills.has(e.id) ? pu(pills.get(e.id)!) : 0)),
       );
       const clearAt = (u: number): boolean => {
-        for (const b of rowSpanBoxes(rt, rsMax, exempt)) {
-          if (u > b.lo - EDGE_NODE_CLEAR + 0.5 && u < b.hi + EDGE_NODE_CLEAR - 0.5) return false;
+        for (const b of rowSpanBoxes(rt, rsMax)) {
+          if (u > b.lo - LOOP_CLEAR + 0.5 && u < b.hi + LOOP_CLEAR - 0.5) return false;
         }
         for (const leg of corridorLegs) {
           if (leg.rHi < rt || leg.rLo > rsMax) continue;
@@ -762,17 +768,18 @@ export function layoutGrid(
           side === -1
             ? Math.min(...members.map((n) => anchorU.get(n.id)! - su(n) / 2)) - LOOP_CLEAR
             : Math.max(...members.map((n) => anchorU.get(n.id)! + su(n) / 2)) + LOOP_CLEAR;
-        const options = [settleCorridor(side, outerStart, rt, rsMax, exempt, myPillU)];
-        // The snug inner corridor: tight against the nearest neighbour on
-        // this side (DESIGN 6.8's "nearest corridor"), when the gap between
-        // it and the source's own face is clear. A lone return may hug its
-        // own source that way; a bus has to clear every source it serves.
+        const options = [settleCorridor(side, outerStart, rt, rsMax, myPillU, LOOP_CLEAR)];
+        // The snug inner corridor: the nearest one DESIGN 6.8 allows, which
+        // is 6.7's own 24 off the source's widest point on this flank — not
+        // a jog's width off it. A lone return may stand there when nothing
+        // else in the rows is nearer; a bus has to clear every source it
+        // serves, so it only ever gets the outer corridor.
         if (!bus) {
           const s = byId.get(g.edges[0]!.from)!;
           const inner =
             side === -1
-              ? anchorU.get(s.id)! - su(s) / 2 - MIN_JOG
-              : anchorU.get(s.id)! + su(s) / 2 + MIN_JOG;
+              ? anchorU.get(s.id)! - su(s) / 2 - LOOP_CLEAR
+              : anchorU.get(s.id)! + su(s) / 2 + LOOP_CLEAR;
           if (clearAt(inner) && !options.some((u) => Math.abs(u - inner) < 1)) {
             options.unshift(inner);
           }
@@ -889,7 +896,7 @@ export function layoutGrid(
       let placed: number | null = null;
       for (const side of [1, -1] as const) {
         const start = side === -1 ? tLo - LOOP_CLEAR : tHi + LOOP_CLEAR;
-        const u = settleCorridor(side, start, rs + 1, rt - 1, new Set(), myPillU);
+        const u = settleCorridor(side, start, rs + 1, rt - 1, myPillU, EDGE_NODE_CLEAR);
         const sU = anchorU.get(e.from)!;
         const tU = anchorU.get(e.to)!;
         // The source-band run must cross only the source's own drops; the

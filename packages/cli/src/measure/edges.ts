@@ -850,6 +850,77 @@ export const longLoop: Check = {
  * exposed the gap: nothing before this measured a label against nodes at
  * all, only against other labels and other edges (6.5's own checks above).
  */
+/**
+ * DESIGN 6.7 (clarified 2026-09-03): the 24 clearance applies to the loop's
+ * **own source too**, measured from the shape's widest point on the flank the
+ * corridor exits — a diamond's side vertex, not its label box.
+ *
+ * What is measured: for every `gc-back` edge, the runs of its path that lie
+ * along the flow axis (vertical in a TB chart) and are long enough to be a
+ * corridor leg rather than a rounded corner. A run whose position falls
+ * *inside* the source's own lateral span is a face drop, not a corridor, and
+ * is skipped; every other run keeps 24 (less a 1-unit tolerance) from the
+ * nearest edge of the source's outline on the side it stands.
+ *
+ * There is deliberately no connected-shape exemption here. That exemption is
+ * exactly the defect: git-workflow's CHANGES corridor turned up 8 from
+ * Review?'s right vertex — legal under every other check, because Review? is
+ * the edge's own source — while the same chart's other loop stood 24 off
+ * Merge, and the pair read as an error rather than two exits.
+ */
+export const loopSourceClear: Check = {
+  id: '6.7-source-clear',
+  rule: '6.7',
+  run(svg, ctx) {
+    const ids = nodeById(ctx);
+    const tb = isTB(ctx);
+    const clear = RULES['6.7-source-clear']!.threshold! * ctx.unit - 1;
+    // A rounded corner moves 12 on each axis; a corridor leg is longer.
+    const legMin = 13 * ctx.unit;
+    let hugging = 0;
+    const hugIds: string[] = [];
+    for (const e of edgeEls(ctx)) {
+      if (!e.classList.contains('gc-back')) continue;
+      const { from } = edgeFromTo(e);
+      const src = from && ids.get(from);
+      if (!src) continue;
+      const sb = rect(outline(src));
+      const ctm = e.getScreenCTM();
+      if (!ctm) continue;
+      const pts = pathPointsHV(e.getAttribute('d'), ctm);
+      // The source's extent across the flank, and along it.
+      const [lo, hi] = tb ? [sb.left, sb.right] : [sb.top, sb.bottom];
+      let worst: number | null = null;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1]!;
+        const b = pts[i]!;
+        // Along the flow axis: vertical when the chart flows top-to-bottom.
+        const along = tb ? Math.abs(b[1] - a[1]) : Math.abs(b[0] - a[0]);
+        const across = tb ? Math.abs(b[0] - a[0]) : Math.abs(b[1] - a[1]);
+        if (along < legMin || across > 1) continue;
+        const at = tb ? a[0] : a[1];
+        if (at > lo && at < hi) continue; // a drop on the source's own face
+        const gap = at <= lo ? lo - at : at - hi;
+        if (worst === null || gap < worst) worst = gap;
+      }
+      if (worst !== null && worst < clear) {
+        hugging++;
+        hugIds.push(`${e.dataset.id}:${Math.round(worst / ctx.unit)}`);
+      }
+    }
+    return hugging
+      ? [
+          {
+            severity: 'fail',
+            message:
+              `6.7 ${hugging} loop corridors within ${RULES['6.7-source-clear']!.threshold!} ` +
+              `of their own source (${hugIds.slice(0, 3).join(' ')})`,
+          },
+        ]
+      : [];
+  },
+};
+
 export const labelClear: Check = {
   id: '6.9-label-clear',
   rule: '6.9',
@@ -1097,6 +1168,7 @@ export const EDGE_CHECKS: Check[] = [
   parallelClearance,
   hairpin,
   longLoop,
+  loopSourceClear,
   labelClear,
   labelDrawn,
   labelOnEdge,
