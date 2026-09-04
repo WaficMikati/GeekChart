@@ -154,7 +154,11 @@ and the check that enforces it cannot drift apart.
   fanned branches no longer were.)
 - **2.3** Nodes in the same row share an exact `y` and height; nodes in the same
   column share an exact `x` and width. Gutters between siblings are equal
-  (24 or 32).
+  (24 or 32) — except a gutter hosting a **derived channel** (2.7), which
+  is measured by 2.7's own derivation: a gap sized for the pill it
+  carries is not arbitrary. (Exemption added 2026-09-04: the 2.3 check
+  predates 2.7 and read a 112 corridor derived for a 66-wide pill as a
+  violation, forcing labelled cross-panel LR charts onto the old path.)
 - **2.4** Diamonds come in **one size per chart**: the smallest that fits the
   chart's longest decision label (drawn around its label box with 16 of
   clearance at the widest point), applied to every diamond in the chart.
@@ -193,7 +197,11 @@ and the check that enforces it cannot drift apart.
   the panels' **contents** stack top-to-bottom inside them instead
   (1.5's leaf-stack move applied at panel scale), and the panel row
   stands. A panel exiled to its own row below its siblings reads as a
-  different tier, which is a meaning the source never stated. Cross-panel
+  different tier, which is a meaning the source never stated. This rule
+  speaks of sibling panels sharing a rank — an LR row; a TB chart's
+  sequential panels are a sequence, not a row, and owe each other
+  nothing here. (Clarified 2026-09-04: the check read the rule as
+  unconditional and failed a legitimate TB panel stack.) Cross-panel
   edges connect the shapes themselves — departing the child's own face
   (6.2), crossing the panel border perpendicular — never the panel
   border as a proxy. (Added 2026-09-04, approved by mockup:
