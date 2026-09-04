@@ -214,6 +214,58 @@ export function layoutGrid(
   }
 
   /**
+   * DESIGN 2.8 + 6.13: several sources feeding one shared hub are a **row**,
+   * centred with the hub, not a string of independent roots.
+   *
+   * Only one of a hub's parents can be its tree edge (that is what a seating
+   * tree means); the rest are joins, and their sources own no tree edge
+   * either, so the root loop below used to lay them out one after another to
+   * the right of the whole subtree that hangs off the first. buzz-one-log's
+   * four sources over one log came to 928 against a room of 904 and the
+   * planner declined a chart that is 480 wide seated as the picture it is:
+   * the sources on their own row, the hub centred under them, its own fan
+   * below that.
+   *
+   * Claimed conservatively: every parent of the hub is a plain source (no
+   * arrivals of its own, this hub its only exit, on the rank directly above)
+   * and nothing in the group is touched by a loop-back, whose corridor has
+   * its own opinion about which flank is free.
+   */
+  const busSources = new Map<string, GraphNode[]>(); // hub id -> its source row
+  const busLead = new Map<string, string>(); // the tree parent's id -> hub id
+  const busSeated = new Set<string>(); // every source seated by its group
+  {
+    const insOf = new Map<string, GraphEdge[]>(graph.nodes.map((n) => [n.id, []]));
+    const outsOf = new Map<string, GraphEdge[]>(graph.nodes.map((n) => [n.id, []]));
+    for (const e of graph.edges) {
+      insOf.get(e.to)!.push(e);
+      outsOf.get(e.from)!.push(e);
+    }
+    for (const hub of graph.nodes) {
+      const arrivals = insOf.get(hub.id)!;
+      if (arrivals.length < 2 || loopTouched.has(hub.id)) continue;
+      const srcs = arrivals.map((e) => byId.get(e.from)!);
+      const plain = srcs.every(
+        (s) =>
+          insOf.get(s.id)!.length === 0 &&
+          outsOf.get(s.id)!.length === 1 &&
+          rank.get(s.id)! === rank.get(hub.id)! - 1 &&
+          !loopTouched.has(s.id),
+      );
+      if (!plain) continue;
+      // Every arrival rides one shared run (below), so no branch of it has a
+      // run of its own to carry a pill on. A labelled source row keeps the
+      // old path until 6.5 has somewhere to put those pills.
+      if (arrivals.some((e) => pills.has(e.id))) continue;
+      const lead = treeEdge.get(hub.id);
+      if (!lead) continue;
+      busSources.set(hub.id, srcs);
+      busLead.set(lead.from, hub.id);
+      for (const s of srcs) busSeated.add(s.id);
+    }
+  }
+
+  /**
    * DESIGN 2.9: a terminal branch off a decision's side sits on the
    * decision's own row. Candidates are structural — the two guards the rule
    * names are the target being terminal (checked here) and the flank fitting
@@ -569,6 +621,47 @@ export function layoutGrid(
       return ext;
     };
 
+    /**
+     * DESIGN 2.8's group centring for a shared hub: the source row and the
+     * hub's own column share one axis, each centred on it. Registered under
+     * the lead source's id so the root loop places the whole thing with one
+     * `placeSub`, exactly as it places any other root.
+     */
+    const buildBus = (leadId: string, hubId: string): SubExt => {
+      const srcs = busSources.get(hubId)!;
+      const hubExt = build(hubId);
+      const hubW = hubExt.hi - hubExt.lo;
+      const widths = srcs.map((s) => su(s));
+      const rowW =
+        widths.reduce((a, b) => a + b, 0) + GUTTER.sibling * (srcs.length - 1);
+      const W = Math.max(rowW, hubW);
+      const rowLeft = (W - rowW) / 2;
+      const hubLeft = (W - hubW) / 2;
+      const kidAt = new Map<string, number>();
+      let x = rowLeft;
+      for (let i = 0; i < srcs.length; i++) {
+        // The lead's own place is the ext's `anchor`; the rest are kids of
+        // it for seating purposes only — their edges into the hub stay the
+        // joins they always were.
+        if (i > 0) {
+          build(srcs[i]!.id);
+          kidAt.set(srcs[i]!.id, x);
+        }
+        x += widths[i]! + GUTTER.sibling;
+      }
+      kidAt.set(hubId, hubLeft);
+      const ext: SubExt = {
+        lo: 0,
+        hi: W,
+        anchor: rowLeft + widths[0]! / 2,
+        kidAt,
+        coreLo: Math.min(rowLeft, hubLeft + hubExt.coreLo),
+        coreHi: Math.max(rowLeft + rowW, hubLeft + hubExt.coreHi),
+      };
+      exts.set(leadId, ext);
+      return ext;
+    };
+
     const anchor = new Map<string, number>();
     const placeSub = (id: string, base: number): void => {
       const ext = exts.get(id)!;
@@ -576,10 +669,14 @@ export function layoutGrid(
       for (const [kid, at] of ext.kidAt) placeSub(kid, base - ext.lo + at);
     };
     let cursor = 0;
-    for (let i = 0; i < roots.length; i++) {
-      const ext = build(roots[i]!.id);
-      if (i > 0) cursor += GUTTER.panel;
-      placeSub(roots[i]!.id, cursor);
+    let seatedAny = false;
+    for (const root of roots) {
+      const hub = busLead.get(root.id);
+      if (!hub && busSeated.has(root.id)) continue; // seated by its own group
+      const ext = hub ? buildBus(root.id, hub) : build(root.id);
+      if (seatedAny) cursor += GUTTER.panel;
+      seatedAny = true;
+      placeSub(root.id, cursor);
       cursor += ext.hi - ext.lo;
     }
     return { anchor, width: cursor };
@@ -676,6 +773,22 @@ export function layoutGrid(
     const rowSv = rowNodes.map((row) => Math.max(...row.map(sv)));
 
     const arrowRoom = scene.edgeGap + 4;
+
+    /**
+     * DESIGN 6.13: every arrival of a shared-hub source row is one merged
+     * bus — one line across the band, one drop into the hub's own top face,
+     * one arrowhead. Routed together below; the ordinary tree and join loops
+     * skip these edges, because a tree drop through the band's midline and a
+     * join through a lane are at two different heights and cross each other.
+     */
+    const busArrival = new Set<string>();
+    for (const hubId of busSources.keys()) {
+      if (stacked.has(hubId) || stackedLeaves.has(hubId)) continue;
+      const rh = rank.get(hubId)!;
+      const srcs = busSources.get(hubId)!;
+      if (srcs.some((s) => rank.get(s.id)! !== rh - 1)) continue;
+      for (const e of forward) if (e.to === hubId) busArrival.add(e.id);
+    }
 
     /**
      * How each tree edge leaves its parent. DESIGN 6.4 wants separate
@@ -798,6 +911,7 @@ export function layoutGrid(
     };
 
     for (const e of joins) {
+      if (busArrival.has(e.id)) continue; // rides the shared bus, not a lane
       const rs = rank.get(e.from)!;
       const rt = rank.get(e.to)!;
       if (stackedLeaves.has(e.from) || stackedLeaves.has(e.to)) return decline('join touches stack');
@@ -1059,6 +1173,7 @@ export function layoutGrid(
     // (DESIGN 6.13's shared corridor), on whichever side is clear.
     const joinCorridor = new Map<string, number>();
     for (const e of joins) {
+      if (busArrival.has(e.id)) continue;
       const rs = rank.get(e.from)!;
       const rt = rank.get(e.to)!;
       if (rt === rs + 1) {
@@ -1348,6 +1463,7 @@ export function layoutGrid(
       const busV = (pBottom + Math.min(...kidTops)) / 2;
       const pCv = rowC[rank.get(p.id)!]!;
       for (const e of kids) {
+        if (busArrival.has(e.id)) continue; // planned with its own source row
         const k = byId.get(e.to)!;
         const kU = anchorU.get(e.to)!;
         const kTop = topOf(k);
@@ -1422,8 +1538,35 @@ export function layoutGrid(
       }
     }
 
+    // DESIGN 6.13: the shared-hub source row's merged bus. Every source drops
+    // to one line across the band, runs to the hub's own centre column and
+    // down into its top face — one arrival point, so 6.3 draws one head and
+    // 6.4's shared-run exemption (a bus from one point) covers the line.
+    for (const [hubId, srcs] of busSources) {
+      const arrivals = forward.filter((e) => e.to === hubId && busArrival.has(e.id));
+      if (!arrivals.length) continue;
+      const hub = byId.get(hubId)!;
+      const tU = anchorU.get(hubId)!;
+      const tTop = topOf(hub);
+      const busV = (Math.max(...srcs.map((s) => bottomOf(s))) + tTop) / 2;
+      for (const e of arrivals) {
+        const sU = anchorU.get(e.from)!;
+        planned.push({
+          edge: e,
+          pts: simplify([
+            { x: sU, y: bottomOf(byId.get(e.from)!) },
+            { x: sU, y: busV },
+            { x: tU, y: busV },
+            { x: tU, y: tTop },
+          ]).map((q) => ({ u: q.x, v: q.y })),
+          exempt: 'bus',
+        });
+      }
+    }
+
     // Joins.
     for (const e of joins) {
+      if (busArrival.has(e.id)) continue;
       const s = byId.get(e.from)!;
       const t = byId.get(e.to)!;
       const rs = rank.get(e.from)!;

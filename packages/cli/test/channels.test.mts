@@ -163,6 +163,54 @@ describe('channel engine — routing and scope', () => {
     }
   });
 
+  /**
+   * DESIGN 2.8 + 6.13: several sources feeding one shared hub that then fans
+   * out. Only one of the hub's parents can carry the seating tree, so the
+   * others used to be seated as independent roots strung out to the right of
+   * the whole subtree hanging off the first — buzz-one-log came to 928
+   * against a room of 904 and the planner declined a chart that is 872 wide
+   * seated as the picture it is. The sources are a row now, centred with the
+   * hub, and their arrivals are one merged bus.
+   */
+  test('a multi-root hybrid — sources into one shared hub — goes to the channel engine', async () => {
+    const src = readFileSync(join(fixtures, 'blog', 'buzz-one-log.mmd'), 'utf8');
+    const reply = await mount(src);
+    assert.ok(isChannels(reply.svg), 'buzz-one-log should be planned by the channel engine');
+    assert.deepEqual(await gateFails(), []);
+
+    const arrivals = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const out: { id: string; endX: number; endY: number; startY: number }[] = [];
+      for (const e of svg.querySelectorAll('.gc-edge[data-id]')) {
+        const id = (e as SVGPathElement).dataset['id']!;
+        if (!id.endsWith('_LOG_0')) continue;
+        const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+        out.push({
+          id,
+          endX: nums[nums.length - 2]!,
+          endY: nums[nums.length - 1]!,
+          startY: nums[1]!,
+        });
+      }
+      return out;
+    });
+    assert.equal(arrivals.length, 4, `expected four arrivals into LOG, got ${arrivals.length}`);
+    // DESIGN 6.13/6.3: one arrival point for the whole bus, so one head.
+    const first = arrivals[0]!;
+    for (const a of arrivals) {
+      assert.ok(
+        Math.abs(a.endX - first.endX) < 1.5 && Math.abs(a.endY - first.endY) < 1.5,
+        `${a.id} arrives at ${a.endX},${a.endY} instead of the bus's own ${first.endX},${first.endY}`,
+      );
+      // Every source is on one row (2.8's group centring), so every branch
+      // of the bus leaves at the same height.
+      assert.ok(
+        Math.abs(a.startY - first.startY) < 1.5,
+        `${a.id} leaves at y=${a.startY}, off the source row's ${first.startY}`,
+      );
+    }
+  });
+
   test('a single node has no rank structure and keeps the old path', async () => {
     const reply = await mount('flowchart TB\n  A[Only]');
     assert.ok(!isChannels(reply.svg), 'a one-node chart should stay on the old path');
