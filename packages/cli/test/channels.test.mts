@@ -1274,18 +1274,12 @@ describe('channel engine — panels', () => {
         seen.pill.y >= p.y + p.height;
       assert.ok(inside || clear, 'the pill straddles a panel border');
     }
-    // Not `gateFails() == []`: a stacked panel pair already FAILs 2.6's
-    // sibling-row check with no label anywhere near it (the same chart with
-    // `B --> C` reports "row 1 of Backend is 232 off the same row of
-    // Frontend"), because that check reads 2.10's "sibling panels keep one
-    // row" as unconditional and the TB planner stacks them. That defect is
-    // older than this test and is not the pill's. Pinned as the *only*
-    // failure so this turns red either when the pill work regresses or when
-    // 2.6's check learns about stacked panels.
-    assert.deepEqual(
-      (await gateFails()).filter((f) => !f.startsWith('2.6 row ')),
-      [],
-    );
+    // This used to be pinned to allow one failure: 2.6's sibling-row check
+    // read 2.10's "sibling panels keep one row" as unconditional and reported
+    // "row 1 of Backend is 232 off the same row of Frontend" for a legitimate
+    // TB stack. 2.10's 2026-09-04 clarification made the row an LR concept,
+    // so the stack owes nothing here and the whole gate is clean.
+    assert.deepEqual(await gateFails(), []);
   });
 
   test('DESIGN 2.3/2.7: a labelled cross-panel edge in LR keeps the channel engine', async () => {

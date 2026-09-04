@@ -963,13 +963,30 @@ export const panelGeometry: Check = {
       }
     }
 
-    // 2.6: children of sibling panels share exact rows.
+    // 2.6: children of sibling panels share exact rows — of sibling panels
+    // that share a RANK, that is. 2.10's 2026-09-04 clarification: a row of
+    // panels is an LR concept, and a TB chart's sequential panels are a
+    // sequence, not a row, so they owe each other no shared rows. Rank is
+    // read off the drawing rather than the direction: panels standing side by
+    // side (their vertical spans overlap) are one rank; panels stacked one
+    // after the other are not.
     const byParent = new Map<string, PanelBox[]>();
     for (const p of panels) {
       const k = panelParent(ctx, p) ?? '';
       byParent.set(k, [...(byParent.get(k) ?? []), p]);
     }
-    for (const group of byParent.values()) {
+    const ranks: PanelBox[][] = [];
+    for (const siblings of byParent.values()) {
+      if (siblings.length < 2) continue;
+      for (const p of [...siblings].sort((a, b) => a.b.top - b.b.top)) {
+        const rank = ranks.find(
+          (r) => r[0]!.b.top < p.b.bottom - 1 && r[0]!.b.bottom > p.b.top + 1 && siblings.includes(r[0]!),
+        );
+        if (rank) rank.push(p);
+        else ranks.push([p]);
+      }
+    }
+    for (const group of ranks) {
       if (group.length < 2) continue;
       const rows = group.map((p) => childRows(directChildren(ctx, p)));
       for (let i = 1; i < group.length; i++) {
