@@ -205,6 +205,13 @@ and the check that enforces it cannot drift apart.
   flank fits the declared display width (too narrow, and the leaf ranks
   down rather than forcing a scale). Opposite sides of one decision may
   each hold a leaf; two leaves off the same side rank down as before.
+  Geometry (approved by mockup 2026-09-03): the flank gutter is one
+  **chart-wide** value — same-flank leaves on different rows share an
+  exact x (2.3 applied to flanks) — derived as the widest flank pill +
+  2×16 of visible line either side + the arrowhead (2.7's derivation);
+  never a fixed minimum that leaves a pill with 7-unit nubs. Diamonds
+  stay the one fixed 2.4 size — the first implementation sized them
+  from their labels, which also broke the column.
   (Added 2026-09-03, approved by mockup: diamond-cascade parked Reject A
   a rank below Check A with two bends "for no real reason" — the layered
   convention that every edge drops a rank, applied to a leaf that nothing
@@ -315,7 +322,10 @@ the renderer keeps what was written and writers own their casing.)
   other edge shares. Not the longest run outright: on a bus (1.5, 6.12,
   6.13) the longest footage is shared trunk, where pills from every branch
   would collide by construction; each branch's exclusive leg is where its
-  pill belongs. Pills never overlap each other or a node; when two pills on
+  pill belongs. The centre is the midpoint of the run's **drawn extent**
+  — the line as painted, which stops short of the arrowhead (10.3) — so
+  the head never counts toward centring. (Added 2026-09-03: a pill
+  centred on the vertex-to-face span sat visibly off the line it labels.) Pills never overlap each other or a node; when two pills on
   one channel would touch, one slides **along its own run** — never off it —
   keeping 2 clear. A label longer than **28 characters** wraps to a second
   pill line; past two lines the render keeps the first two and WARNs
