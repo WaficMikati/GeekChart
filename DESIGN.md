@@ -172,7 +172,15 @@ and the check that enforces it cannot drift apart.
   **mono kicker inside the top padding** — 11 mono caps at the panel's
   left padding edge, baseline 30 below the panel top, first child row 48
   below the panel top — never a centred heading in its own empty band.
-  The title's strip is reserved space: no edge crosses it. Children are
+  The title's strip is reserved space: nothing travels **along** it, and
+  no edge that neither starts nor ends inside the panel enters the panel
+  at all — but an edge landing on a shape inside may cross the top border
+  perpendicular through the strip's height (it occupies none of the
+  strip's width, so it cannot collide with the kicker; routing it around
+  to a side would cost three bends against 6.1's two and pull the source
+  off its child's centre line, 2.3). (Sentence added 2026-09-04, from
+  phase 3b: 2.6-as-written and 2.10's perpendicular crossing were
+  contradictory for a TB edge entering a panel's first row.) Children are
   **centred** in the panel and obey 2.3 inside it; children of sibling
   panels share exact rows. Inputs above a panel and outputs below it line
   up **column for column**. A nested panel is a child like any other: it
