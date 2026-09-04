@@ -196,9 +196,12 @@ and the check that enforces it cannot drift apart.
 - **2.9** **Same-row leaves.** A terminal branch off a decision's side sits
   on the decision's **own row** — box centre sharing the decision's centre
   y within 1 — joined by one straight labeled run from the side vertex to
-  the near face: no rank drop, no bends. Two guards: the target is
-  terminal (no outgoing edges — a side branch that continues somewhere
-  still ranks down, its target has downstream order to keep), and the
+  the near face: no rank drop, no bends. Two guards: the target has no
+  **forward** outgoing edges — an exit that is only a loop-back to an
+  earlier rank orders nothing downstream and does not disqualify (revised
+  2026-09-03, same day: "no outgoing edges" wrongly kept login-flow's
+  Show error a rank down for the sake of an edge the ranker itself
+  ignores; a side branch that continues *forward* still ranks down), and the
   flank fits the declared display width (too narrow, and the leaf ranks
   down rather than forcing a scale). Opposite sides of one decision may
   each hold a leaf; two leaves off the same side rank down as before.
