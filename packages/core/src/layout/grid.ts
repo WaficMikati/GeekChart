@@ -334,6 +334,21 @@ export function layoutGrid(
   /** Tree children that still sit a rank below: everything but those. */
   let rowKidsOf = kidsOf;
 
+  /**
+   * DESIGN 1.6: sibling wrapping. A parent's children fill left to right and
+   * break into as many rows as the declared display takes; a child on any row
+   * but the first sits that many ranks further down — the CUMULATIVE subtree
+   * height of the rows above it, not the row's index, or the second row would
+   * land on the same ranks as the first row's own grandchildren.
+   *
+   * Keyed by child id. Absent (or 0) means the first row: an ordinary tree
+   * edge spanning one band. A non-zero offset makes the tree edge a
+   * rank-skipping join, drawn as 1.6's four-bend wrap bus.
+   */
+  let wrapOffset = new Map<string, number>();
+  /** Wrapped children grouped by `${parent}#${row}` — one bus each. */
+  let wrapRows = new Map<string, GraphEdge[]>();
+
   const height = new Map<string, number>();
   const subHeight = (id: string): number => {
     const cached = height.get(id);
@@ -412,6 +427,17 @@ export function layoutGrid(
     return parents;
   };
 
+  /**
+   * DESIGN 1.5's own shape: two or more children, all of them terminal and
+   * touched by nothing else. `stackableParents` adds the pill clause and the
+   * all-or-nothing last row on top of this; 1.6 uses the bare shape to know
+   * when a too-wide row is a leaf fan that stacking owns.
+   */
+  const leafFan = (pid: string): boolean => {
+    const kids = kidsOf.get(pid)!;
+    return kids.length >= 2 && kids.every((e) => !kidsOf.get(e.to)!.length && !touched.has(e.to));
+  };
+
   // SEAT — recursive tidy tree over the cross axis. Subtrees are seated
   // first, then each parent is centred on the geometric extent of its
   // entire subtree (DESIGN 2.8, applied at every level); when depths differ,
@@ -422,8 +448,13 @@ export function layoutGrid(
     stacked: Set<string>,
     flipShallow: boolean,
     mirrorLegs = true,
+    /** DESIGN 1.6's wrap budget: the width one row of siblings may fill, or
+     *  null for the unwrapped seating every undeclared-display chart gets. */
+    wrapTo: number | null = null,
   ): { anchor: Map<string, number>; width: number } | null => {
     const exts = new Map<string, SubExt>();
+    wrapOffset = new Map();
+    wrapRows = new Map();
     // DESIGN 2.9's geometry: the flank gutter is one CHART-WIDE value, so
     // same-flank leaves on different rows share an exact x (2.3 applied to
     // flanks) — two-diamonds' Beta and Gamma line up, and so do
@@ -492,6 +523,10 @@ export function layoutGrid(
         // The stacked leaf column is indented under the node by its own rule,
         // so 2.8's extent is the node's box alone.
         ext = { lo: 0, hi: Math.max(w, colLo + kidW), anchor: w / 2, kidAt, coreLo: 0, coreHi: w };
+        // A stacked list takes no rank of its own — it hangs in the band below
+        // its parent — so for DESIGN 1.6's row offsets this column is one
+        // rank tall, not two.
+        if (wrapTo !== null) height.set(id, 1);
       } else {
         const kidEdges = rowKidsOf.get(id)!;
         if (!kidEdges.length) {
@@ -500,6 +535,11 @@ export function layoutGrid(
           // Flanks sit in the gutter beside this box, not under it.
           ext = { lo: -padLo, hi: w + padHi, anchor: w / 2, kidAt, coreLo: 0, coreHi: w };
         } else {
+          // DESIGN 1.6: a wrapping seating needs every child's own wrap
+          // decided before this one's, because a child that wrapped is taller
+          // than its plain depth and that is what sets the rows' offsets.
+          // `build` is memoized, so this only moves the recursion earlier.
+          if (wrapTo !== null) for (const e of kidEdges) build(e.to);
           const hs = kidEdges.map((e) => subHeight(e.to));
           const deepest = Math.max(...hs);
           const allEqual = hs.every((h) => h === deepest);
@@ -513,22 +553,116 @@ export function layoutGrid(
             ordered = rank.get(id)! % 2 === 0 ? [...shallow, ...deep] : [...deep, ...shallow];
           }
           const kidExts = ordered.map((e) => build(e.to));
+          /** The packing gap between two adjacent siblings: the plain gutter,
+           *  widened when the two pills either side of it would touch. */
+          const gapAt = (i: number): number => {
+            const prev = kidExts[i - 1]!;
+            const ke = kidExts[i]!;
+            let gap = GUTTER.sibling;
+            const pill0 = pills.get(ordered[i - 1]!.id);
+            const pill1 = pills.get(ordered[i]!.id);
+            const need = ((pill0 ? pu(pill0) : 0) + (pill1 ? pu(pill1) : 0)) / 2 + PILL_CLEAR;
+            const dist = prev.hi - prev.anchor + gap + ke.anchor - ke.lo;
+            if (dist < need) gap += need - dist;
+            return gap;
+          };
+          // DESIGN 1.6: fill left to right, break when the next sibling's own
+          // column would not fit the row's budget. One row is the ordinary
+          // seating below; two or more is the wrap.
+          const rows: number[][] = [];
+          if (wrapTo !== null) {
+            let row: number[] = [];
+            let filled = 0;
+            for (let i = 0; i < ordered.length; i++) {
+              const span = kidExts[i]!.hi - kidExts[i]!.lo;
+              if (row.length) {
+                const g = gapAt(i);
+                if (filled + g + span > wrapTo + 0.5) {
+                  rows.push(row);
+                  row = [];
+                  filled = 0;
+                }
+              }
+              if (row.length) filled += gapAt(i) + span;
+              else filled = span;
+              row.push(i);
+            }
+            if (row.length) rows.push(row);
+          }
+          if (rows.length > 1) {
+            // Every row is centred on the group's ONE axis — 2.8's own axis,
+            // which holds through the wrap (1.6: "every row centred on the
+            // row's own original centre line"). The axis is 0 here; the
+            // parent sits on it too, so both rows read as hanging off it
+            // rather than off whichever one wrapping computed first.
+            const kidAt = new Map<string, number>();
+            const rowFull: [number, number][] = [];
+            const rowCore: [number, number][] = [];
+            for (const row of rows) {
+              const local: number[] = [];
+              let at = 0;
+              for (let k = 0; k < row.length; k++) {
+                const i = row[k]!;
+                if (k > 0) at += gapAt(i);
+                local.push(at);
+                at += kidExts[i]!.hi - kidExts[i]!.lo;
+              }
+              let cLo = Infinity;
+              let cHi = -Infinity;
+              let fLo = Infinity;
+              let fHi = -Infinity;
+              for (let k = 0; k < row.length; k++) {
+                const ke = kidExts[row[k]!]!;
+                const base = local[k]! - ke.lo;
+                cLo = Math.min(cLo, base + ke.coreLo);
+                cHi = Math.max(cHi, base + ke.coreHi);
+                fLo = Math.min(fLo, local[k]!);
+                fHi = Math.max(fHi, local[k]! + ke.hi - ke.lo);
+              }
+              const shift = -(cLo + cHi) / 2;
+              for (let k = 0; k < row.length; k++)
+                kidAt.set(ordered[row[k]!]!.to, local[k]! + shift);
+              rowCore.push([cLo + shift, cHi + shift]);
+              rowFull.push([fLo + shift, fHi + shift]);
+            }
+            // The rank offset of a row is the cumulative subtree height of the
+            // rows above it: row 1 starts below row 0's own grandchildren.
+            let below = 0;
+            for (let r = 0; r < rows.length; r++) {
+              const key = `${id}#${r}`;
+              for (const i of rows[r]!) {
+                wrapOffset.set(ordered[i]!.to, below);
+                if (r > 0) {
+                  const list = wrapRows.get(key);
+                  if (list) list.push(ordered[i]!);
+                  else wrapRows.set(key, [ordered[i]!]);
+                }
+              }
+              below += Math.max(...rows[r]!.map((i) => subHeight(ordered[i]!.to)));
+            }
+            height.set(id, 1 + below);
+            seatFlanks(kidAt, 0);
+            ext = {
+              lo: Math.min(-w / 2 - padLo, ...rowFull.map((f) => f[0])),
+              hi: Math.max(w / 2 + padHi, ...rowFull.map((f) => f[1])),
+              anchor: 0,
+              kidAt,
+              coreLo: Math.min(-w / 2, ...rowCore.map((c) => c[0])),
+              coreHi: Math.max(w / 2, ...rowCore.map((c) => c[1])),
+            };
+            exts.set(id, ext);
+            return ext;
+          }
+          // One row: the depth this node's own parent must budget for is still
+          // its deepest child's, but that child may itself have wrapped.
+          if (wrapTo !== null)
+            height.set(id, 1 + Math.max(...ordered.map((e) => subHeight(e.to))));
           const kidAt = new Map<string, number>();
           let cur = 0;
           const anchorsRel: number[] = [];
           for (let i = 0; i < ordered.length; i++) {
             const ke = kidExts[i]!;
-            let gap = GUTTER.sibling;
-            if (i > 0) {
-              const prev = kidExts[i - 1]!;
-              const pill0 = pills.get(ordered[i - 1]!.id);
-              const pill1 = pills.get(ordered[i]!.id);
-              const need =
-                ((pill0 ? pu(pill0) : 0) + (pill1 ? pu(pill1) : 0)) / 2 + PILL_CLEAR;
-              const dist = prev.hi - prev.anchor + gap + ke.anchor - ke.lo;
-              if (dist < need) gap += need - dist;
-              cur += gap;
-            }
+            if (i > 0) cur += gapAt(i);
             kidAt.set(ordered[i]!.to, cur);
             anchorsRel.push(cur + (ke.anchor - ke.lo));
             cur += ke.hi - ke.lo;
@@ -685,6 +819,60 @@ export function layoutGrid(
   const room = scene.canvas.width - scene.canvas.margin * 2;
 
   /**
+   * DESIGN 1.6: turn a wrapped seating into ranks. A child on a later row sits
+   * `wrapOffset` ranks further down than its parent, so its own tree edge now
+   * skips ranks — a rank-skipping join drawn as the wrap bus, not a one-band
+   * drop — and everything under it slides down with it.
+   *
+   * Returns false when the push breaks an invariant the rest of the planner is
+   * written against (a join that no longer points forward, a loop that no
+   * longer points back), which declines this wrap rather than shipping it.
+   */
+  const applyWrapRanks = (): boolean => {
+    if (![...wrapOffset.values()].some((v) => v > 0)) return true;
+    const seen = new Set<string>();
+    const walk = (id: string): boolean => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      const r = rank.get(id)!;
+      for (const e of kidsOf.get(id)!) {
+        rank.set(e.to, sideRow.has(e.to) ? r : r + 1 + (wrapOffset.get(e.to) ?? 0));
+        if (!walk(e.to)) return false;
+      }
+      return true;
+    };
+    for (const n of roots) {
+      rank.set(n.id, 0);
+      if (!walk(n.id)) return false;
+    }
+    if (seen.size !== graph.nodes.length) return false;
+    const used = [...new Set(graph.nodes.map((n) => rank.get(n.id)!))].sort((a, b) => a - b);
+    if (used.length < 2) return false;
+    const remap = new Map(used.map((r, i) => [r, i] as const));
+    for (const n of graph.nodes) rank.set(n.id, remap.get(rank.get(n.id)!)!);
+    maxRank = used.length - 1;
+    for (const [child, e] of treeEdge) {
+      const rc = rank.get(child)!;
+      const rp = rank.get(e.from)!;
+      if (sideRow.has(child)) {
+        if (rc !== rp) return false;
+      } else if (wrapOffset.get(child)) {
+        if (rc <= rp + 1) return false;
+      } else if (rc !== rp + 1) return false;
+    }
+    for (const e of joins) if (rank.get(e.to)! <= rank.get(e.from)!) return false;
+    for (const e of loops) if (rank.get(e.to)! > rank.get(e.from)!) return false;
+    // A wrapped child is no longer a one-band drop off its parent, so it is
+    // no longer this parent's business in any band, bus or leg derivation.
+    rowKidsOf = new Map(
+      graph.nodes.map(
+        (n) => [n.id, rowKidsOf.get(n.id)!.filter((e) => !wrapOffset.get(e.to))] as const,
+      ),
+    );
+    return true;
+  };
+
+  /**
    * DESIGN 2.7 + 6.5: give the widest one-line branch label a second line.
    *
    * The shared branch-leg length is derived from that label, so it can ask
@@ -712,7 +900,7 @@ export function layoutGrid(
 
   const attempt = (flipShallow: boolean, sameRow: boolean): ChannelLayoutPlan | null => {
     if (!applySameRow(sameRow)) return decline('same-row ranks');
-    let stacked = new Set<string>();
+    const stacked = new Set<string>();
     let seated = seatAll(stacked, flipShallow);
     if (!seated) return null;
     if (seated.width > room && !packToDisplay) {
@@ -730,17 +918,59 @@ export function layoutGrid(
     }
     if (!seated) return null;
     if (seated.width > room) {
-      // Under a declared display the old path owns packing — its widest-
-      // first stacking, fold and sibling wrap (DESIGN 1.5/1.2/1.6) are
-      // richer than the all-or-nothing stack this planner knows.
-      if (packToDisplay)
-        return decline(`declared display needs packing (${Math.round(seated.width)} > ${room})`);
+      // DESIGN 1.1's packing order: 1.5's leaf stacking first, then 1.6's
+      // sibling wrap.
       const parents = stackableParents();
-      if (!parents) return decline(`too wide unstacked (${Math.round(seated.width)} > ${room})`);
-      stacked = parents;
-      seated = seatAll(stacked, flipShallow);
-      if (!seated || seated.width > room)
-        return decline(`too wide stacked (${Math.round(seated?.width ?? -1)} > ${room})`);
+      let stackedSeat = parents ? seatAll(parents, flipShallow) : null;
+      if (packToDisplay && parents && (!stackedSeat || stackedSeat.width > room)) {
+        // The same 2.7 relief the unstacked seating gets above, so "does 1.5
+        // alone fit?" is not answered by the derived branch legs alone:
+        // python-or-java's "no, enterprise or Android" asks 792 of a 524 room
+        // with mirrored legs and 488 without, and 1.5 does fit it.
+        const plain = seatAll(parents, flipShallow, false);
+        if (plain && plain.width <= room) stackedSeat = plain;
+      }
+      if (stackedSeat && stackedSeat.width <= room) {
+        // Stacking alone was enough. Under a declared display that packing is
+        // still the old path's — its widest-first search stacks a *labeled*
+        // leaf fan, which this planner's all-or-nothing stack turns down — so
+        // this stays the decline it has always been rather than claiming a
+        // chart 1.5 already fits without 1.6.
+        if (packToDisplay) return decline(`declared display: 1.5 alone fits, the old path packs it`);
+        return plan(stackedSeat.anchor, parents!);
+      }
+      if (!packToDisplay) {
+        if (!parents) return decline(`too wide unstacked (${Math.round(seated.width)} > ${room})`);
+        return decline(`too wide stacked (${Math.round(stackedSeat?.width ?? -1)} > ${room})`);
+      }
+      // DESIGN 1.6, under a declared display, on top of 1.5 — the packing
+      // order 1.1 names. The wrap budget starts at the whole room and comes
+      // down a track at a time: the corridor the bus rides stands outside the
+      // widest row, so a row that exactly fills the room leaves it nowhere to
+      // go.
+      for (const packing of parents ? [parents, new Set<string>()] : [new Set<string>()]) {
+        for (let budget = room; budget > 0; budget -= 4 * TRACK) {
+          if (!applySameRow(sameRow)) break;
+          const wrapSeat = seatAll(packing, flipShallow, true, budget);
+          if (!wrapSeat) continue;
+          const wrappedParents = [
+            ...new Set([...wrapRows.values()].flat().map((e) => e.from)),
+          ];
+          if (!wrappedParents.length) continue; // nothing wrapped
+          // A lone fan of leaves is DESIGN 1.5's, not 1.6's — 1.1 names the
+          // order, and the old path can stack a fan whose branches carry
+          // labels where this planner cannot. Running a column of leaves down
+          // the side on a wrap bus instead is a worse picture of the same
+          // rule (python-or-java-short at 500: two labeled leaves off one
+          // diamond, which 1.5 indents under it).
+          if (wrappedParents.every((pid) => !packing.has(pid) && leafFan(pid))) continue;
+          if (!applyWrapRanks()) continue;
+          const laid = plan(wrapSeat.anchor, packing);
+          if (laid) return laid;
+        }
+      }
+      applySameRow(sameRow);
+      return decline(`wrapping could not reach the display (${Math.round(seated.width)} > ${room})`);
     }
     return plan(seated.anchor, stacked);
   };
@@ -758,7 +988,18 @@ export function layoutGrid(
   ): ChannelLayoutPlan | null => {
     const stackedLeaves = new Set<string>();
     for (const p of stacked) for (const e of kidsOf.get(p)!) stackedLeaves.add(e.to);
-    const lastRow = stackedLeaves.size ? maxRank - 1 : maxRank;
+    // The rows are the ranks that still hold a box. A stacked leaf list hangs
+    // in the band below its parent instead of taking a rank of its own, so it
+    // never makes a row — which with DESIGN 1.6's wrap can now be true at more
+    // than one rank at once, not only the last.
+    const lastRow = Math.max(
+      ...graph.nodes.filter((n) => !stackedLeaves.has(n.id)).map((n) => rank.get(n.id)!),
+    );
+    /** DESIGN 1.6 is in play for this plan. */
+    const wrapping = wrapRows.size > 0;
+    /** Parents whose children display-width wrapping broke into rows. */
+    const wrapFanOut = new Set<string>();
+    for (const es of wrapRows.values()) for (const e of es) wrapFanOut.add(e.from);
 
     const rowNodes: GraphNode[][] = [];
     for (let r = 0; r <= lastRow; r++) rowNodes.push([]);
@@ -816,7 +1057,13 @@ export function layoutGrid(
       if (!kids.length || stacked.has(p.id)) continue;
       const pU = anchorU.get(p.id)!;
       const r = rank.get(p.id)!;
-      if (kids.length >= 3) {
+      // DESIGN 1.6: a wrap bus leaves the parent's bottom face AT ITS CENTRE,
+      // "like the edges to its first-row siblings (6.4's shared start)". So a
+      // parent that wrapped fans from that one point to every child, wrapped
+      // or not — 6.12's bus, which is what the whole group now is. Ports 16
+      // off centre would put a first-row drop across the wrap bus's own run
+      // out of the band, with no shared point to exempt the crossing.
+      if (kids.length >= 3 || wrapFanOut.has(p.id)) {
         for (const e of kids) treeMode.set(e.id, { kind: 'bus' });
         continue;
       }
@@ -973,7 +1220,20 @@ export function layoutGrid(
         const nearU = anchorU.get(leafId)! - (s.dir * su(byId.get(leafId)!)) / 2;
         boxes.push({ lo: Math.min(faceU, nearU), hi: Math.max(faceU, nearU) });
       }
-      if (rHi >= maxRank && stackedLeaves.size) {
+      // A stacked leaf column hangs in the band below its parent's own row, so
+      // a corridor that passes that row passes the column too. Without 1.6's
+      // wrap every stack is on the last row, which is the older reading.
+      if (wrapping) {
+        for (const p of stacked) {
+          const r = rank.get(p)!;
+          if (r < rLo || r > rHi) continue;
+          for (const e of kidsOf.get(p)!) {
+            const n = byId.get(e.to)!;
+            const a = anchorU.get(e.to)!;
+            boxes.push({ lo: a - su(n) / 2, hi: a + su(n) / 2 });
+          }
+        }
+      } else if (rHi >= maxRank && stackedLeaves.size) {
         for (const id of stackedLeaves) {
           const n = byId.get(id)!;
           const a = anchorU.get(id)!;
@@ -1220,6 +1480,62 @@ export function layoutGrid(
       joinCorridor.set(e.id, placed);
     }
 
+    /**
+     * DESIGN 1.6's wrap bus. A parent's edge into a sibling on any row but the
+     * first leaves the parent's bottom face at its centre — 6.4's shared start,
+     * the same point its first-row siblings leave from — drops into the gap
+     * below the parent, runs out to a corridor 24 past the widest row's edge,
+     * down past the rows between, back along the gap above the sibling's own
+     * row and into its top face: four bends, one arrowhead each.
+     *
+     * Every sibling wrapping put on one row rides ONE trunk (6.13's merged
+     * bus), so the corridor, both band runs and the drops are planned per row,
+     * not per edge.
+     */
+    interface WrapBus {
+      edges: GraphEdge[];
+      parent: string;
+      rs: number;
+      rt: number;
+      corridorU: number;
+      /** Which of the band's wrap runs this is: the exit sits above the tree
+       *  bus line, so it crosses none of the first-row siblings' own drops. */
+      exitSlot: number;
+    }
+    const wrapBuses: WrapBus[] = [];
+    const wrapExitSlots: number[] = Array.from({ length: Math.max(lastRow, 0) }, () => 0);
+    {
+      const groups = [...wrapRows.values()].filter((es) => es.length > 0);
+      // A corridor is pushed OUTWARD off the ones already placed, so the
+      // shortest drop claims the innermost lane and a longer one stands
+      // outside it. Placed the other way round the two buses nest wrongly and
+      // cross (diamond-cascade at 358: three rejects, each one rank deeper).
+      const span = (es: GraphEdge[]): number => rank.get(es[0]!.to)! - rank.get(es[0]!.from)!;
+      groups.sort((a, b) => span(a) - span(b));
+      for (const es of groups) {
+        const pid = es[0]!.from;
+        const rs = rank.get(pid)!;
+        const rt = rank.get(es[0]!.to)!;
+        if (es.some((e) => rank.get(e.to)! !== rt)) return decline('wrap row split across ranks');
+        if (rt <= rs + 1 || rt > lastRow || rs >= lastRow) return decline('wrap row rank span');
+        if (es.length > 1 && es.some((e) => pills.has(e.id)))
+          return decline('labeled wrap row shares one trunk');
+        const myPillU = Math.max(
+          0,
+          ...es.map((e) => (pills.has(e.id) ? pu(pills.get(e.id)!) : 0)),
+        );
+        // 1.6's own words: the corridor stands past the WIDEST row's right
+        // edge — every row the bus passes, not just the two it joins.
+        const boxes = rowSpanBoxes(rs, rt);
+        const start = Math.max(...boxes.map((b) => b.hi)) + LOOP_CLEAR;
+        const cu = settleCorridor(1, start, rs, rt, myPillU, LOOP_CLEAR);
+        corridorLegs.push({ u: cu, rLo: rs, rHi: rt, pillU: myPillU });
+        const exitSlot = wrapExitSlots[rs]!++;
+        if (!allocLane(rt - 1, es)) return decline('wrap arrival lane');
+        wrapBuses.push({ edges: es, parent: pid, rs, rt, corridorU: cu, exitSlot });
+      }
+    }
+
     // DERIVE — the uniform band height, from what must live in each band
     // (DESIGN 2.7): trunk turn legs, each drop pill plus clearances, the
     // lanes at their pitch.
@@ -1321,12 +1637,17 @@ export function layoutGrid(
       const slot = lanePill ? 24 : TRACK;
       laneSlot.push(slot);
       const laneZone = lanes ? 8 + slot * lanes : 0;
+      // DESIGN 1.6: a wrap bus's exit run lives in the band's own upper half,
+      // above the tree bus line, so it crosses none of the first-row
+      // siblings' drops. The band has to hold that half twice over.
+      const exits = wrapExitSlots[b] ?? 0;
       bandNeed = Math.max(
         bandNeed,
         straightNeed,
         busy ? 2 * Math.max(halfTurn, fanPillBelow) : 0,
         busy && lanes ? 2 * (TRACK + laneZone) : 0,
         lanes ? laneZone + TRACK : 0,
+        exits ? 2 * TRACK * (exits + 1) : 0,
       );
     }
     const bandV = roundUp(bandNeed, GRID);
@@ -1339,13 +1660,36 @@ export function layoutGrid(
     const stripSlotBottom = TRACK;
     const stripTopV = stripTop.length ? LOOP_CLEAR + stripSlotTop * (stripTop.length - 1) : 0;
 
+    /**
+     * DESIGN 1.5 + 1.6 together: a stacked leaf column hangs in the band below
+     * its parent, and with sibling wrapping there can now be a row under it.
+     * That band holds the column plus a sibling gutter — the one place a band
+     * is not the chart's uniform height, because what has to live in it is not
+     * the same thing (2.7's own derivation, applied to a column).
+     */
+    const stackBand: number[] = Array.from({ length: Math.max(lastRow, 0) }, () => 0);
+    for (const p of stacked) {
+      const r = rank.get(p)!;
+      if (r >= lastRow) continue;
+      const kids = kidsOf.get(p)!;
+      const need =
+        FIRST_GAP +
+        kids.reduce((acc, e) => acc + sv(byId.get(e.to)!), 0) +
+        LEAF_GAP * (kids.length - 1) +
+        // and, below the column, the band's own lanes at their pitch with
+        // 6.1's 16 clear either side of them
+        2 * EDGE_NODE_CLEAR +
+        (laneSlots[r]! ? 8 + laneSlot[r]! * laneSlots[r]! : 0);
+      stackBand[r] = Math.max(stackBand[r]!, roundUp(need, GRID));
+    }
+
     // Row centres along the flow axis.
     const rowC: number[] = [];
     let vCursor = stripTopV;
     for (let r = 0; r <= lastRow; r++) {
       rowC.push(vCursor + rowSv[r]! / 2);
       vCursor += rowSv[r]!;
-      if (r < lastRow) vCursor += bandV;
+      if (r < lastRow) vCursor += Math.max(bandV, stackBand[r]!);
     }
     const rowTopMin = (r: number): number => rowC[r]! - rowSv[r]! / 2;
     const rowBottomMax = (r: number): number => rowC[r]! + rowSv[r]! / 2;
@@ -1370,6 +1714,10 @@ export function layoutGrid(
       const slot = laneSlot[b]!;
       return rowTopMin(b + 1) - 8 - slot * k - slot / 2;
     };
+    /** DESIGN 1.6: the wrap bus's exit run, in the upper half of the parent's
+     *  own band — clear of its box, and above the tree bus line every
+     *  first-row sibling's drop leaves from. */
+    const wrapExitV = (wb: WrapBus): number => rowBottomMax(wb.rs) + TRACK * (wb.exitSlot + 1);
     const stripTopLaneV = (e: GraphEdge): number =>
       rowTopMin(0) - LOOP_CLEAR - stripSlotTop * stripSlot.get(`${e.id}@top`)!;
     const stripBottomLaneV = (e: GraphEdge): number =>
@@ -1560,6 +1908,40 @@ export function layoutGrid(
             { x: tU, y: tTop },
           ]).map((q) => ({ u: q.x, v: q.y })),
           exempt: 'bus',
+        });
+      }
+    }
+
+    // DESIGN 1.6: the wrap buses, drawn.
+    for (const wb of wrapBuses) {
+      const p = byId.get(wb.parent)!;
+      const pU = anchorU.get(wb.parent)!;
+      const pBottom = bottomOf(p);
+      const lvS = wrapExitV(wb);
+      const lvT = laneV(wb.rt - 1, wb.edges[0]!);
+      const cu = wb.corridorU;
+      for (const e of wb.edges) {
+        const k = byId.get(e.to)!;
+        const kU = anchorU.get(e.to)!;
+        const pill = pills.get(e.id);
+        planned.push({
+          edge: e,
+          pts: simplify([
+            { x: pU, y: pBottom },
+            { x: pU, y: lvS },
+            { x: cu, y: lvS },
+            { x: cu, y: lvT },
+            { x: kU, y: lvT },
+            { x: kU, y: topOf(k) },
+          ]).map((q) => ({ u: q.x, v: q.y })),
+          exempt: 'wrap',
+          pillRun: pill
+            ? [
+                { u: cu, v: lvS + TURN },
+                { u: cu, v: lvT - TURN },
+              ]
+            : undefined,
+          pillAt: pill ? { u: cu, v: nearestBandCentre(lvS, lvT) } : undefined,
         });
       }
     }

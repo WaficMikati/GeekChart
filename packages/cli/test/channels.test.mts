@@ -1096,6 +1096,85 @@ describe('channel engine — the grid planner (phase 3a)', () => {
   });
 });
 
+describe('channel engine — DESIGN 1.6 sibling wrapping', () => {
+  const fixture = (name: string) => readFileSync(join(fixtures, name), 'utf8');
+
+  test('org-chart at display 620 wraps its leads, every row on the shared axis', async () => {
+    const reply = await mount(fixture('org-chart.mmd'), { display: 620 });
+    assert.ok(isChannels(reply.svg), 'org-chart at 620 should stay on the channel engine');
+
+    const shape = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const outline = (id: string) =>
+        (svg.querySelector(`.gc-node[data-id="${id}"] .gc-outline`) as SVGGraphicsElement).getBBox();
+      const centre = (id: string) => {
+        const b = outline(id);
+        return b.x + b.width / 2;
+      };
+      const wraps = [...svg.querySelectorAll('path.gc-edge.gc-wrap')].map((p) => {
+        const d = p.getAttribute('d')!;
+        return {
+          id: p.getAttribute('data-id')!,
+          // Every quadratic segment is one rounded turn, so the arc count is
+          // the bend count.
+          bends: (d.match(/Q/g) ?? []).length,
+          startsAt: /^M([\d.]+),([\d.]+)/.exec(d)!.slice(1).map(Number) as [number, number],
+          heads: svg.querySelectorAll(`.gc-arrow[data-id="${p.getAttribute('data-id')}"]`).length,
+        };
+      });
+      return {
+        width: svg.viewBox.baseVal.width,
+        ceo: centre('CEO'),
+        rows: ['ADM', 'ACA', 'CAR'].map(centre),
+        ceoBottom: outline('CEO').y + outline('CEO').height,
+        wraps,
+      };
+    });
+
+    assert.ok(shape.width <= 620, `org-chart at 620 came out ${shape.width} wide`);
+    // Two of the three leads wrapped onto rows of their own; DESIGN 1.6 asks
+    // that every row be centred on the group's one axis, which is also where
+    // the parent sits (2.8 holds through the wrap).
+    for (const c of shape.rows)
+      assert.ok(
+        Math.abs(c - shape.ceo) <= 1,
+        `a wrapped row sits ${(c - shape.ceo).toFixed(1)} off the shared axis`,
+      );
+    assert.equal(shape.wraps.length, 2, 'ACA and CAR are fed by a wrap bus each');
+    for (const w of shape.wraps) {
+      assert.equal(w.bends, 4, `${w.id} is not the four-bend wrap bus (${w.bends} bends)`);
+      assert.equal(w.heads, 1, `${w.id} must draw exactly one arrowhead`);
+      // 1.6's own correction: the bus leaves the parent's OUTLINE at its
+      // bottom centre — the first version started at the corridor's x on the
+      // parent's bottom y, a line beginning in space. (The drawn `d` starts
+      // `edgeGapStart` past the face, the same standoff every edge shows.)
+      const below = w.startsAt[1] - shape.ceoBottom;
+      assert.ok(
+        Math.abs(w.startsAt[0] - shape.ceo) <= 1 && below >= 0 && below <= 8,
+        `${w.id} starts at ${w.startsAt.join(',')}, not the parent's bottom centre ` +
+          `(${shape.ceo},${shape.ceoBottom})`,
+      );
+    }
+    assert.deepEqual(await gateFails(), []);
+  });
+
+  test('two-diamonds at display 358 packs to the phone column instead of scaling', async () => {
+    const reply = await mount(fixture('two-diamonds.mmd'), { display: 358 });
+    assert.ok(isChannels(reply.svg), 'two-diamonds at 358 should stay on the channel engine');
+    const { width, scaled } = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      return {
+        width: svg.viewBox.baseVal.width,
+        // DESIGN 1.1: packing happens before scaling, never instead of it.
+        scaled: Boolean(svg.querySelector('.gc-chart > g[transform*="scale"]')),
+      };
+    });
+    assert.ok(width <= 358, `two-diamonds at 358 came out ${width} wide`);
+    assert.equal(scaled, false, 'a packed chart is never scaled down to the cap');
+    assert.deepEqual(await gateFails(), []);
+  });
+});
+
 describe('channel engine — the whole gate still applies', () => {
   test('every channel chart passes the full measure suite', async () => {
     const cases: [string, string, AnyRequest][] = [
