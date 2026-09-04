@@ -1221,6 +1221,15 @@ export const panelGeometry: Check = {
  * source states and a panel sent to a row of its own reads as a tier the
  * source never named. In a top-to-bottom chart sibling panels legitimately sit
  * at different ranks, so there is no row to hold and nothing is measured.
+ *
+ * Nor is a row measured that could not have stood at all. 2.10's move for a
+ * row too wide for the display is to stack the panels' contents, and that is
+ * what a chart at the plain default gets; when a caller names a phone column
+ * and the stacked row still overflows, DESIGN 1.6's sibling wrap is what is
+ * left (1.4: a caller who named a narrow display has already spent the room
+ * that made "keep the row" the better read). Measured, not assumed: the row
+ * is only excused when the panels drawn plus their gutters genuinely do not
+ * fit the content box.
  */
 export const panelRow: Check = {
   id: '2.10-panel-row',
@@ -1237,8 +1246,13 @@ export const panelRow: Check = {
       const k = panelParent(ctx, p) ?? '';
       byParent.set(k, [...(byParent.get(k) ?? []), p]);
     }
+    const room = (Number(svg.dataset.display) || 1000) - 2 * tokens.CANVAS.margin;
     for (const group of byParent.values()) {
       if (group.length < 2) continue;
+      const wide =
+        group.reduce((sum, p) => sum + p.b.width / ctx.unit, 0) +
+        (group.length - 1) * tokens.GUTTER.panel;
+      if (wide > room + tol) continue;
       const top = group[0]!.b.top;
       for (const p of group) {
         const off = Math.abs(p.b.top - top) / ctx.unit;

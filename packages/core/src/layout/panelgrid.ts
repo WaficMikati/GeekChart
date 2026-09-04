@@ -721,6 +721,49 @@ export function layoutPanelChart(
     solution = solve();
   }
 
+  /**
+   * DESIGN 1.6 at panel scale, under a declared display only.
+   *
+   * 2.10's own packing move is the contents stack above, and it is the move a
+   * chart at the plain default gets: the panel row stands. A caller who named
+   * a phone column has already spent the room that made "keep the row" the
+   * better read — 1.4 says as much in its own words — and a row of stacked
+   * panels that still overflows has nothing left to give. Then the panels
+   * wrap like 1.6's siblings.
+   *
+   * What runs here is the shape 1.9 names for a display that fits only ONE
+   * column: "the ribbon degenerates to a vertical list — no returns exist,
+   * edges run straight down". A row of panels one panel wide IS that list, so
+   * the whole wrap is the root container turning its ranks down the page, and
+   * every cross-panel edge stays the ordinary two-face run it already was. A
+   * display with room for two panels but not all of them would need 1.9's own
+   * four-bend return between the rows, which this planner has no route shape
+   * for yet — so it declines and the old path draws it, rather than inventing
+   * a return the spec describes and the code does not draw.
+   */
+  const rootPanels = [...panelItems.values()].filter((p) => !parentOf.has(p.id));
+  if (
+    packToDisplay &&
+    solution &&
+    overWide(solution.seated) &&
+    (interiorOf.get(ROOT) ?? flowAxis) === 'x' &&
+    rootPanels.length > 1
+  ) {
+    const widths = rootPanels.map((p) => p.w).sort((a, b) => a - b);
+    const perRow = widths[0]! + GUTTER.panel + widths[1]! <= room ? 2 : 1;
+    if (perRow > 1) {
+      decline(`a wrap of ${perRow} panels a row needs 1.9's return, which this planner has not`);
+      return null;
+    }
+    interiorOf.set(ROOT, 'y');
+    const listed = solve();
+    if (listed && listed.seated.w < solution.seated.w) solution = listed;
+    else {
+      interiorOf.delete(ROOT);
+      solution = solve();
+    }
+  }
+
   // 2.7's fixed point: derive with the straight-run band, and re-derive once
   // if a turn actually turned up in the plan. A band already widened for a
   // pill never narrows here — a turn asks for more room, never less.
@@ -742,9 +785,6 @@ export function layoutPanelChart(
   // composition row — and hand labelled cross-panel LR charts back to the old
   // path. With the exemption in `2.3-row-gutters` they stay here.
   const { routes } = solution;
-  // A declared display changes nothing here: 2.10 names one packing move for a
-  // panel row, and it is the same move either way.
-  void packToDisplay;
 
   // --- VERIFY -------------------------------------------------------------
   const allPanels = [...panelItems.values()];

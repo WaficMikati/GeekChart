@@ -1755,6 +1755,55 @@ describe('channel engine — panels', () => {
     );
   });
 
+  // DESIGN 2.10's own tail (2026-09-04): contents stacking is enough at the
+  // plain default, but a row of already-stacked panels can still be wider than
+  // a phone column, and then the panels wrap as 1.6's siblings. At 358 the
+  // room holds one panel, which is 1.9's degenerate vertical list — no
+  // returns, edges straight down.
+  for (const [name, src, panelCount] of [
+    ['subgraph-pair', pair, 2],
+    ['three-subgraphs', three, 3],
+  ] as const) {
+    test(`${name} at display 358 wraps its panel row into a column, edges straight down`, async () => {
+      const reply = await mount(src, { display: 358 });
+      assert.ok(isChannels(reply.svg), `${name} at 358 should stay on the channel engine`);
+      const width = await session.page.evaluate(
+        () => (document.querySelector('svg.gc-chart') as SVGSVGElement).viewBox.baseVal.width,
+      );
+      assert.ok(width <= 358, `${name} at 358 came out ${width} wide`);
+
+      const ps = await panels();
+      assert.equal(ps.length, panelCount);
+      // One panel a row, each below the last and each inside the column.
+      const stack = [...ps].sort((a, b) => a.y - b.y);
+      for (let i = 1; i < stack.length; i++) {
+        assert.ok(
+          stack[i]!.y >= stack[i - 1]!.y + stack[i - 1]!.h,
+          `${stack[i]!.id} overlaps the panel above it`,
+        );
+      }
+      for (const p of ps) assert.ok(p.w <= 358 - 96 + 1, `${p.id} is ${p.w.toFixed(0)} wide`);
+
+      // 1.9's degenerate case: no returns, so every cross-panel edge is a
+      // plain vertical run with no bend at all.
+      const verticals = await session.page.evaluate(() =>
+        [...document.querySelectorAll('.gc-edge[data-id]')].map((e) => {
+          const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
+          return { id: (e as HTMLElement).dataset.id!, points: nums.length / 2 };
+        }),
+      );
+      for (const v of verticals) {
+        assert.equal(v.points, 2, `${v.id} bends; a one-column wrap has no returns`);
+      }
+      // 2.10's row check does not fire on a row that could not have stood.
+      assert.deepEqual(await gateCheck('2.10-panel-row'), []);
+      assert.deepEqual(
+        (await gateFails()).filter((m) => !m.startsWith('1.7')),
+        [],
+      );
+    });
+  }
+
   test('2.10-panel-endpoint has teeth: the old path spreads its arrivals off the columns', async () => {
     // control-plane is the old path's own panel-endpoint composition — the
     // geometry 2.10's column clause replaces. Its four inputs are spread

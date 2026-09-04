@@ -201,7 +201,19 @@ and the check that enforces it cannot drift apart.
   speaks of sibling panels sharing a rank — an LR row; a TB chart's
   sequential panels are a sequence, not a row, and owe each other
   nothing here. (Clarified 2026-09-04: the check read the rule as
-  unconditional and failed a legitimate TB panel stack.) An edge whose
+  unconditional and failed a legitimate TB panel stack.) Contents
+  stacking is what a chart at the plain **default** display gets, and it
+  is enough there. Under a **declared** display it can run out: a row of
+  panels already stacked as narrow as their own contents go can still be
+  wider than a phone column, and there is nothing left to stack. Then the
+  panels wrap as 1.6's siblings — the same trade 1.4 already names, where
+  a caller who asked for a narrow column has spent the room that made
+  keeping the row the better read. A display with room for only one panel
+  is 1.9's own degenerate case, "the ribbon degenerates to a vertical
+  list", and those edges run straight down with no returns at all.
+  (Added 2026-09-04: at a 358 phone column subgraph-pair seats 376 wide
+  and three-subgraphs 584, against a room of 262, with every panel's
+  contents already in one column.) An edge whose
   source names the **panel itself** as an endpoint (mermaid: `Web -->
   ControlPlane`) attaches to the panel's border, perpendicular, the
   arrowhead stopping on the border — the author said "into the system",
