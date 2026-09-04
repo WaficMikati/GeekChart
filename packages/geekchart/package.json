@@ -1,8 +1,8 @@
 {
   "name": "geekchart",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Paste a mermaid chart, get an animated one in the 4geeks look — a React component, a server renderer, and a CLI.",
+  "description": "Paste a mermaid chart, get an animated one in the 4geeks look \u2014 a React component, a server renderer, and a CLI.",
   "license": "MIT",
   "author": "Wafic Mikati <wrmikati@4geeks.com>",
   "keywords": [
