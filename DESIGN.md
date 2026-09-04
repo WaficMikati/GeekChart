@@ -155,9 +155,15 @@ and the check that enforces it cannot drift apart.
 - **2.3** Nodes in the same row share an exact `y` and height; nodes in the same
   column share an exact `x` and width. Gutters between siblings are equal
   (24 or 32).
-- **2.4** Diamonds are drawn around a 160×48 label box with 16 of clearance at
-  the widest point. Terminals (ovals) are the same 160×48 with `rx` = half the
-  height.
+- **2.4** Diamonds come in **one size per chart**: the smallest that fits the
+  chart's longest decision label (drawn around its label box with 16 of
+  clearance at the widest point), applied to every diamond in the chart.
+  Gate: `2.4-uniform-diamond`. Not one absolute size across the library
+  (revised 2026-09-04 from a fixed 160×48-based size, user's ruling): at
+  any diamond wider than ~152, a root-return loop like git-workflow's
+  blows 6.7/6.8's length budget — and a reader compares diamonds within a
+  chart, never across charts. Terminals (ovals) are 160×48 with `rx` =
+  half the height.
 - **2.5** Corner radius is one value per chart: `rx 6` for nodes, `rx 12` for
   panels/clusters. Never mixed.
 - **2.6** Panels (clusters, swimlanes, the Lyzr-style control plane) have 24
