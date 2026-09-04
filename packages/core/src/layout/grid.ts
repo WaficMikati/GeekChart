@@ -440,10 +440,8 @@ export function layoutGrid(
 
   // SEAT — recursive tidy tree over the cross axis. Subtrees are seated
   // first, then each parent is centred on the geometric extent of its
-  // entire subtree (DESIGN 2.8, applied at every level); when depths differ,
-  // the deepest branch keeps the
-  // parent's own axis (the decision-cascade spine) and shallow branches sit
-  // beside it.
+  // entire subtree (DESIGN 2.8, applied at every level) — every child's
+  // column, whatever its depth.
   const seatAll = (
     stacked: Set<string>,
     flipShallow: boolean,
@@ -667,9 +665,18 @@ export function layoutGrid(
             anchorsRel.push(cur + (ke.anchor - ke.lo));
             cur += ke.hi - ke.lo;
           }
-          const anchorKids = allEqual
-            ? ordered.map((_, i) => i)
-            : ordered.map((_, i) => i).filter((i) => subHeight(ordered[i]!.to) === deepest);
+          // Every child below this rank counts, deep branch or shallow.
+          // DESIGN 2.8 names exactly two things a column leaves out — a 2.9
+          // flank leaf and a stacked leaf list — and both are already out of
+          // `ordered` by the time this runs. Depth was a third, unwritten
+          // exclusion: the deepest branch kept the parent's own axis and a
+          // shallow sibling hung off to one side uncounted. It never fired
+          // in the default catalog (every shallow sibling there is a flank
+          // or a stacked leaf), but under a declared display, where a flank
+          // that does not fit ranks down into an ordinary sibling, it left
+          // two-diamonds' Start 72 off the centre of Beta and the Second?
+          // column it now shares a rank with.
+          const anchorKids = ordered.map((_, i) => i);
           // DESIGN 2.8 (revised 2026-09-04): what decides where the parent
           // sits is each child's WHOLE subtree, not the child's own box. The
           // subtrees are seated first (this is the recursion's return trip),

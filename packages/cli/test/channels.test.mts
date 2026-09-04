@@ -1175,6 +1175,51 @@ describe('channel engine — DESIGN 1.6 sibling wrapping', () => {
     assert.equal(scaled, false, 'a packed chart is never scaled down to the cap');
     assert.deepEqual(await gateFails(), []);
   });
+
+  // DESIGN 2.8: at 620 the flank gutter no longer fits, so Beta ranks down
+  // and becomes an ordinary sibling of Second? on Start's second rank. The
+  // seating used to leave a *shallow* sibling like Beta out of the extent it
+  // centred the parent on — the deepest branch kept the axis — which is a
+  // third exclusion 2.8 does not name (it names two: a 2.9 flank leaf and a
+  // stacked leaf list). Start sat 72 right of the centre of everything under
+  // it. Counting every child's column instead wraps Beta onto its own row
+  // (1.6, after 1.5's stacking) and puts the whole chart back on one axis.
+  test('two-diamonds at display 620 centres every parent on its whole subtree', async () => {
+    const reply = await mount(fixture('two-diamonds.mmd'), { display: 620 });
+    assert.ok(isChannels(reply.svg), 'two-diamonds at 620 should stay on the channel engine');
+    const shape = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const box = (id: string) =>
+        (svg.querySelector(`.gc-node[data-id="${id}"] .gc-outline`) as SVGGraphicsElement).getBBox();
+      const centre = (id: string) => {
+        const b = box(id);
+        return b.x + b.width / 2;
+      };
+      const ids = ['A', 'Q1', 'B', 'Q2', 'C', 'D'];
+      const boxes = ids.map(box);
+      return {
+        width: svg.viewBox.baseVal.width,
+        centres: Object.fromEntries(ids.map((id) => [id, centre(id)])),
+        // The extent of everything below Start — the column 2.8 centres it on.
+        subLo: Math.min(...boxes.slice(1).map((b) => b.x)),
+        subHi: Math.max(...boxes.slice(1).map((b) => b.x + b.width)),
+      };
+    });
+    assert.ok(shape.width <= 620, `two-diamonds at 620 came out ${shape.width} wide`);
+    const subCentre = (shape.subLo + shape.subHi) / 2;
+    assert.ok(
+      Math.abs(shape.centres['A']! - subCentre) <= 1,
+      `Start sits ${(shape.centres['A']! - subCentre).toFixed(1)} off its subtree's centre`,
+    );
+    // Every rank on one axis is what the wrap buys; the old seating had
+    // Start and both diamonds at 308 with Beta stranded at 60.
+    for (const id of ['Q1', 'B', 'Q2'])
+      assert.ok(
+        Math.abs(shape.centres[id]! - shape.centres['A']!) <= 1,
+        `${id} is ${(shape.centres[id]! - shape.centres['A']!).toFixed(1)} off the chart's axis`,
+      );
+    assert.deepEqual(await gateFails(), []);
+  });
 });
 
 describe('channel engine — the whole gate still applies', () => {
