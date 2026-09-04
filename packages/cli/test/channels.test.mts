@@ -297,6 +297,26 @@ describe('channel engine — the grid planner (phase 3a)', () => {
       const nums = (e.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g)!.map(Number);
       return nums.filter((_, i) => i % 2 === 0);
     }, id);
+  const edgeD = async (id: string) =>
+    session.page.evaluate(
+      (eid) =>
+        document.querySelector(`svg.gc-chart .gc-edge[data-id="${eid}"]`)!.getAttribute('d')!,
+      id,
+    );
+  /** DESIGN 2.9: one straight run — two points, no corner arcs. */
+  const isStraightRun = (d: string): boolean =>
+    !/[QCA]/i.test(d.replace(/^M/, '')) && (d.match(/-?\d+(\.\d+)?/g) ?? []).length === 4;
+  const rowsOf = async () =>
+    session.page.evaluate(() => {
+      // Rows share a centre line, not a top: a diamond is taller than the
+      // leaf beside it (DESIGN 2.9).
+      const centres = new Set<number>();
+      for (const n of document.querySelectorAll('svg.gc-chart .gc-node[data-id] .gc-outline')) {
+        const b = (n as SVGGraphicsElement).getBBox();
+        centres.add(Math.round(b.y + b.height / 2));
+      }
+      return centres.size;
+    });
 
   test('two-diamonds: the second decision sits under the first, not off to the side', async () => {
     // The user's review: "Second being on the left, aligned to Start, is
@@ -312,6 +332,23 @@ describe('channel engine — the grid planner (phase 3a)', () => {
     assert.ok(Math.abs(q1!.cx - q2!.cx) <= 1, `Q2 is ${Math.abs(q1!.cx - q2!.cx)} off Q1's axis`);
     const groupC = (Math.min(c!.x, d!.x) + Math.max(c!.x + c!.w, d!.x + d!.w)) / 2;
     assert.ok(Math.abs(q2!.cx - groupC) <= 1, `Q2 is ${Math.abs(q2!.cx - groupC)} off C/D's centre`);
+  });
+
+  test('DESIGN 2.9: two-diamonds seats Beta on First?’s own row, one straight run', async () => {
+    // Beta is terminal, so it does not drop a rank to be reached: it sits on
+    // the decision's row, joined by one labeled run off the side vertex.
+    await mount(fixture('two-diamonds.mmd'));
+    const [q1, b] = await Promise.all(['Q1', 'B'].map(nodeBox));
+    const cy = (n: NonNullable<typeof q1>) => n.y + n.h / 2;
+    assert.ok(
+      Math.abs(cy(b!) - cy(q1!)) <= 1,
+      `Beta is ${Math.abs(cy(b!) - cy(q1!)).toFixed(1)} off First?'s row`,
+    );
+    assert.ok(b!.x + b!.w < q1!.x, 'Beta sits beside the decision, not under it');
+    const d = await edgeD('L_Q1_B_0');
+    assert.ok(isStraightRun(d), `Q1→B is not one straight run: ${d}`);
+    assert.deepEqual(await gateCheck('2.9-same-row-leaf'), []);
+    assert.equal(await rowsOf(), 3, 'the leaf costs no rank of its own');
   });
 
   test('diamond-cascade: every label on its own line, every run orthogonal', async () => {
@@ -336,6 +373,45 @@ describe('channel engine — the grid planner (phase 3a)', () => {
     // The cascade's spine holds one axis: each Check sits under the last.
     const [q1, q2, q3] = await Promise.all(['Q1', 'Q2', 'Q3'].map(nodeBox));
     assert.ok(Math.abs(q1!.cx - q2!.cx) <= 1 && Math.abs(q2!.cx - q3!.cx) <= 1);
+  });
+
+  test('DESIGN 2.9: diamond-cascade seats each Reject on its own Check’s row', async () => {
+    // The mockup the rule was approved from: Reject A had been parked a rank
+    // below Check A behind two bends, for a branch nothing downstream orders.
+    await mount(fixture('diamond-cascade.mmd'));
+    const [q1, q2, q3, e1, e2, e3, okBox] = await Promise.all(
+      ['Q1', 'Q2', 'Q3', 'E1', 'E2', 'E3', 'OK'].map(nodeBox),
+    );
+    const cy = (n: NonNullable<typeof q1>) => n.y + n.h / 2;
+    for (const [leaf, decision, edge] of [
+      [e1, q1, 'L_Q1_E1_0'],
+      [e2, q2, 'L_Q2_E2_0'],
+      [e3, q3, 'L_Q3_E3_0'],
+      [okBox, q3, 'L_Q3_OK_0'],
+    ] as const) {
+      assert.ok(
+        Math.abs(cy(leaf!) - cy(decision!)) <= 1,
+        `${edge}: the leaf is ${Math.abs(cy(leaf!) - cy(decision!)).toFixed(1)} off its decision's row`,
+      );
+      const d = await edgeD(edge);
+      assert.ok(isStraightRun(d), `${edge} is not one straight run: ${d}`);
+    }
+    // Accept and Reject C share Check C's row, so the rank they used to own
+    // is gone: five ranks of boxes draw as four rows.
+    assert.equal(await rowsOf(), 4);
+    assert.deepEqual(await gateCheck('2.9-same-row-leaf'), []);
+    assert.deepEqual(await gateCheck('6.2-side-exclusivity'), []);
+    assert.deepEqual(await gateCheck('6.5-pill-on-line'), []);
+  });
+
+  test('DESIGN 2.9 guard: login-flow’s Show error continues, so it still ranks down', async () => {
+    // The target has an outgoing edge (back to the login form), so it keeps
+    // its downstream order and the rule does not apply.
+    await mount(fixture('login-flow.mmd'));
+    const [v, e] = await Promise.all(['V', 'E'].map(nodeBox));
+    const cy = (n: NonNullable<typeof v>) => n.y + n.h / 2;
+    assert.ok(cy(e!) > cy(v!) + 8, 'Show error keeps its own rank below the decision');
+    assert.deepEqual(await gateCheck('2.9-same-row-leaf'), []);
   });
 
   test('ternary-tree: the root centres on the widest row, the branch row on the same axis', async () => {

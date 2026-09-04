@@ -263,6 +263,117 @@ export const sideExclusivity: Check = {
   },
 };
 
+/**
+ * DESIGN 2.9: a terminal branch off a decision's side sits on the decision's
+ * own row — one straight labeled run from the side vertex to the near face,
+ * no rank drop, no bends, the pill on the run (6.5).
+ *
+ * The pattern is re-detected from the DOM, never assumed: a diamond, a child
+ * nothing leaves and only that decision enters, and at most one other child
+ * — the branch that continues, which holds the axis and leaves through the
+ * flow face, so the side vertex the leaf uses is free (6.2).
+ *
+ * The rule's second guard is width: too narrow a flank and the leaf ranks
+ * down instead of forcing a scale. Measured here as the room the chart's own
+ * canvas has left inside the declared display — with no room to widen, the
+ * drop is the rule working and nothing is reported.
+ */
+export const sameRowLeaf: Check = {
+  id: '2.9-same-row-leaf',
+  rule: '2.9',
+  run(svg, ctx) {
+    if (!isChannels(svg)) return [];
+    // The rule is written on rows: the TB axis.
+    if (svg.dataset.flow === 'LR' || svg.dataset.flow === 'RL') return [];
+    const ids = nodeById(ctx);
+    const meta = edgeMeta(ctx).filter((m) => m.from && m.to && ids.has(m.from) && ids.has(m.to));
+    const outDeg = new Map<string, number>();
+    const inDeg = new Map<string, number>();
+    const loopy = new Set<string>();
+    for (const m of meta) {
+      outDeg.set(m.from!, (outDeg.get(m.from!) ?? 0) + 1);
+      inDeg.set(m.to!, (inDeg.get(m.to!) ?? 0) + 1);
+      if (m.e.classList.contains('gc-back')) {
+        loopy.add(m.from!);
+        loopy.add(m.to!);
+      }
+    }
+    const tol = RULES['2.9']!.threshold! * ctx.unit;
+    const display = Number(svg.dataset.display ?? '0');
+    const spare = (display || ctx.vb.width) - ctx.vb.width; // canvas units left
+    const plateOf = new Map(plates(ctx).map((p) => [p.id, p.b] as const));
+    const findings: Finding[] = [];
+
+    for (const [id, node] of ids) {
+      if (!node.classList.contains('gc-shape-diamond') || loopy.has(id)) continue;
+      const kids = meta.filter((m) => m.from === id);
+      const term = kids.filter((m) => !outDeg.get(m.to!) && inDeg.get(m.to!) === 1);
+      const cont = kids.filter((m) => !term.includes(m));
+      if (!term.length || term.length > 2 || cont.length > 1) continue;
+      if (!cont.length && term.length !== 2) continue;
+      const db = rect(outline(node));
+      const dcy = (db.top + db.bottom) / 2;
+      for (const m of term) {
+        const leaf = ids.get(m.to!)!;
+        const lb = rect(outline(leaf));
+        // Guard: the flank has to fit the declared display.
+        if (spare < lb.width / ctx.unit + 24) continue;
+        const off = Math.abs((lb.top + lb.bottom) / 2 - dcy) / ctx.unit;
+        if (off > RULES['2.9']!.threshold!) {
+          findings.push({
+            severity: 'fail',
+            message: `2.9 terminal leaf ${m.to} sits ${off.toFixed(0)} off ${id}'s row`,
+          });
+          continue;
+        }
+        const ctm = m.e.getScreenCTM();
+        if (!ctm) continue;
+        const pts = pathPointsHV(m.e.getAttribute('d'), ctm);
+        const straight =
+          pts.length === 2 && Math.abs(pts[0]![1] - pts[1]![1]) <= tol;
+        if (!straight) {
+          findings.push({
+            severity: 'fail',
+            message: `2.9 the run ${id}→${m.to} is not one straight segment (${pts.length} points)`,
+          });
+          continue;
+        }
+        // From the decision's own side vertex to the leaf's near face.
+        const x1 = Math.min(pts[0]![0], pts[1]![0]);
+        const x2 = Math.max(pts[0]![0], pts[1]![0]);
+        const rightward = pts[0]![0] < pts[1]![0];
+        const vertex = rightward ? db.right : db.left;
+        const face = rightward ? lb.left : lb.right;
+        // Both ends stand off their own face — the edge gap at the start,
+        // the arrowhead at the end — so the join is measured to a standoff,
+        // not to the pixel.
+        const standoff = 16 * ctx.unit;
+        if (Math.abs(pts[0]![0] - vertex) > standoff || Math.abs(pts[1]![0] - face) > standoff) {
+          findings.push({
+            severity: 'fail',
+            message: `2.9 the run ${id}→${m.to} does not join the side vertex to the near face`,
+          });
+        }
+        const plate = plateOf.get(m.e.dataset.id ?? '');
+        if (plate) {
+          const pcy = (plate.top + plate.bottom) / 2;
+          if (
+            Math.abs(pcy - pts[0]![1]) > tol ||
+            plate.left < x1 - tol ||
+            plate.right > x2 + tol
+          ) {
+            findings.push({
+              severity: 'fail',
+              message: `2.9 the label on ${id}→${m.to} is not centred on its run`,
+            });
+          }
+        }
+      }
+    }
+    return findings;
+  },
+};
+
 /** A chain re-detected from the DOM: unique forward next-map covering every
  *  node once, start to end. */
 function detectChain(ctx: Ctx): string[] | null {
@@ -510,6 +621,7 @@ export const returnBus: Check = {
 export const CHANNEL_CHECKS: Check[] = [
   pillOnLine,
   fanSymmetry,
+  sameRowLeaf,
   ribbon,
   sideExclusivity,
   returnBus,

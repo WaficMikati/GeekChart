@@ -156,7 +156,7 @@ export function layoutGrid(
     if (queue.length !== graph.nodes.length) return decline('forward cycle');
   }
   for (const e of loops) if (rank.get(e.to)! >= rank.get(e.from)! + 1) return decline('loop ranks');
-  const maxRank = Math.max(...graph.nodes.map((n) => rank.get(n.id)!));
+  let maxRank = Math.max(...graph.nodes.map((n) => rank.get(n.id)!));
   if (maxRank === 0) return decline('single rank');
 
   // FLOOR PLAN 2: the seating tree. A node's primary parent is its first
@@ -183,17 +183,6 @@ export function layoutGrid(
     if (p) pills.set(e.id, p);
   }
 
-  const height = new Map<string, number>();
-  const subHeight = (id: string): number => {
-    const cached = height.get(id);
-    if (cached !== undefined) return cached;
-    const kids = kidsOf.get(id)!;
-    const h = kids.length ? 1 + Math.max(...kids.map((e) => subHeight(e.to))) : 1;
-    height.set(id, h);
-    return h;
-  };
-  for (const n of graph.nodes) subHeight(n.id);
-
   const roots = graph.nodes.filter((n) => !treeEdge.has(n.id));
 
   const touched = new Set<string>();
@@ -201,6 +190,123 @@ export function layoutGrid(
     touched.add(e.from);
     touched.add(e.to);
   }
+  const loopTouched = new Set<string>();
+  for (const e of loops) {
+    loopTouched.add(e.from);
+    loopTouched.add(e.to);
+  }
+
+  /**
+   * DESIGN 2.9: a terminal branch off a decision's side sits on the
+   * decision's own row. Candidates are structural — the two guards the rule
+   * names are the target being terminal (checked here) and the flank fitting
+   * the declared display (checked by seating the chart with them and falling
+   * back to today's ranks when it does not fit).
+   *
+   * At most one leaf per side (the rule's own limit), and at most one child
+   * left below: with a single child below, that child sits on the parent's
+   * own axis and leaves through the flow face, so nothing else wants the
+   * side vertex the leaf run uses (DESIGN 6.2's side exclusivity, held by
+   * construction). Two children left below would each want a vertex, so
+   * that decision keeps today's ranks.
+   */
+  interface SideLeaf {
+    edge: GraphEdge;
+    parent: string;
+    dir: -1 | 1;
+  }
+  const sideLeafCandidates: SideLeaf[] = [];
+  {
+    const outDeg = new Map<string, number>(graph.nodes.map((n) => [n.id, 0]));
+    for (const e of graph.edges) outDeg.set(e.from, outDeg.get(e.from)! + 1);
+    // Terminal: nothing leaves it, and its only arrival is its own tree edge
+    // — a target with downstream order to keep still ranks down.
+    const terminal = (id: string): boolean =>
+      outDeg.get(id) === 0 && !touched.has(id) && treeEdge.has(id);
+    if (TB) {
+      for (const p of graph.nodes) {
+        if (p.shape !== 'diamond' || loopTouched.has(p.id)) continue;
+        const kids = kidsOf.get(p.id)!;
+        const cont = kids.filter((e) => !terminal(e.to));
+        const term = kids.filter((e) => terminal(e.to));
+        if (!term.length || cont.length > 1) continue;
+        let low: GraphEdge[];
+        let high: GraphEdge[];
+        if (cont.length === 1) {
+          // The branch that continues holds the axis; a leaf sits on the
+          // side of it that reading order already put it on.
+          const ci = kids.indexOf(cont[0]!);
+          low = term.filter((e) => kids.indexOf(e) < ci);
+          high = term.filter((e) => kids.indexOf(e) > ci);
+        } else {
+          // Both outcomes end: one leaf each side, in reading order.
+          if (term.length !== 2) continue;
+          low = [term[0]!];
+          high = [term[1]!];
+        }
+        // Two leaves off the same side rank down as before.
+        if (low.length > 1 || high.length > 1) continue;
+        for (const e of low) sideLeafCandidates.push({ edge: e, parent: p.id, dir: -1 });
+        for (const e of high) sideLeafCandidates.push({ edge: e, parent: p.id, dir: 1 });
+      }
+    }
+  }
+
+  const baseRank = new Map(rank);
+  /** Leaf id -> its plan, for the leaves seated on their decision's row. */
+  let sideRow = new Map<string, SideLeaf>();
+  /** Tree children that still sit a rank below: everything but those. */
+  let rowKidsOf = kidsOf;
+
+  const height = new Map<string, number>();
+  const subHeight = (id: string): number => {
+    const cached = height.get(id);
+    if (cached !== undefined) return cached;
+    const kids = rowKidsOf.get(id)!;
+    const h = kids.length ? 1 + Math.max(...kids.map((e) => subHeight(e.to))) : 1;
+    height.set(id, h);
+    return h;
+  };
+
+  /**
+   * Re-rank for one attempt. With `on`, every 2.9 candidate is pulled up to
+   * its decision's rank; a rank left empty by the move disappears and the
+   * ranks below it slide up — the chart gets shorter.
+   */
+  const applySameRow = (on: boolean): boolean => {
+    sideRow = new Map();
+    for (const [id, r] of baseRank) rank.set(id, r);
+    if (on) {
+      for (const c of sideLeafCandidates) {
+        sideRow.set(c.edge.to, c);
+        rank.set(c.edge.to, baseRank.get(c.parent)!);
+      }
+    }
+    rowKidsOf = on
+      ? new Map(
+          graph.nodes.map(
+            (n) => [n.id, kidsOf.get(n.id)!.filter((e) => !sideRow.has(e.to))] as const,
+          ),
+        )
+      : kidsOf;
+    const used = [...new Set(graph.nodes.map((n) => rank.get(n.id)!))].sort((a, b) => a - b);
+    if (used.length < 2) return false;
+    const remap = new Map(used.map((r, i) => [r, i] as const));
+    for (const n of graph.nodes) rank.set(n.id, remap.get(rank.get(n.id)!)!);
+    maxRank = used.length - 1;
+    // Every tree edge still spans exactly one band, every loop still points
+    // back: the invariants the rest of the planner is written against.
+    for (const [child, e] of treeEdge) {
+      if (sideRow.has(child)) {
+        if (rank.get(child)! !== rank.get(e.from)!) return false;
+      } else if (rank.get(child)! !== rank.get(e.from)! + 1) return false;
+    }
+    for (const e of joins) if (rank.get(e.to)! <= rank.get(e.from)!) return false;
+    for (const e of loops) if (rank.get(e.to)! > rank.get(e.from)!) return false;
+    height.clear();
+    for (const n of graph.nodes) subHeight(n.id);
+    return true;
+  };
 
   // DESIGN 1.5: leaf stacking, the packing move a too-wide tree gets before
   // being declined. All-or-nothing on the last rank, so the stacks replace a
@@ -239,6 +345,43 @@ export function layoutGrid(
       if (cached) return cached;
       const node = byId.get(id)!;
       const w = su(node);
+      // DESIGN 2.9: the flanks a decision's own row-mates need. The gap is
+      // derived from what lives on the run (2.7): the pill plus its node
+      // clearance, never less than a sibling gutter.
+      const flanks = kidsOf.get(id)!.filter((e) => sideRow.has(e.to));
+      // DESIGN 2.3: one gutter for the row, so a decision holding a leaf on
+      // each side is symmetric — the wider of the two runs sets both.
+      const flankGap = flanks.length
+        ? Math.max(
+            GUTTER.sibling,
+            ...flanks.map((e) => {
+              const pill = pills.get(e.id);
+              return pill ? pu(pill) + 2 * PILL_NODE_CLEAR : 0;
+            }),
+          )
+        : 0;
+      const flankOf = (dir: -1 | 1): { edge: GraphEdge; gap: number; width: number } | null => {
+        for (const e of flanks) {
+          if (sideRow.get(e.to)!.dir !== dir) continue;
+          return { edge: e, gap: flankGap, width: su(byId.get(e.to)!) };
+        }
+        return null;
+      };
+      const flankLo = flankOf(-1);
+      const flankHi = flankOf(1);
+      const padLo = flankLo ? flankLo.gap + flankLo.width : 0;
+      const padHi = flankHi ? flankHi.gap + flankHi.width : 0;
+      /** Seat the row-mates around a parent box centred at `anchor`. */
+      const seatFlanks = (kidAt: Map<string, number>, anchorAt: number): void => {
+        if (flankLo) {
+          build(flankLo.edge.to);
+          kidAt.set(flankLo.edge.to, anchorAt - w / 2 - padLo);
+        }
+        if (flankHi) {
+          build(flankHi.edge.to);
+          kidAt.set(flankHi.edge.to, anchorAt + w / 2 + flankHi.gap);
+        }
+      };
       let ext: SubExt;
       if (stacked.has(id)) {
         const kids = kidsOf.get(id)!;
@@ -252,9 +395,11 @@ export function layoutGrid(
         }
         ext = { lo: 0, hi: Math.max(w, colLo + kidW), anchor: w / 2, kidAt };
       } else {
-        const kidEdges = kidsOf.get(id)!;
+        const kidEdges = rowKidsOf.get(id)!;
         if (!kidEdges.length) {
-          ext = { lo: 0, hi: w, anchor: w / 2, kidAt: new Map() };
+          const kidAt = new Map<string, number>();
+          seatFlanks(kidAt, w / 2);
+          ext = { lo: -padLo, hi: w + padHi, anchor: w / 2, kidAt };
         } else {
           const hs = kidEdges.map((e) => subHeight(e.to));
           const deepest = Math.max(...hs);
@@ -299,8 +444,9 @@ export function layoutGrid(
             ...anchorKids.map((i) => anchorsRel[i]! + su(byId.get(ordered[i]!.to)!) / 2),
           );
           const anchor = (boxLo + boxHi) / 2;
-          const lo = Math.min(0, anchor - w / 2);
-          const hi = Math.max(cur, anchor + w / 2);
+          seatFlanks(kidAt, anchor);
+          const lo = Math.min(0, anchor - w / 2 - padLo);
+          const hi = Math.max(cur, anchor + w / 2 + padHi);
           ext = { lo, hi, anchor, kidAt };
         }
       }
@@ -326,7 +472,8 @@ export function layoutGrid(
 
   const room = scene.canvas.width - scene.canvas.margin * 2;
 
-  const attempt = (flipShallow: boolean): ChannelLayoutPlan | null => {
+  const attempt = (flipShallow: boolean, sameRow: boolean): ChannelLayoutPlan | null => {
+    if (!applySameRow(sameRow)) return decline('same-row ranks');
     let stacked = new Set<string>();
     let seated = seatAll(stacked, flipShallow);
     if (!seated) return null;
@@ -389,10 +536,15 @@ export function layoutGrid(
       | { kind: 'bus' }
       | { kind: 'trunk' }
       | { kind: 'side'; faceU: number }
+      | { kind: 'rowleaf'; dir: -1 | 1 }
       | { kind: 'port'; portU: number };
     const treeMode = new Map<string, TreeMode>();
     for (const p of graph.nodes) {
-      const kids = kidsOf.get(p.id)!;
+      for (const e of kidsOf.get(p.id)!) {
+        const s = sideRow.get(e.to);
+        if (s) treeMode.set(e.id, { kind: 'rowleaf', dir: s.dir });
+      }
+      const kids = rowKidsOf.get(p.id)!;
       if (!kids.length || stacked.has(p.id)) continue;
       const pU = anchorU.get(p.id)!;
       const r = rank.get(p.id)!;
@@ -503,6 +655,17 @@ export function layoutGrid(
           const a = anchorU.get(n.id)!;
           boxes.push({ lo: a - su(n) / 2, hi: a + su(n) / 2 });
         }
+      }
+      // DESIGN 2.9: the flank between a decision and its row-mate is not
+      // empty — the labeled run lives there, so a corridor clears it the way
+      // it clears a box.
+      for (const [leafId, s] of sideRow) {
+        const r = rank.get(leafId)!;
+        if (r < rLo || r > rHi || exempt.has(leafId) || exempt.has(s.parent)) continue;
+        const p = byId.get(s.parent)!;
+        const faceU = anchorU.get(s.parent)! + (s.dir * su(p)) / 2;
+        const nearU = anchorU.get(leafId)! - (s.dir * su(byId.get(leafId)!)) / 2;
+        boxes.push({ lo: Math.min(faceU, nearU), hi: Math.max(faceU, nearU) });
       }
       if (rHi >= maxRank && stackedLeaves.size) {
         for (const id of stackedLeaves) {
@@ -761,7 +924,9 @@ export function layoutGrid(
       let straightNeed = 0;
       let busy = false;
       for (const p of rowNodes[b]!) {
-        const kids = kidsOf.get(p.id)!;
+        // A 2.9 row-mate's run lives in its own row, so it asks nothing of
+        // any band: `rowKidsOf` is what this band has to hold.
+        const kids = rowKidsOf.get(p.id)!;
         if (!kids.length || stacked.has(p.id)) continue;
         for (const ke of kids) {
           const mode = modeOf(ke);
@@ -919,7 +1084,7 @@ export function layoutGrid(
       const kU = anchorU.get(ke.to)!;
       if (Math.abs(kU - pU0) < 1) return null;
       let bound = pU0;
-      for (const other of kidsOf.get(parentId)!) {
+      for (const other of rowKidsOf.get(parentId)!) {
         if (other === ke) continue;
         const oU = anchorU.get(other.to)!;
         if ((oU - pU0) * (kU - pU0) <= 0) continue; // other side
@@ -941,10 +1106,35 @@ export function layoutGrid(
     // parent's own bottom face and its nearest child's top face — exactly
     // the wall-to-wall centre 6.8 asks of a Z's middle run.
     for (const p of graph.nodes) {
-      const kids = kidsOf.get(p.id)!;
-      if (!kids.length) continue;
+      const kids = rowKidsOf.get(p.id)!;
       const pU = anchorU.get(p.id)!;
       const pBottom = bottomOf(p);
+      // DESIGN 2.9: one straight labeled run from the decision's side vertex
+      // to the leaf's near face. No rank drop, no bends, one arrowhead, and
+      // the pill on the run itself (6.5).
+      for (const e of kidsOf.get(p.id)!) {
+        const s = sideRow.get(e.to);
+        if (!s) continue;
+        const k = byId.get(e.to)!;
+        const v = rowC[rank.get(p.id)!]!;
+        const faceU = pU + (s.dir * su(p)) / 2;
+        const nearU = anchorU.get(e.to)! - (s.dir * su(k)) / 2;
+        const pill = pills.get(e.id);
+        planned.push({
+          edge: e,
+          pts: [
+            { u: faceU, v },
+            { u: nearU, v },
+          ],
+          pillRun: pill
+            ? [
+                { u: Math.min(faceU, nearU) + PILL_CLEAR, v },
+                { u: Math.max(faceU, nearU) - PILL_CLEAR, v },
+              ]
+            : undefined,
+        });
+      }
+      if (!kids.length) continue;
       if (stacked.has(p.id)) {
         const boxy = isBoxyShape(p.shape);
         const trunkU = boxy ? pU - su(p) / 2 + TRUNK_OFFSET : pU;
@@ -1687,7 +1877,13 @@ export function layoutGrid(
     return { layout: { width: totalW, height: totalH, warnings }, commit };
   };
 
-  const done = attempt(false) ?? attempt(true);
+  // DESIGN 2.9's second guard: the same-row seating is tried first, and a
+  // chart whose flank does not fit (or that the verifier turns down for any
+  // other reason) falls back to today's ranks, where the leaf drops a row.
+  const done =
+    (sideLeafCandidates.length ? (attempt(false, true) ?? attempt(true, true)) : null) ??
+    attempt(false, false) ??
+    attempt(true, false);
   if (!done) return null;
   done.commit();
   return done.layout;
