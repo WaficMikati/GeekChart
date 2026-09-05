@@ -23,6 +23,7 @@ import {
 import { planRoutes, type Extent, type OrthoRoute } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
 import { isBoxyShape, TRUNK_OFFSET } from './layout/stack.ts';
+import { checkRuntimeGeometry, type RuntimeEdge } from './layout/runtime-checks.ts';
 import { GRID, GUTTER, PANEL } from './tokens.ts';
 import { RULES } from './rules.ts';
 
@@ -216,6 +217,11 @@ export interface Drawing {
    * can read a hair tighter than the `getBBox()` it replaces.
    */
   extent: { x: number; y: number; width: number; height: number };
+  /** DESIGN 6.x's render-time geometry checks (`layout/runtime-checks.ts`),
+   *  run on this chart's final boxes and routes regardless of which engine
+   *  placed them. Empty on a clean chart — which the channel engine and the
+   *  safe layout always are, since they verify before they ever commit. */
+  runtimeWarnings: string[];
 }
 
 /**
@@ -739,6 +745,11 @@ function attemptDraw(
   // edges other than the one it belongs to (DESIGN 6.5) — not just the ones
   // that carry a label of their own.
   const edgeSegments: EdgeSegments[] = [];
+  // The raw, un-shortened route per edge — kept alongside `edgeSegments`'
+  // display-shortened one for the render-time geometry checks below, which
+  // want to see where a route actually departs its source's outline, not
+  // where the drawn line stops short of it for the standoff.
+  const runtimeEdges: RuntimeEdge[] = [];
   const endLabels: string[] = [];
   const sparks: string[] = [];
   // Kept out of `parts` and emitted last (DESIGN 8.5): plates and sparks paint
@@ -879,6 +890,13 @@ function attemptDraw(
       scene.edgeGapStart + backStart,
     );
     edgeSegments.push({ id: edge.id, points: line });
+    runtimeEdges.push({
+      id: edge.id,
+      from: edge.from,
+      to: edge.to,
+      points: marked,
+      endSide: route.endSide,
+    });
 
     // A corner is rounded to a third of the shorter run into it, capped, so a
     // tight elbow rounds less rather than bulging past where the line belongs.
@@ -1113,6 +1131,42 @@ function attemptDraw(
   const ey1 = Math.max(...eys1);
   const extent = { x: ex0, y: ey0, width: ex1 - ex0, height: ey1 - ey0 };
 
+  // Render-time invariant checks (see `layout/runtime-checks.ts`): run on
+  // every chart's final geometry, whichever engine placed it. The channel
+  // engine and the safe layout both verify their own routes before this
+  // point ever runs, so a violation here on one of those is an engine bug to
+  // fix, not a warning to surface — the old state/class/ER machinery is where
+  // this is expected to still find something.
+  // DESIGN 2.6: a panel's members are whatever nodes its own drawn box
+  // actually encloses — read back geometrically rather than off
+  // `cluster.nodes`, which names only a panel's *direct* children and misses
+  // a nested panel's own grandchildren (nested-subgraph.mmd, nested-depth-3),
+  // which sit inside the outer panel's box just as much as a direct child
+  // does.
+  const geometricMembers = new Map<string, string[]>();
+  for (const [panelId, box] of panels) {
+    geometricMembers.set(
+      panelId,
+      placed
+        .filter(
+          (n) =>
+            n.x >= box.x - 1 &&
+            n.y >= box.y - 1 &&
+            n.x + n.width <= box.x + box.width + 1 &&
+            n.y + n.height <= box.y + box.height + 1,
+        )
+        .map((n) => n.id),
+    );
+  }
+  const runtimeWarnings = checkRuntimeGeometry(
+    obstacles.map((o) => ({
+      id: o.id,
+      ...o.box,
+      members: geometricMembers.get(o.id),
+    })),
+    runtimeEdges,
+  );
+
   return {
     svg,
     width: size.width + pad * 2,
@@ -1125,6 +1179,7 @@ function attemptDraw(
       graph.clusters.flatMap((c) => c.nodes.map((nodeId) => [nodeId, c.id] as const)),
     ),
     extent,
+    runtimeWarnings,
   };
 }
 

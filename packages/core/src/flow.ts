@@ -778,6 +778,9 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
     ...phoneHeightWarning(framed.svg, options.display),
     // Layout-time findings (DESIGN 6.5's label truncation, today).
     ...(size.warnings ?? []),
+    // Render-time geometry findings (`layout/runtime-checks.ts`), run on the
+    // final boxes and routes regardless of which engine laid the chart out.
+    ...framed.runtimeWarnings,
   ];
 
   return {
