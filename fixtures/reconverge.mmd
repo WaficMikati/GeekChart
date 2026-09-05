@@ -1,0 +1,7 @@
+flowchart TD
+  A[Ticket<br/>student writes in] --> B{Bot can answer?}
+  B -->|Yes| C[Bot replies]
+  B -->|No| D[Human agent]
+  C -->|Still stuck| D
+  C -->|Solved| E[Ticket closed]
+  D --> E

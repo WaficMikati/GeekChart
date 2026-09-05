@@ -1253,7 +1253,24 @@ export function layoutGrid(
 
     /** Push a corridor outward until it clears every box in its rows by
      *  `clear` — 6.7's 24 for a return, 6.1's 16 for a forward join — and
-     *  every already-placed leg (track pitch, pill widths included). */
+     *  every already-placed leg (track pitch, pill widths included).
+     *
+     * `bandBuffer` widens the row-range test two legs are compared with: 0
+     * (every caller but the join corridors below) means "share an actual
+     * row", which is right for a loop-back group (6.14 already merges every
+     * loop sharing a target into one corridor before this ever runs, so two
+     * *different* loop corridors here only ever come from genuinely
+     * different spans) and for a wrap bus (1.6's own row offsets are already
+     * exact). A reconverging join has no such upfront grouping — two joins
+     * into two different targets one band apart (DESIGN 6.8, task-2's
+     * B→D/C→E) each own only the row *between* their own bands in this
+     * bookkeeping, but the corridor each one draws still runs into the
+     * shared band between those rows to make its own turn — so two such
+     * corridors can occupy the identical line despite never being read as
+     * "the same row" by the plain `rLo`/`rHi` check. Widening the test by
+     * one row is what makes that shared band collide instead of the two
+     * corridors reading as clear of each other and lining up on the same x
+     * (`grid ts`'s own `share a v-run` decline, before this parameter). */
     const settleCorridor = (
       side: -1 | 1,
       start: number,
@@ -1261,6 +1278,7 @@ export function layoutGrid(
       rHi: number,
       myPillU: number,
       clear: number,
+      bandBuffer = 0,
     ): number => {
       const boxes = rowSpanBoxes(rLo, rHi);
       let u = start;
@@ -1273,7 +1291,7 @@ export function layoutGrid(
           }
         }
         for (const leg of corridorLegs) {
-          if (leg.rHi < rLo || leg.rLo > rHi) continue;
+          if (leg.rHi < rLo - bandBuffer || leg.rLo > rHi + bandBuffer) continue;
           const sep = Math.max(TRACK, myPillU / 2 + 4, leg.pillU / 2 + 4);
           if (Math.abs(u - leg.u) < sep) {
             u = side === -1 ? leg.u - sep : leg.u + sep;
@@ -1439,6 +1457,19 @@ export function layoutGrid(
 
     // Corridors for multi-rank joins: adjacent to the target's own column
     // (DESIGN 6.13's shared corridor), on whichever side is clear.
+    //
+    // DESIGN 6.8: two reconverging joins whose row-spans overlap — including
+    // touching at one shared band, `settleCorridor`'s own `bandBuffer` — turn
+    // inside that band on the SAME side by default (both try the near side
+    // first), which is fine when their spans nest but crosses when they only
+    // overlap partway (task-2's B→D and C→E: one starts before the other
+    // ends and ends after it does — the "bump" shape a lone join always
+    // draws literally cannot avoid crossing another bump staggered like
+    // that, whichever one is drawn outermost). Putting them on OPPOSITE
+    // sides instead sidesteps the shape entirely: mirroring 6.14's own
+    // `flankTaken` for loop-backs, a join whose span overlaps an
+    // already-placed join's tries the side that one did NOT take, first.
+    const joinFlankTaken: { side: -1 | 1; rLo: number; rHi: number }[] = [];
     const joinCorridor = new Map<string, number>();
     for (const e of joins) {
       if (busArrival.has(e.id)) continue;
@@ -1461,10 +1492,20 @@ export function layoutGrid(
       const tLo = anchorU.get(t.id)! - su(t) / 2;
       const tHi = anchorU.get(t.id)! + su(t) / 2;
       const myPillU = pills.has(e.id) ? pu(pills.get(e.id)!) : 0;
+      const myRLo = rs + 1;
+      const myRHi = rt - 1;
+      const overlaps = (f: { rLo: number; rHi: number }): boolean =>
+        f.rHi + 1 >= myRLo && f.rLo - 1 <= myRHi;
+      const takenSide = joinFlankTaken.find((f) => overlaps(f))?.side;
+      const sideOrder: readonly (-1 | 1)[] = takenSide === 1 ? [-1, 1] : [1, -1];
       let placed: number | null = null;
-      for (const side of [1, -1] as const) {
+      for (const side of sideOrder) {
         const start = side === -1 ? tLo - LOOP_CLEAR : tHi + LOOP_CLEAR;
-        const u = settleCorridor(side, start, rs + 1, rt - 1, myPillU, EDGE_NODE_CLEAR);
+        // DESIGN 6.8: two reconverging joins one band apart both turn inside
+        // the band between them — the shared line `settleCorridor`'s own
+        // doc comment names — so the row-range test that separates them has
+        // to see that band as shared too, not just an exact row match.
+        const u = settleCorridor(side, start, rs + 1, rt - 1, myPillU, EDGE_NODE_CLEAR, 1);
         const sU = anchorU.get(e.from)!;
         const tU = anchorU.get(e.to)!;
         // The source-band run must cross only the source's own drops; the
@@ -1481,7 +1522,8 @@ export function layoutGrid(
         });
         if (srcBad || dstBad) continue;
         placed = u;
-        corridorLegs.push({ u, rLo: rs + 1, rHi: rt - 1, pillU: myPillU });
+        corridorLegs.push({ u, rLo: myRLo, rHi: myRHi, pillU: myPillU });
+        joinFlankTaken.push({ side, rLo: myRLo, rHi: myRHi });
         break;
       }
       if (placed === null) return decline(`join ${e.id} has no clean corridor`);
@@ -1656,6 +1698,19 @@ export function layoutGrid(
         busy && lanes ? 2 * (TRACK + laneZone) : 0,
         lanes ? laneZone + TRACK : 0,
         exits ? 2 * TRACK * (exits + 1) : 0,
+        // DESIGN 6.9: a same-band drop's own pill (centred in the band,
+        // `onLine`'s own placement) sits fine beside a single lane through
+        // the same band — `laneV`'s one slot already clears it at the plain
+        // `lanes ? laneZone + TRACK : 0` floor above (login-flow's MFA→OTP
+        // pill and MFA→S's own lane share a band this way, comfortably). A
+        // SECOND lane in that band — two joins reconverging one band apart,
+        // task-2's B→D and C→E, whose arrival and departure lanes land in
+        // the identical shared band — pushes the closer one a further
+        // `TRACK` toward the pill (`laneV`'s own `slot*k` term), which is
+        // what actually closes the gap; growing every band regardless of
+        // lane count (measured against login-flow) grows the whole chart
+        // past DESIGN 1.4's aspect cap for no reason the extra room fixes.
+        straightNeed && lanes >= 2 ? straightNeed + (lanes - 1) * TRACK + PILL_EDGE_CLEAR : 0,
       );
     }
     const bandV = roundUp(bandNeed, GRID);

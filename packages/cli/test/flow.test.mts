@@ -2622,3 +2622,40 @@ describe('DESIGN 1.5, mirrored source stack', () => {
     assert.ok(sharedX !== undefined, 'every source shares one trunk x, not its own private route');
   });
 });
+
+describe('DESIGN 6.8, reconverging join lanes', () => {
+  // fixtures/reconverge.mmd: the bot-triage chart from the task brief. B→D
+  // and C→E are both multi-rank joins, one band apart — B→D arrives at D
+  // exactly where C→D (D's ordinary tree edge) already does, and C→E
+  // arrives at E exactly where D→E does. Before DESIGN 6.8's lane
+  // separation, the two joins' side corridors landed on the same line
+  // ("share a v-run") and the chart fell to the safe layout.
+  const source = `flowchart TD
+  A[Ticket<br/>student writes in] --> B{Bot can answer?}
+  B -->|Yes| C[Bot replies]
+  B -->|No| D[Human agent]
+  C -->|Still stuck| D
+  C -->|Solved| E[Ticket closed]
+  D --> E
+`;
+
+  test('a reconverging DAG that used to share a v-run upgrades to a designed layout at 612', async () => {
+    const reply = await mount(source, { display: 612, motion: false });
+    const svg = await session.page.evaluate(
+      () => document.querySelector('svg.gc-chart')!.outerHTML,
+    );
+    assert.ok(svg.includes('data-gc-engine="channels"'), 'the channel engine drew it');
+    assert.ok(!svg.includes('data-gc-layout="safe"'), 'not the plain safe column');
+    assert.deepEqual(reply.warnings, [], reply.warnings.join(' | '));
+  });
+
+  test('both merges land as one trunk, one arrowhead per side, per 6.8', async () => {
+    await mount(source, { display: 612, motion: false });
+    const counts = await session.page.evaluate(() => ({
+      intoD: document.querySelectorAll('.gc-arrow[data-id$="_D_0"]').length,
+      intoE: document.querySelectorAll('.gc-arrow[data-id$="_E_0"]').length,
+    }));
+    assert.equal(counts.intoD, 1, 'B→D and C→D merge into a single arrowhead on D');
+    assert.equal(counts.intoE, 1, 'C→E and D→E merge into a single arrowhead on E');
+  });
+});
