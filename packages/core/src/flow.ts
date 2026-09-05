@@ -433,7 +433,7 @@ export function phoneHeightWarning(svg: string, display: number | undefined): st
   if (height <= width * 2) return [];
   const screens = (height / (width * 2)).toFixed(1);
   return [
-    `1.7 on a ${display}px phone this chart is about ${screens} screens tall — keep phone charts to two screens (fewer boxes, or two short charts)`,
+    `1.7 on a ${display}px phone this chart is taller than twice its width (about ${screens} phone screens) — try direction LR before cutting content; past that, fewer boxes or two short charts`,
   ];
 }
 
