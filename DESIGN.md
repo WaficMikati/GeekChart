@@ -115,6 +115,18 @@ and the check that enforces it cannot drift apart.
   bottom-left corner, not its top. (Added 2026-09-03: rings of 5/7/9 sent the
   closing edge out the top while the left face sat empty and nearer,
   reading as a wrong turn — the user's own review, three charts.)
+- **1.10** **The safe layout, and the end of the old fallback.** A flowchart
+  the planner cannot give one of its designed shapes is drawn in the safe
+  layout: every node on its own rank, one column (the widest node sets it),
+  every edge either a straight drop between neighbours or a run through a
+  reserved side corridor (6.7's clearances, 6.14's shared trunks). It is
+  deliberately plain and can always be drawn legally — tall is the worst
+  case, broken is impossible. A flowchart NEVER falls back to the
+  pre-rewrite router: a drawing nobody verified is worse than a plain one
+  that holds every rule. (Added 2026-09-05, user's ruling on seeing an
+  old-fallback render: "why are we using it as a fallback? that makes no
+  sense." The old machinery remains only behind the non-flowchart types
+  until they migrate.)
 - **1.9** **Chain wrapping is a reading-order ribbon, wrapped at the last
   possible moment.** Columns = as many as the declared display fits at full
   box-plus-gutter pitch — a chain never wraps earlier than the width forces
