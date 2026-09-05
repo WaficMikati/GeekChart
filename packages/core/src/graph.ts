@@ -339,8 +339,16 @@ export interface Graph {
    * stamps it as `data-gc-layout="safe"` beside `data-gc-engine`, so a
    * reader (and the gate) can tell a plain last-resort column from a shape
    * the planner actually chose.
+   *
+   * `'source-stack'` (DESIGN 1.5, mirrored, set by `layout/source-stack.ts`)
+   * is a *designed* shape, not a fallback — it never earns the `safe` stamp
+   * — but its own downstream chain is seated by the safe layout's rank
+   * mechanics all the same, so it shares the same "cannot trade height for
+   * width" property `flow.ts`'s framing has to know about. Kept a distinct
+   * value rather than reusing `'safe'` precisely so the gate can still tell
+   * the two apart.
    */
-  layoutKind?: 'safe';
+  layoutKind?: 'safe' | 'source-stack';
 }
 
 /** Mermaid's shape vocabulary, mapped onto the shapes we actually draw. */

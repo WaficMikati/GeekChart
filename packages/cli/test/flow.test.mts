@@ -2542,3 +2542,83 @@ describe('rings, DESIGN 1.8', () => {
     });
   }
 });
+
+describe('DESIGN 1.5, mirrored source stack', () => {
+  // fixtures/source-stack.mmd: four plain sources feeding one collector,
+  // whose row cannot stand at a 612px display — the case that used to fall
+  // all the way to the safe layout's plain column ("a four-source pipeline
+  // at 612 drew the sources as a false sequence with the hub parked
+  // mid-column and four improvised routes").
+  const source = `flowchart LR
+  A[LMS events] --> E[Collector]
+  B[CRM] --> E
+  C[Payments] --> E
+  D[Website] --> E
+  E --> F[Clean<br/>and validate]
+  F --> G[Model<br/>join and enrich]
+  G --> H[Student progress]
+  G --> I[Enrollment funnel]
+  G --> J[Revenue]
+`;
+
+  test('a source row that cannot stand at 612 upgrades to a designed stack, not the safe layout', async () => {
+    const reply = await mount(source, { display: 612, motion: false });
+    const svg = await session.page.evaluate(
+      () => document.querySelector('svg.gc-chart')!.outerHTML,
+    );
+    assert.ok(svg.includes('data-gc-engine="channels"'), 'the channel engine drew it');
+    assert.ok(!svg.includes('data-gc-layout="safe"'), 'not the plain safe column');
+    assert.deepEqual(reply.warnings, [], reply.warnings.join(' | '));
+  });
+
+  test('one collecting trunk, one arrowhead into the collector, the hub after the stack and centred on it', async () => {
+    await mount(source, { display: 612, motion: false });
+    const geometry = await session.page.evaluate(() => {
+      const boxOf = (id: string) => {
+        const rect = document
+          .querySelector<SVGGraphicsElement>(`.gc-node[data-id="${id}"] .gc-outline`)
+          ?.getBBox();
+        return rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null;
+      };
+      const edges = ['A', 'B', 'C', 'D'].map(
+        (id) => document.querySelector<SVGPathElement>(`.gc-edge[data-id="L_${id}_E_0"]`)?.getAttribute('d') ?? null,
+      );
+      const heads = document.querySelectorAll('.gc-arrow[data-id$="_E_0"]');
+      return {
+        edges,
+        headCount: heads.length,
+        hub: boxOf('E'),
+        sources: ['A', 'B', 'C', 'D'].map(boxOf),
+      };
+    });
+    assert.ok(
+      geometry.edges.every((d) => d),
+      'every source has a route into the collector',
+    );
+    assert.equal(geometry.headCount, 1, 'a single arrowhead into the collector — one trunk, one head');
+
+    const { hub, sources } = geometry;
+    assert.ok(hub && sources.every((s) => s));
+    // "Hub after the stack, centred on it, never interleaved beside it."
+    const stackBottom = Math.max(...sources.map((s) => s!.y + s!.height));
+    assert.ok(
+      hub!.y >= stackBottom - 1,
+      `the hub (y ${hub!.y}) sits below the whole source stack (bottom ${stackBottom}), not beside it`,
+    );
+    const stackCentreX = sources[0]!.x + sources[0]!.width / 2;
+    assert.ok(
+      Math.abs(hub!.x + hub!.width / 2 - stackCentreX) <= 1,
+      `the hub is centred on the stack's own x (${stackCentreX}), not off to one side`,
+    );
+
+    // One collecting trunk: every source's own route shares one identical
+    // vertical run's x, not four independent paths to the hub.
+    const trunkXsPerEdge = geometry.edges.map((d) => {
+      const xs = ptsOf(d!).map((p) => Math.round(p.x));
+      return new Set(xs.slice(1, -1));
+    });
+    const candidateXs = [...trunkXsPerEdge[0]!];
+    const sharedX = candidateXs.find((x) => trunkXsPerEdge.every((xs) => xs.has(x)));
+    assert.ok(sharedX !== undefined, 'every source shares one trunk x, not its own private route');
+  });
+});

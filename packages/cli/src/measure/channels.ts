@@ -496,8 +496,11 @@ export const sameRowLeaf: Check = {
     // definition — that is the whole of what it promises. 2.9 is a rule about
     // which designed shape a decision earns, and there is no designed shape
     // here: the chart is on the safe layout precisely because every one of
-    // them declined.
-    if (svg.dataset.gcLayout === 'safe') return [];
+    // them declined. DESIGN 1.5's mirrored source stack shares this for its
+    // own downstream chain — the stack, trunk and hub are designed, but
+    // whatever continues from the hub is seated by the same raw rank
+    // mechanics, with no designed shape of its own to hold 2.9 either.
+    if (svg.dataset.gcLayout === 'safe' || svg.dataset.gcLayout === 'source-stack') return [];
     const ids = nodeById(ctx);
     const meta = edgeMeta(ctx).filter((m) => m.from && m.to && ids.has(m.from) && ids.has(m.to));
     // Forward out-degree only: a leaf whose single exit loops back to an

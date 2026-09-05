@@ -755,10 +755,13 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   // "tall is the worst case, broken is impossible". Framing it against 1.4's
   // cap does not shorten it; it guillotines the bottom of the column, which
   // is the same clipping the `displayMet` branch above already refuses. Same
-  // `Infinity` override, same reason.
+  // `Infinity` override, same reason. DESIGN 1.5's mirrored source stack
+  // shares the property — its own downstream chain is seated by the same
+  // safe-layout rank mechanics — without earning the `safe` stamp itself, so
+  // any `layoutKind` at all is read as "tall by construction" here.
   const fitAgainst = !displayMet
     ? { ...baseScene.canvas, maxAspect: Infinity }
-    : graph.layoutKind === 'safe'
+    : graph.layoutKind
       ? { ...scene.canvas, maxAspect: Infinity }
       : scene.canvas;
   const framed = {

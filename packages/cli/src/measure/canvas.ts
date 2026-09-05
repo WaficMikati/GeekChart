@@ -149,14 +149,30 @@ export const aspect: Check = {
     // clip the bottom of the column off the canvas, so the reading a tall
     // safe render deserves is "this chart never found a shape", which is a
     // WARN pointing at the split 1.4 actually wants.
-    return svg.dataset.gcLayout === 'safe'
-      ? [
-          {
-            severity: 'warn',
-            message: `1.4 safe layout is ${h} tall on ${w} — no designed shape fitted; split the chart`,
-          },
-        ]
-      : [{ severity: 'fail', message: `1.4 taller than ${CANVAS.maxAspect}×w (${h})` }];
+    //
+    // DESIGN 1.5's mirrored source stack (`data-gc-layout="source-stack"`)
+    // shares the property for the same reason: its own downstream chain is
+    // seated by the safe layout's own rank mechanics, so it is exactly as
+    // tall-by-construction as a plain safe column even though it is a
+    // designed shape, not a fallback — a WARN naming the real cause, not the
+    // FAIL a chart with room to go wide instead would earn.
+    if (svg.dataset.gcLayout === 'safe') {
+      return [
+        {
+          severity: 'warn',
+          message: `1.4 safe layout is ${h} tall on ${w} — no designed shape fitted; split the chart`,
+        },
+      ];
+    }
+    if (svg.dataset.gcLayout === 'source-stack') {
+      return [
+        {
+          severity: 'warn',
+          message: `1.4 mirrored source stack is ${h} tall on ${w} — its own downstream chain has no room to go wide; split the chart`,
+        },
+      ];
+    }
+    return [{ severity: 'fail', message: `1.4 taller than ${CANVAS.maxAspect}×w (${h})` }];
   },
 };
 

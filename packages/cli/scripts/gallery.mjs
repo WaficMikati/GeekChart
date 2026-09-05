@@ -121,6 +121,7 @@ const GROUPS = [
       ['login-flow', 'Login flow', 'flowchart'],
       ['back-to-start', 'Back to start', 'flowchart'],
       ['hub-with-returns', 'Hub with returns', 'flowchart'],
+      ['source-stack', 'Mirrored source stack', 'flowchart'],
     ],
   },
   {

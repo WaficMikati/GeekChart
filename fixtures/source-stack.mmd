@@ -1,0 +1,10 @@
+flowchart LR
+  A[LMS events] --> E[Collector]
+  B[CRM] --> E
+  C[Payments] --> E
+  D[Website] --> E
+  E --> F[Clean<br/>and validate]
+  F --> G[Model<br/>join and enrich]
+  G --> H[Student progress]
+  G --> I[Enrollment funnel]
+  G --> J[Revenue]
