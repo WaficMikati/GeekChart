@@ -68,7 +68,15 @@ and the check that enforces it cannot drift apart.
   A fan this way costs the shared box width plus 24, not the width doubled —
   two 200-wide fans either side of a decision come to 224 + 32 + 224, not
   332 + 32 + 332. Stacking is applied to the widest fans first and stops as
-  soon as the layout fits. If stacking every fan still is not enough, DESIGN
+  soon as the layout fits. The rule also runs **mirrored, for sources**:
+  two or more plain sources feeding one hub, when their row cannot stand,
+  stack in one column joined by a single collecting trunk in a 24 indent
+  strip on their right — each source a short branch off its right face —
+  descending to one arrival into the hub, which sits after the stack,
+  centred on it, never interleaved beside it; whatever chain continues
+  from the hub packs by its own rules (1.9) below. (Added 2026-09-05: a
+  four-source pipeline at 612 drew the sources as a false sequence with
+  the hub parked mid-column and four improvised routes.) If stacking every fan still is not enough, DESIGN
   1.2's chain fold gets a turn on top of it; past that, the chart is accepted
   as wide rather than shrunk — a gate WARN, not a FAIL. (Added 2026-08-28;
   revised the same day from a fan centred on the parent, which cost the
