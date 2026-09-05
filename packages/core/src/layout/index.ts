@@ -356,9 +356,23 @@ export async function layout(
     // there is nothing below this branch for it to fall to. The
     // `GC_GRID_DEBUG` decline lines stay: they now say why a chart got the
     // plain column instead of a shape someone designed.
-    const laid =
+    let laid =
       layoutChannels(graph, channelPlan, scene, measureLine, packToDisplay) ??
       layoutSafe(graph, scene, measureLine);
+    // DESIGN 1.1: pack before you accept-wider. A designed shape that could
+    // not reach the declared cap is only allowed to ship wide if nothing
+    // narrower exists — and the safe layout is the ultimate packer, so it
+    // gets a turn before the WARN. Narrower wins; ties keep the designed
+    // shape. (python-or-java at a 358 phone: the wrap path stalls at 592,
+    // the safe column reaches the cap — before this, removing the old
+    // fallback shipped the 592 with 8px type.)
+    if (packToDisplay) {
+      const room = scene.canvas.width;
+      if (laid.width > room) {
+        const plain = layoutSafe(graph, scene, measureLine);
+        if (plain.width < laid.width) laid = plain;
+      }
+    }
     pillMeasurer.done();
     // No `square()` here: the engine's own grid is already exact, and the
     // banding pass snaps *centres* to the grid one at a time — which can

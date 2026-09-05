@@ -68,7 +68,19 @@ and the check that enforces it cannot drift apart.
   A fan this way costs the shared box width plus 24, not the width doubled —
   two 200-wide fans either side of a decision come to 224 + 32 + 224, not
   332 + 32 + 332. Stacking is applied to the widest fans first and stops as
-  soon as the layout fits. The rule also runs **mirrored, for sources**:
+  soon as the layout fits. A **labeled** branch is not disqualifying: the
+  indent strip widens to hold the widest branch's pill (2.7) plus what
+  drawing one costs beyond the plain 24/32 — the turn off the trunk, the
+  stub either side of the pill, the standoff into the leaf's face — each
+  branch's pill centred on its own horizontal run (6.5), the vertical trunk
+  staying shared and pill-free. Measured off a 3-word "no" pill: strip =
+  pill + 60, rounded to the grid. This only ever widens a fan already worth
+  stacking; a plain two-leaf decision keeps preferring 2.9's flanks, which
+  are narrower still, and only turns to this once nothing shares its row to
+  make room for a flank. (Added 2026-09-05: `stackableParents` had turned
+  every labeled fan down outright, leaving no destination for one once the
+  pre-rewrite router was retired — see 1.10.) The rule also runs
+  **mirrored, for sources**:
   two or more plain sources feeding one hub, when their row cannot stand,
   stack in one column joined by a single collecting trunk in a 24 indent
   strip on their right — each source a short branch off its right face —

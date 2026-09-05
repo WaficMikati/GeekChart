@@ -706,21 +706,32 @@ describe('display: python-or-java-short', () => {
     );
   });
 
-  test('500: the leaf-stack trunk leaves a diamond parent at its own bottom centre, DESIGN 1.5', async () => {
-    // Wide enough that the stacked fan (~328 units) fits under the display
-    // on its own — DESIGN 1.5's own leaf stacking wins outright here, no
-    // need for 1.6's sibling-wrap on top.
-    await mount(shortDecision(), { display: 500 });
-    // DESIGN 1.10, 2026-09-05: this chart does not reach the declared display
-    // any more. What got it there was DESIGN 1.5's leaf stacking over
-    // *labelled* branches — a fan whose tree edge carries a pill — which only
-    // the old path can seat: `stackableParents` (grid.ts) turns such a fan
-    // down at `pills.has(te.id)`. 1.10 removed the old path, so the chart
-    // falls to the safe layout: full type size, no scale, and wider than
-    // asked, which is 1.1's WARN rather than a shrink. Everything below is
-    // the 1.5/1.6 picture and comes back the day the channel engine can seat
-    // a pill on a stacked-leaf bus branch.
-    if (await onSafeLayout()) return;
+  // DESIGN 1.5 (2026-09-05): a labeled fan can stack now, but only when it is
+  // cheaper than the alternatives already on offer for exactly two leaves —
+  // DESIGN 2.9's own flanks, one either side of the decision. A *root*
+  // decision like this fixture's own Q1 has a whole row to itself, so 2.9's
+  // flanks always have room and always win, at any display down to the
+  // point 1.6's wrap takes over instead (the "358" case below) — DESIGN 1.5
+  // never gets a turn. A *nested* decision competing for its row with a
+  // sibling is a different shape: 2.9 needs room 2.9 does not have, and the
+  // stack shows up as advertised. Verified with the same PY/JAVA content and
+  // labels this file uses elsewhere, nested one level under a first
+  // decision so Q1 shares Start's row with Aside.
+  const nestedDecision = () => `flowchart TB
+  A[Start]
+  A --> Q0{"First?"}
+  Q0 -->|left| SIDE[Aside]
+  Q0 -->|right| Q1{"Data, scripting, or web prototyping?"}
+  Q1 -->|yes| PY["Python<br/>Pandas · Django · #1 on TIOBE"]
+  Q1 -->|no| JAVA["Java<br/>Spring · Android · top 5 on TIOBE"]
+`;
+
+  test('650: the leaf-stack trunk leaves a diamond parent at its own bottom centre, DESIGN 1.5', async () => {
+    // Nested under Q0, sharing Start's second rank with Aside — narrow
+    // enough (per DESIGN 2.9) that Q1's own flanks lose their room, wide
+    // enough that the stacked fan fits without 1.6's wrap on top.
+    await mount(nestedDecision(), { display: 650 });
+    assert.ok(!(await onSafeLayout()), 'expected a designed channel layout, not the safe fallback');
 
     // DESIGN 1.5's ordinary hanging port (parent.x + 12) is a point in empty
     // space under a diamond — the outline only reaches its own bounding box
@@ -733,7 +744,11 @@ describe('display: python-or-java-short', () => {
     });
     const q1CentreX = q1.x + q1.width / 2;
 
-    const buses = await busEdges(session);
+    // Q0's own edge into Q1 is a DESIGN 1.6 wrap-bus (`.gc-wrap`), not a
+    // DESIGN 1.5 leaf stack — Q1 needed its own row to have any room to
+    // stack in at all. Only Q1's own two children are this test's own
+    // leaf-stack fan.
+    const buses = (await busEdges(session)).filter((e) => e.from === 'Q1');
     assert.equal(buses.length, 2, `expected a 2-leaf stack under Q1, found ${buses.length} bus edges`);
     for (const e of buses) {
       assert.ok(
@@ -742,17 +757,17 @@ describe('display: python-or-java-short', () => {
       );
       // DESIGN 1.5: a leaf hangs off a non-boxy parent's centre by at least
       // 20, not off its left edge by 32 — `leaf.x = parent centre + 20` is
-      // the floor; DESIGN 6.10 can still grow it further right to seat a
-      // wide label ("no, enterprise or Android") beside the trunk.
+      // the floor; DESIGN 2.7 can still grow it further right to seat the
+      // branch's own label beside the trunk.
       assert.ok(
         e.toBox!.x >= q1CentreX + 20 - 0.5,
         `${e.id}: leaf x is ${e.toBox!.x}, expected at least parent centre + 20 (${q1CentreX + 20})`,
       );
     }
 
-    // DESIGN 6.11: "no, enterprise or Android" used to read as sitting
-    // within 16 of Q1→PY's own trunk once both edges left the diamond from
-    // the same point — a shared start DESIGN 6.4 allows, not "another edge".
+    // DESIGN 6.11: a branch label must not read as sitting on a foreign
+    // edge — both of Q1's own edges leave the diamond from the same point
+    // (a shared start DESIGN 6.4 allows, not "another edge").
     const labelOnEdge = await gateFindings('6.11-label-on-edge');
     assert.deepEqual(
       labelOnEdge,

@@ -1185,8 +1185,13 @@ describe('channel engine — DESIGN 1.6 sibling wrapping', () => {
   // centred the parent on — the deepest branch kept the axis — which is a
   // third exclusion 2.8 does not name (it names two: a 2.9 flank leaf and a
   // stacked leaf list). Start sat 72 right of the centre of everything under
-  // it. Counting every child's column instead wraps Beta onto its own row
-  // (1.6, after 1.5's stacking) and puts the whole chart back on one axis.
+  // it. Counting every child's column fixes that.
+  // (Revised 2026-09-05: Second?'s own labeled fan, C/D, can stack now —
+  // DESIGN 1.5 accepts a labeled leaf fan — and stacking is narrow enough
+  // that Beta and Second? fit side by side without ever reaching DESIGN
+  // 1.6's wrap, which is what this test used to exercise at this display.
+  // 2.8's exclusion for a stacked leaf list still holds one level up: Start
+  // centres on Q1/Beta/Second?'s own boxes, not Second?'s stacked C/D.)
   test('two-diamonds at display 620 centres every parent on its whole subtree', async () => {
     const reply = await mount(fixture('two-diamonds.mmd'), { display: 620 });
     assert.ok(isChannels(reply.svg), 'two-diamonds at 620 should stay on the channel engine');
@@ -1199,13 +1204,31 @@ describe('channel engine — DESIGN 1.6 sibling wrapping', () => {
         return b.x + b.width / 2;
       };
       const ids = ['A', 'Q1', 'B', 'Q2', 'C', 'D'];
-      const boxes = ids.map(box);
+      // DESIGN 2.8: a stacked leaf list is one of the two things a column
+      // leaves out, on purpose — "that column is drawn by the stacking
+      // rule, not by 2.8". Q2 -->|yes|C / -->|no|D are Q2's own labeled
+      // leaves (DESIGN 1.5 stacks them now that a labeled fan can stack at
+      // all): once they ride the leaf-stack bus (`.gc-bus`, no `.gc-wrap`),
+      // they hang off Q2 the same way any stacked column does, and Start's
+      // own centring is measured against Q1/B/Q2 alone, the same column the
+      // engine itself centred on.
+      const stackedLeaf = (id: string) => {
+        const e = svg.querySelector(`.gc-edge[data-to="${id}"]`);
+        return Boolean(e?.classList.contains('gc-bus') && !e.classList.contains('gc-wrap'));
+      };
+      const subtreeIds = ids.slice(1).filter((id) => !stackedLeaf(id));
+      const subtreeBoxes = subtreeIds.map(box);
+      const bBox = box('B');
+      const q2Box = box('Q2');
       return {
         width: svg.viewBox.baseVal.width,
         centres: Object.fromEntries(ids.map((id) => [id, centre(id)])),
         // The extent of everything below Start — the column 2.8 centres it on.
-        subLo: Math.min(...boxes.slice(1).map((b) => b.x)),
-        subHi: Math.max(...boxes.slice(1).map((b) => b.x + b.width)),
+        subLo: Math.min(...subtreeBoxes.map((b) => b.x)),
+        subHi: Math.max(...subtreeBoxes.map((b) => b.x + b.width)),
+        // Q1's own children's row, the same restricted extent one level down.
+        q1RowLo: Math.min(bBox.x, q2Box.x),
+        q1RowHi: Math.max(bBox.x + bBox.width, q2Box.x + q2Box.width),
       };
     });
     assert.ok(shape.width <= 620, `two-diamonds at 620 came out ${shape.width} wide`);
@@ -1214,13 +1237,23 @@ describe('channel engine — DESIGN 1.6 sibling wrapping', () => {
       Math.abs(shape.centres['A']! - subCentre) <= 1,
       `Start sits ${(shape.centres['A']! - subCentre).toFixed(1)} off its subtree's centre`,
     );
-    // Every rank on one axis is what the wrap buys; the old seating had
-    // Start and both diamonds at 308 with Beta stranded at 60.
-    for (const id of ['Q1', 'B', 'Q2'])
-      assert.ok(
-        Math.abs(shape.centres[id]! - shape.centres['A']!) <= 1,
-        `${id} is ${(shape.centres[id]! - shape.centres['A']!).toFixed(1)} off the chart's axis`,
-      );
+    // Start and Q1 share the axis every ancestor of an even pair keeps.
+    assert.ok(
+      Math.abs(shape.centres['Q1']! - shape.centres['A']!) <= 1,
+      `Q1 is ${(shape.centres['Q1']! - shape.centres['A']!).toFixed(1)} off the chart's axis`,
+    );
+    // DESIGN 1.1/1.5: Q2's own labeled fan (C, D) is narrow enough to stack
+    // now that a labeled fan can stack at all — narrow enough that B and Q2
+    // fit side by side without 1.6's wrap, a better packing than the wrap
+    // this test used to exercise at this display. Neither sibling need share
+    // Start's own axis on its own any more (that was 1.6's wrap centring
+    // every single-item row on it); what DESIGN 2.8 still asks is that Q1
+    // itself centres on the two of them.
+    const q1RowCentre = (shape.q1RowLo + shape.q1RowHi) / 2;
+    assert.ok(
+      Math.abs(shape.centres['Q1']! - q1RowCentre) <= 1,
+      `Q1 sits ${(shape.centres['Q1']! - q1RowCentre).toFixed(1)} off the centre of B and Q2's own boxes`,
+    );
     assert.deepEqual(await gateFails(), []);
   });
 });

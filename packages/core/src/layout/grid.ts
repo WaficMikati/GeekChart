@@ -407,14 +407,17 @@ export function layoutGrid(
 
   // DESIGN 1.5: leaf stacking, the packing move a too-wide tree gets before
   // being declined. All-or-nothing on the last rank, so the stacks replace a
-  // whole row rather than hanging beside one (2.3's shared rows).
+  // whole row rather than hanging beside one (2.3's shared rows). A labeled
+  // leaf edge is no longer disqualifying (revised 2026-09-05): the stack's
+  // own indent strip now derives from the branch pills it carries (2.7), so
+  // there is no shape left that only the retired old path could draw.
   const stackableParents = (): Set<string> | null => {
     if (!TB) return null;
     const parents = new Set<string>();
     for (const n of graph.nodes) {
       if (rank.get(n.id)! !== maxRank) continue;
       const te = treeEdge.get(n.id);
-      if (!te || pills.has(te.id)) return null;
+      if (!te) return null;
       if (kidsOf.get(n.id)!.length > 0 || touched.has(n.id)) return null;
       parents.add(te.from);
     }
@@ -425,17 +428,6 @@ export function layoutGrid(
       if (kids.some((e) => rank.get(e.to)! !== maxRank)) return null;
     }
     return parents;
-  };
-
-  /**
-   * DESIGN 1.5's own shape: two or more children, all of them terminal and
-   * touched by nothing else. `stackableParents` adds the pill clause and the
-   * all-or-nothing last row on top of this; 1.6 uses the bare shape to know
-   * when a too-wide row is a leaf fan that stacking owns.
-   */
-  const leafFan = (pid: string): boolean => {
-    const kids = kidsOf.get(pid)!;
-    return kids.length >= 2 && kids.every((e) => !kidsOf.get(e.to)!.length && !touched.has(e.to));
   };
 
   // SEAT — recursive tidy tree over the cross axis. Subtrees are seated
@@ -511,7 +503,31 @@ export function layoutGrid(
       if (stacked.has(id)) {
         const kids = kidsOf.get(id)!;
         const boxy = isBoxyShape(node.shape);
-        const colLo = boxy ? LEAF_INDENT : w / 2 + LEAF_CENTRE_OFFSET;
+        // DESIGN 1.5 + 2.7: a labeled fan's indent strip is derived from its
+        // own branch pills, the same way any other channel is — widest
+        // branch pill plus its 16 stubs on each side (2.7's own derivation).
+        // Unlike an ordinary fan's mirrored leg, this run also has to pay for
+        // getting there at all: the one turn the trunk spends leaving the
+        // vertical bus for the horizontal branch (TURN, at the near end) and
+        // the standoff into the leaf's own face, arrowhead included, at the
+        // far end (measured off python-or-java-short's own render: 13.5,
+        // rounded up for a margin) — ink `2.7-fan-legs-mirror` does not
+        // count as the branch's own stub, but the strip still has to hold it
+        // besides the stub. An unlabeled fan is untouched: the derivation
+        // floors at the plain indent every fan already had.
+        const branchPillW = Math.max(
+          0,
+          ...kids.map((e) => {
+            const pill = pills.get(e.id);
+            return pill ? pu(pill) : 0;
+          }),
+        );
+        const labelRun = branchPillW
+          ? roundUp(branchPillW + 2 * BRANCH_STUB + TURN + 16, GRID)
+          : 0;
+        const colLo = boxy
+          ? TRUNK_OFFSET + Math.max(LEAF_INDENT - TRUNK_OFFSET, labelRun)
+          : w / 2 + Math.max(LEAF_CENTRE_OFFSET, labelRun);
         const kidW = Math.max(...kids.map((e) => su(byId.get(e.to)!)));
         const kidAt = new Map<string, number>();
         for (const e of kids) {
@@ -888,12 +904,12 @@ export function layoutGrid(
    * label keeps its place on a run — so the derivation buys it before it
    * gives up on the placement. Returns false when nothing can wrap further.
    */
-  const narrowWidestBranchPill = (): boolean => {
+  const narrowWidestBranchPill = (anyPill = false): boolean => {
     let best: { id: string; pill: Pill; was: number } | null = null;
     for (const n of graph.nodes) {
       const kids = rowKidsOf.get(n.id)!;
-      if (kids.length !== 2) continue;
-      for (const e of kids) {
+      if (!anyPill && kids.length !== 2) continue;
+      for (const e of anyPill ? graph.edges.filter((ed) => ed.from === n.id) : kids) {
         const pill = pills.get(e.id);
         if (!pill || (best && pill.width <= best.was)) continue;
         const narrower = narrowPill(pill, scene, measureLine);
@@ -966,16 +982,30 @@ export function layoutGrid(
           ];
           if (!wrappedParents.length) continue; // nothing wrapped
           // A lone fan of leaves is DESIGN 1.5's, not 1.6's — 1.1 names the
-          // order, and the old path can stack a fan whose branches carry
-          // labels where this planner cannot. Running a column of leaves down
-          // the side on a wrap bus instead is a worse picture of the same
-          // rule (python-or-java-short at 500: two labeled leaves off one
-          // diamond, which 1.5 indents under it).
-          if (wrappedParents.every((pid) => !packing.has(pid) && leafFan(pid))) continue;
+          // order. This used to guard a gap: the old path could stack a fan
+          // whose branches carry labels where this planner could not, so a
+          // labeled fan reaching here had to be declined rather than wrapped
+          // (python-or-java-short at 500: two labeled leaves off one
+          // diamond, which 1.5 now indents under it). `stackableParents`
+          // accepts labeled fans now (2026-09-05), and 1.5 already gets a
+          // turn ahead of this loop (`stackedSeat`, above) and again as this
+          // loop's own first `packing` pass — so a fan still needing to wrap
+          // here is one 1.5 genuinely could not fit, and wrapping it is 1.6
+          // doing its own job, not standing in for 1.5's.
           if (!applyWrapRanks()) continue;
           const laid = plan(wrapSeat.anchor, packing);
           if (laid) return laid;
         }
+      }
+      // 6.5's two-line pill is the cheaper payment here too: a corridor
+      // hosting a one-line pill widens the flank by the pill's full half,
+      // and at a phone display that alone can hold the chart over the cap
+      // (python-or-java at 358: a 224 pill in the skip corridor). Wrap the
+      // widest pill anywhere and run the whole attempt again before
+      // declaring the display unreachable.
+      if (packToDisplay && narrowWidestBranchPill(true)) {
+        applySameRow(sameRow);
+        return attempt(flipShallow, sameRow);
       }
       applySameRow(sameRow);
       return decline(`wrapping could not reach the display (${Math.round(seated.width)} > ${room})`);
@@ -1858,6 +1888,19 @@ export function layoutGrid(
           const leaf = byId.get(e.to)!;
           const lv = stackV.get(e.to)!;
           const leafLo = anchorU.get(e.to)! - su(leaf) / 2;
+          // DESIGN 1.5 + 6.5: the branch's own horizontal run is its
+          // exclusive stretch — the vertical trunk is shared by every leaf,
+          // so the pill never sits there. The near end (off the trunk) keeps
+          // one TURN clear of the bend; the far end (into the leaf's face)
+          // is trimmed to the drawn ink by the ordinary edge-gap/arrowhead
+          // standoff every edge gets, not by anything special here.
+          const pill = pills.get(e.id);
+          const pillRun: [FlowPt, FlowPt] | undefined = pill
+            ? [
+                { u: Math.min(trunkU, leafLo) + TURN, v: lv },
+                { u: Math.max(trunkU, leafLo), v: lv },
+              ]
+            : undefined;
           planned.push({
             edge: e,
             pts: [
@@ -1865,6 +1908,7 @@ export function layoutGrid(
               { u: trunkU, v: lv },
               { u: leafLo, v: lv },
             ],
+            pillRun,
             exempt: 'bus',
           });
         }
