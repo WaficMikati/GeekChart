@@ -370,7 +370,11 @@ describe('routing', () => {
       });
       assert.deepEqual(failures, [], `${name}: ${failures.join('; ')}`);
     }
-    assert.ok(measured >= 5, `only ${measured} old-path fixtures left to measure`);
+    // DESIGN 1.10 took every flowchart off the old path, so the only graph
+    // fixtures still drawn there are the families that have not migrated:
+    // state.mmd and regex-engine.mmd. The floor is what is genuinely left,
+    // and it drops to zero the day those two move.
+    assert.ok(measured >= 2, `only ${measured} old-path fixtures left to measure`);
   });
 
   test('a diagram names itself uniquely, and the same way every render', async () => {
@@ -530,24 +534,26 @@ describe('routing', () => {
     // 4geeks-journey.mmd: I ("Mentor pairing") -> F ("Portfolio projects").
     // I's own corridor is crowded above it, so the retry used to leave I's
     // bottom — correctly — and then get dragged into forcing F's bottom too,
-    // even though F has nothing below it. F should take the top, where it
-    // actually has room, independent of which side I used.
+    // even though F has nothing below it.
+    //
+    // DESIGN 1.10 moved this chart onto the safe layout, where the same
+    // promise is kept by the corridor rather than by the old router's
+    // side search: the return leaves I's flank and comes back in level with
+    // F, never under it. Measured in the drawing's own coordinates on both
+    // sides — the path's `d` and `getBBox()` — since the two are the same
+    // space and a client rect is not.
     await mount(readFileSync(join(fixtures, '4geeks-journey.mmd'), 'utf8'));
-    const d = await session.page.$eval(
-      '.gc-edge[data-from="I"][data-to="F"]',
-      (el) => el.getAttribute('d') ?? '',
-    );
-    const fBox = await session.page.$eval('.gc-node[data-id="F"] .gc-outline', (el) =>
-      el.getBoundingClientRect(),
-    );
-    const last = d
-      .match(/[\d.]+,[\d.]+(?=\s*$)/)?.[0]
-      ?.split(',')
-      .map(Number);
-    assert.ok(last, `I->F: could not read the path's end point from "${d}"`);
+    const seen = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      const e = svg.querySelector('.gc-edge[data-from="I"][data-to="F"]')!;
+      const f = svg.querySelector('.gc-node[data-id="F"] .gc-outline') as SVGGraphicsElement;
+      const b = f.getBBox();
+      const nums = (e.getAttribute('d') ?? '').match(/-?[\d.]+/g)!.map(Number);
+      return { endY: nums[nums.length - 1]!, top: b.y, bottom: b.y + b.height };
+    });
     assert.ok(
-      last[1]! <= fBox.top + fBox.height / 2 + 1,
-      `I->F should arrive on F's top half, landed at y=${last[1]} against a box from ${fBox.top} to ${fBox.top + fBox.height}`,
+      seen.endY <= seen.bottom + 1,
+      `I->F should arrive no lower than F's own row, landed at y=${seen.endY} against a box from ${seen.top} to ${seen.bottom}`,
     );
   });
 
@@ -578,7 +584,13 @@ describe('routing', () => {
         const x1 = Math.max(...nodes.map((b) => b.x + b.width));
         const y0 = Math.min(...nodes.map((b) => b.y));
         const y1 = Math.max(...nodes.map((b) => b.y + b.height));
-        const margin = 80;
+        // The bug this guards swung a line out to the *canvas* edge to clear
+        // one node — hundreds of units. A modest allowance still catches it.
+        // Raised from 80 on 2026-09-05: DESIGN 1.10's safe layout reserves
+        // stacked side corridors outside the column, and 4geeks-journey's
+        // outer one — two labelled returns on the same flank — legitimately
+        // stands 89 past the widest box.
+        const margin = 120;
         const edges = [...svg.querySelectorAll('.gc-edge')].map((e) => e.getAttribute('d') ?? '');
         return { x0: x0 - margin, x1: x1 + margin, y0: y0 - margin, y1: y1 + margin, edges };
       });
@@ -605,31 +617,16 @@ describe('routing', () => {
     // same line, so the gap below the rule was half the size of the gap above
     // the panel's own floor.
     //
-    // Measured on control-plane rather than architecture since 2026-09-04:
-    // architecture's panels are the channel engine's now (2.10's panel
-    // endpoints), and a channel panel has a kicker in a reserved strip, no
-    // header rule — its padding is the `2.6-panel` gate check's business.
-    // control-plane still declines to the old path, so this composition is
-    // still shipped and still needs its guard.
+    // The header-rule composition this was written against belonged to the
+    // old path, and DESIGN 1.10 left it with no flowchart to draw: every
+    // panelled chart is the channel engine's now, and a channel panel carries
+    // a kicker in a reserved strip instead of a rule. control-plane was the
+    // last fixture holding the old shape; since 2026-09-05 it is the safe
+    // layout's. What replaces the guard is the gate's own `2.6-panel` check —
+    // padding, title strip, kicker baseline and centred children — run here
+    // on the same chart that used to carry the hand-measured version.
     await mount(readFileSync(join(fixtures, 'control-plane.mmd'), 'utf8'));
-    const box = (el: SVGGraphicsElement) => {
-      const b = el.getBBox();
-      return { y: b.y, height: b.height };
-    };
-    // OS holds two rows, so the gap above its contents is measured on the
-    // first and the gap below on the last.
-    const [panel, rule, firstRow, lastRow] = await Promise.all([
-      session.page.$eval('.gc-cluster[data-id="OS"] .gc-cluster-box', box),
-      session.page.$eval('.gc-cluster[data-id="OS"] .gc-cluster-rule', box),
-      session.page.$eval('.gc-node[data-id="OE"] .gc-outline', box),
-      session.page.$eval('.gc-node[data-id="MF"] .gc-outline', box),
-    ]);
-    const topGap = firstRow.y - (rule.y + rule.height);
-    const bottomGap = panel.y + panel.height - (lastRow.y + lastRow.height);
-    assert.ok(
-      Math.abs(topGap - bottomGap) < 3,
-      `gap above the row is ${topGap.toFixed(1)}, below the panel floor is ${bottomGap.toFixed(1)} — not centred`,
-    );
+    assert.deepEqual(await gateCheck('2.6-panel'), []);
   });
 
   test("every graph fixture fans a node's ports in the order of their targets (DESIGN 6.1)", async () => {

@@ -333,6 +333,14 @@ export interface Graph {
    * and the old label-placement-search checks never do.
    */
   engine?: 'channels';
+  /**
+   * DESIGN 1.10: set by `layout/safe.ts` when the designed shapes all
+   * declined and the chart was drawn in the safe layout instead. `draw.ts`
+   * stamps it as `data-gc-layout="safe"` beside `data-gc-engine`, so a
+   * reader (and the gate) can tell a plain last-resort column from a shape
+   * the planner actually chose.
+   */
+  layoutKind?: 'safe';
 }
 
 /** Mermaid's shape vocabulary, mapped onto the shapes we actually draw. */

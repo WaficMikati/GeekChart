@@ -127,19 +127,22 @@ describe('channel engine — routing and scope', () => {
     assert.ok(isChannels(reply.svg), `expected channels engine for:\n${tbChain}`);
   });
 
-  test('everything else keeps the old path: a too-wide LR decision flow, a panel-to-panel chart', async () => {
-    // flow.mmd is an LR run of six ranks — wider than the undeclared room —
-    // so the grid planner declines it and the old path runs unchanged.
+  // DESIGN 1.10: what a designed shape declines is no longer the old path's.
+  // flow.mmd is an LR run of six ranks wider than the undeclared room, and
+  // control-plane's OS carries four edges on a face against six columns
+  // inside it — both still decline every designed shape, and both are drawn
+  // in the safe layout now instead of handed to the pre-rewrite router.
+  test('a flowchart every designed shape declines lands on the safe layout, never the old path', async () => {
     const flow = readFileSync(join(fixtures, 'flow.mmd'), 'utf8');
-    // A panel endpoint is legal now (2.10), but control-plane's OS carries
-    // four edges on a face against six columns inside it, and 2.10 states no
-    // alignment for a face whose edge count no column count matches — so the
-    // planner declines rather than spreading them by a rule nobody wrote, and
-    // the golden (10.6) keeps the picture it was drawn to.
     const panelEdges = readFileSync(join(fixtures, 'control-plane.mmd'), 'utf8');
     for (const src of [flow, panelEdges]) {
       const reply = await mount(src);
-      assert.ok(!isChannels(reply.svg), `expected old path for:\n${src}`);
+      assert.ok(isChannels(reply.svg), `expected the channel engine for:\n${src}`);
+      assert.match(
+        reply.svg,
+        /data-gc-layout="safe"/,
+        `expected the safe layout to be stamped for:\n${src}`,
+      );
     }
   });
 
@@ -1953,11 +1956,12 @@ describe('channel engine — panels', () => {
     }
   });
 
-  test('a loop-back the 6.7 budget cannot hold declines rather than shipping long', async () => {
+  test('a loop-back the 6.7 budget cannot hold takes the safe layout, not the old path', async () => {
     // One return, from the last shape of the second panel back to the first
     // shape of the first: reaching the target's own flow-in face means going
     // over the top of everything, which measures 660 against 6.7's own
-    // Manhattan-plus-128 of 548. The planner checks that budget itself.
+    // Manhattan-plus-128 of 548. The panel planner still checks that budget
+    // and still declines — DESIGN 1.10 only changes where a decline lands.
     const lone = `flowchart TB
   subgraph Build
     B1[Compile] --> B2[Test]
@@ -1968,40 +1972,56 @@ describe('channel engine — panels', () => {
   B2 --> S1
   S2 --> B1`;
     const reply = await mount(lone);
-    assert.ok(!isChannels(reply.svg), 'a return over 6.7 budget should go to the old path');
+    assert.ok(isChannels(reply.svg), 'a flowchart never leaves the engine (DESIGN 1.10)');
+    assert.match(reply.svg, /data-gc-layout="safe"/, 'the declined return lands on the safe layout');
+    assert.deepEqual(await gateFails(), []);
   });
 
-  test('2.10-panel-endpoint has teeth: the old path spreads its arrivals off the columns', async () => {
-    // control-plane is the old path's own panel-endpoint composition — the
-    // geometry 2.10's column clause replaces. Its four inputs are spread
-    // evenly across the panel's width instead of landing on the columns of
-    // the shapes inside, which is exactly what the new check measures; the
-    // chart is only spared because every channel check is keyed on
-    // `data-gc-engine` and control-plane still declines to the old path.
+  test("2.10's column clause has nothing to line up against in a one-column panel", async () => {
+    // control-plane's four inputs used to be the old path's own composition,
+    // spread evenly across OS's width and landing on none of the columns
+    // inside it. DESIGN 1.10 takes that path away: the chart is the safe
+    // layout's now, OS holds one column, and the four arrivals merge onto it
+    // as one trunk with one head (6.3/6.14) — which is what 2.10 asks for
+    // when there is a single column to ask about.
     const reply = await mount(readFileSync(join(fixtures, 'control-plane.mmd'), 'utf8'));
-    assert.ok(!isChannels(reply.svg), 'control-plane still declines to the old path');
+    assert.ok(isChannels(reply.svg), 'control-plane is drawn by the channel engine');
     const seen = await session.page.evaluate(() => {
       const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
-      const unit = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+      const mid = (r: DOMRect) => (r.left + r.right) / 2;
       const panel = document
         .querySelector('.gc-cluster[data-id="OS"] .gc-cluster-box')!
         .getBoundingClientRect();
-      const mid = (r: DOMRect) => (r.left + r.right) / 2 / unit;
       const columns = [...svg.querySelectorAll('.gc-node[data-id]')]
         .map((n) => (n.querySelector('.gc-outline') ?? n).getBoundingClientRect())
         .filter((b) => b.top > panel.top && b.bottom < panel.bottom)
         .map(mid);
-      const arrivals = ['L_CRM_OS_0', 'L_MKT_OS_0', 'L_BRD_OS_0', 'L_CHN_OS_0'].map((id) =>
-        mid(document.querySelector(`.gc-arrow[data-id="${id}"]`)!.getBoundingClientRect()),
-      );
-      return { columns: [...new Set(columns.map((c) => Math.round(c)))], arrivals };
+      // One merged arrival means one drawn head (6.3), so the four are read
+      // off where their own paths end rather than off four arrowheads.
+      const unit = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+      const arrivals = ['L_CRM_OS_0', 'L_MKT_OS_0', 'L_BRD_OS_0', 'L_CHN_OS_0'].map((id) => {
+        const d = document.querySelector(`.gc-edge[data-id="${id}"]`)!.getAttribute('d') ?? '';
+        const nums = d.match(/-?[\d.]+/g)!.map(Number);
+        return nums[nums.length - 2]!;
+      });
+      const heads = ['L_CRM_OS_0', 'L_MKT_OS_0', 'L_BRD_OS_0', 'L_CHN_OS_0'].filter((id) =>
+        document.querySelector(`.gc-arrow[data-id="${id}"]`),
+      ).length;
+      return {
+        columns: [...new Set(columns.map((c) => Math.round((c - svg.getBoundingClientRect().left) / unit)))],
+        arrivals,
+        heads,
+      };
     });
-    assert.equal(seen.columns.length, 3, 'OS holds three columns of shapes');
+    assert.equal(seen.columns.length, 1, 'the safe layout stands OS\'s shapes in one column');
+    assert.equal(seen.heads, 1, 'four arrivals on one point draw one head (DESIGN 6.3)');
+    const first = seen.arrivals[0]!;
     for (const a of seen.arrivals) {
       assert.ok(
-        !seen.columns.some((c) => Math.abs(c - a) <= 2),
-        `an arrival at x ${a.toFixed(0)} would have matched a column after all`,
+        Math.abs(a - first) <= 1,
+        `an arrival at x ${a.toFixed(0)} is off the shared trunk at ${first.toFixed(0)}`,
       );
     }
+    assert.deepEqual(await gateFails(), []);
   });
 });

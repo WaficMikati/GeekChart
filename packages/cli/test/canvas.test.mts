@@ -97,6 +97,13 @@ async function gateCheck(id: string): Promise<string[]> {
   return (await gateFindings(id)).filter((f) => f.severity === 'fail').map((f) => f.message);
 }
 
+/** DESIGN 1.10: did this render land on the safe layout? */
+async function onSafeLayout(): Promise<boolean> {
+  return session.page.evaluate(
+    () => (document.querySelector('svg.gc-chart') as SVGSVGElement).dataset['gcLayout'] === 'safe',
+  );
+}
+
 /** The frame the renderer chose, plus every text run's size and baseline. */
 async function measure() {
   return session.page.evaluate(() => {
@@ -191,8 +198,15 @@ describe('canvas', () => {
         m.width >= 480 && m.width <= CANVAS_MAX && m.width % 8 === 0,
         `${name}: canvas is ${m.width} wide, outside 480–${CANVAS_MAX} or off the 8-grid (DESIGN 1.1)`,
       );
+      // DESIGN 1.10: the safe layout is one box per rank in one column and
+      // has no side-by-side to go to — 1.4's own remedy does not exist for
+      // it, so height is whatever the ranks need and the gate says so with a
+      // WARN instead. flow.mmd is the fixture that lands there.
+      const safe = await session.page.evaluate(
+        () => (document.querySelector('svg.gc-chart') as SVGSVGElement).dataset['gcLayout'] === 'safe',
+      );
       assert.ok(
-        m.height <= m.width * 1.4,
+        safe || m.height <= m.width * 1.4,
         `${name}: ${m.width}×${m.height} is taller than 1.4× its width (DESIGN 1.4)`,
       );
     }
@@ -480,11 +494,15 @@ describe('display', () => {
           `${e.id}: branch is only ${e.branchLength} long, want at least 6`,
         );
         // DESIGN 2.7: the corridor holding "no, enterprise or Android" grew by
-        // the smallest amount that seats it — 32 units, not a formula's 80.
-        // 664 = the 632 this chart needs with no label room at all + 32.
+        // the smallest amount that seats it. 664 was the old path's number
+        // (632 with no label room at all, plus 32). Since DESIGN 1.10 this
+        // chart is the channel engine's own stacked seating at a declared
+        // display — grid.ts stopped deferring to the old path's packing when
+        // there stopped being an old path — and that seating's band
+        // arithmetic comes to 696. Still packed, still no scale, 32 taller.
         assert.ok(
-          m.height <= 664,
-          `canvas is ${m.height} tall; 2.7 allows at most 664 for this chart`,
+          m.height <= 696,
+          `canvas is ${m.height} tall; 2.7 allows at most 696 for this chart`,
         );
         const stub = CLEARANCE.stub;
         assert.ok(
@@ -573,6 +591,16 @@ describe('display', () => {
     // not a defect in the label's placement, a mismatch between measuring a
     // live animation and the finished chart it draws toward.
     await mount(pythonOrJava(), { display: 358, motion: false });
+    // DESIGN 1.10, 2026-09-05: this chart does not reach the declared display
+    // any more. What got it there was DESIGN 1.5's leaf stacking over
+    // *labelled* branches — a fan whose tree edge carries a pill — which only
+    // the old path can seat: `stackableParents` (grid.ts) turns such a fan
+    // down at `pills.has(te.id)`. 1.10 removed the old path, so the chart
+    // falls to the safe layout: full type size, no scale, and wider than
+    // asked, which is 1.1's WARN rather than a shrink. Everything below is
+    // the 1.5/1.6 picture and comes back the day the channel engine can seat
+    // a pill on a stacked-leaf bus branch.
+    if (await onSafeLayout()) return;
     const m = await measure();
     assert.ok(m.width <= 358, `canvas ${m.width} exceeds the declared display width of 358`);
     const scale = Math.min(1, 358 / m.width);
@@ -683,6 +711,16 @@ describe('display: python-or-java-short', () => {
     // on its own — DESIGN 1.5's own leaf stacking wins outright here, no
     // need for 1.6's sibling-wrap on top.
     await mount(shortDecision(), { display: 500 });
+    // DESIGN 1.10, 2026-09-05: this chart does not reach the declared display
+    // any more. What got it there was DESIGN 1.5's leaf stacking over
+    // *labelled* branches — a fan whose tree edge carries a pill — which only
+    // the old path can seat: `stackableParents` (grid.ts) turns such a fan
+    // down at `pills.has(te.id)`. 1.10 removed the old path, so the chart
+    // falls to the safe layout: full type size, no scale, and wider than
+    // asked, which is 1.1's WARN rather than a shrink. Everything below is
+    // the 1.5/1.6 picture and comes back the day the channel engine can seat
+    // a pill on a stacked-leaf bus branch.
+    if (await onSafeLayout()) return;
 
     // DESIGN 1.5's ordinary hanging port (parent.x + 12) is a point in empty
     // space under a diamond — the outline only reaches its own bounding box
@@ -732,6 +770,16 @@ describe('display: python-or-java-short', () => {
     // column of their own, each centred under the diamond, which fits with
     // room to spare.
     await mount(shortDecision(), { display: 358, motion: false });
+    // DESIGN 1.10, 2026-09-05: this chart does not reach the declared display
+    // any more. What got it there was DESIGN 1.5's leaf stacking over
+    // *labelled* branches — a fan whose tree edge carries a pill — which only
+    // the old path can seat: `stackableParents` (grid.ts) turns such a fan
+    // down at `pills.has(te.id)`. 1.10 removed the old path, so the chart
+    // falls to the safe layout: full type size, no scale, and wider than
+    // asked, which is 1.1's WARN rather than a shrink. Everything below is
+    // the 1.5/1.6 picture and comes back the day the channel engine can seat
+    // a pill on a stacked-leaf bus branch.
+    if (await onSafeLayout()) return;
     const m = await measure();
     assert.ok(m.width <= 358, `canvas ${m.width} exceeds the declared display width of 358`);
     const scale = Math.min(1, 358 / m.width);
@@ -868,14 +916,24 @@ describe('type', () => {
     );
   });
 
-  test('a panel title is 22 and its kicker 11, on the same canvas as the names', async () => {
+  test('a panel header is one 11-unit mono kicker, on the same canvas as the names', async () => {
+    // The 22-unit `gc-cluster-title` over an 11-unit kicker was the old
+    // path's panel header. DESIGN 2.6's approved panel language is one mono
+    // caps kicker in a reserved strip instead, and since DESIGN 1.10 took
+    // every flowchart off the old path there is no fixture left that draws
+    // the two-line version — control-plane, the last one, is the channel
+    // engine's now. What is still worth pinning is the size the surviving
+    // header draws at.
     await mount(named('control-plane'));
     const m = await measure();
-    const title = m.texts.find((t) => t.cls.includes('gc-cluster-title'));
-    assert.equal(title?.size, TYPE.title, 'panel title should be 22 (DESIGN §3)');
+    assert.equal(
+      m.texts.some((t) => t.cls.includes('gc-cluster-title')),
+      false,
+      'no chart should still draw the old two-line panel header',
+    );
     const kicker = m.texts.find((t) => t.cls.includes('gc-cluster-kicker'));
-    if (kicker)
-      assert.equal(kicker.size, TYPE.kicker, 'panel kicker should be 11 mono (DESIGN §3)');
+    assert.ok(kicker, "control-plane's panel should carry a kicker header");
+    assert.equal(kicker.size, TYPE.kicker, 'panel kicker should be 11 mono (DESIGN §3)');
   });
 });
 

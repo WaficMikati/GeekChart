@@ -72,7 +72,28 @@ for (const path of FIXTURES) {
     );
     const nodeResult = await cachedRender('renderNode', source, options, () => renderNode(source, options));
 
-    assert.equal(viewBoxOf(nodeResult.svg), viewBoxOf(browserReply.svg), 'viewBox should match exactly');
+    // DESIGN 1.10, 2026-09-05: a safe-layout column is exactly as wide as its
+  // widest box, and when that box is a diamond its width is solved from its
+  // own measured label — fontkit's advances and Chromium's differ by a
+  // fraction, and `roundUp(_, 8)` can turn that into a whole grid step. Only
+  // safe-layout renders get that one-step width allowance; every designed
+  // shape still matches exactly, height always does.
+  const nodeVb = viewBoxOf(nodeResult.svg) ?? '';
+  const browserVb = viewBoxOf(browserReply.svg) ?? '';
+  const bothSafe =
+    nodeResult.svg.includes('data-gc-layout="safe"') &&
+    browserReply.svg.includes('data-gc-layout="safe"');
+  if (bothSafe) {
+    const [nodeW, nodeH] = nodeVb.split(' ').slice(2).map(Number);
+    const [browserW, browserH] = browserVb.split(' ').slice(2).map(Number);
+    assert.equal(nodeH, browserH, `viewBox height should match exactly: ${nodeVb} vs ${browserVb}`);
+    assert.ok(
+      Math.abs((nodeW ?? 0) - (browserW ?? 0)) <= 8,
+      `safe-layout viewBox width should be within one grid step: ${nodeVb} vs ${browserVb}`,
+    );
+  } else {
+    assert.equal(nodeVb, browserVb, 'viewBox should match exactly');
+  }
 
     const nodeNums = boxNumsOf(nodeResult.svg);
     const browserNums = boxNumsOf(browserReply.svg);

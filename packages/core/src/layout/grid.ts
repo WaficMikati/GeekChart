@@ -938,12 +938,13 @@ export function layoutGrid(
         if (plain && plain.width <= room) stackedSeat = plain;
       }
       if (stackedSeat && stackedSeat.width <= room) {
-        // Stacking alone was enough. Under a declared display that packing is
-        // still the old path's — its widest-first search stacks a *labeled*
-        // leaf fan, which this planner's all-or-nothing stack turns down — so
-        // this stays the decline it has always been rather than claiming a
-        // chart 1.5 already fits without 1.6.
-        if (packToDisplay) return decline(`declared display: 1.5 alone fits, the old path packs it`);
+        // Stacking alone was enough. This used to decline under a declared
+        // display and hand the chart to the old path, whose widest-first
+        // search stacks a *labeled* leaf fan where this planner's
+        // all-or-nothing stack does not. DESIGN 1.10 removed that
+        // destination: the only thing below a decline now is the safe
+        // layout's plain column, which is a worse picture than the stack this
+        // seating already found. So the stack ships at every display.
         return plan(stackedSeat.anchor, parents!);
       }
       if (!packToDisplay) {

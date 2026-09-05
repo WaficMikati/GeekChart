@@ -750,7 +750,17 @@ export async function renderFlow(source: string, options: FlowOptions = {}): Pro
   // HONEY and AUDIT/CODE both drawn past the edge of a canvas that never
   // grew to hold them). Given the same `Infinity` override `scene.canvas`
   // already gets below for exactly this reason.
-  const fitAgainst = displayMet ? scene.canvas : { ...baseScene.canvas, maxAspect: Infinity };
+  // DESIGN 1.10: the safe layout is one box per rank in one column, so its
+  // height is boxes × ranks and nothing in it can trade height for width —
+  // "tall is the worst case, broken is impossible". Framing it against 1.4's
+  // cap does not shorten it; it guillotines the bottom of the column, which
+  // is the same clipping the `displayMet` branch above already refuses. Same
+  // `Infinity` override, same reason.
+  const fitAgainst = !displayMet
+    ? { ...baseScene.canvas, maxAspect: Infinity }
+    : graph.layoutKind === 'safe'
+      ? { ...scene.canvas, maxAspect: Infinity }
+      : scene.canvas;
   const framed = {
     ...drawing,
     svg: fitToCanvas(drawing.svg, fitAgainst, drawing.extent, scene.canvas.width),

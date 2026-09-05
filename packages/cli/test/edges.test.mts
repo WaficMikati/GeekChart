@@ -285,10 +285,19 @@ describe('every edge is orthogonal', () => {
 });
 
 describe('panels, loops and the grid', () => {
-  test('a panel takes one straight channel per column, in and out', async () => {
-    // DESIGN 2.6 and 6.4. Four inputs converged on a single point on the panel's
-    // top edge and the outputs fanned from a single point below it; the columns
-    // above and below did not line up with each other at all.
+  test("a panel's channels land on the columns inside it, in and out", async () => {
+    // DESIGN 2.6, 2.10 and 6.4. The defect was arrivals that lined up with
+    // nothing: four inputs converged on a single point of the panel's top
+    // edge and the outputs fanned from a single point below it, neither on
+    // any column of the shapes inside.
+    //
+    // What "a column" means depends on the shape the planner found, and
+    // since DESIGN 1.10 control-plane is the safe layout's — one column, so
+    // every channel lands on that one and the four inputs share it on
+    // purpose (6.3's merged arrival, 6.14's trunk). The invariant that
+    // survives both shapes, and the one the original defect broke, is that a
+    // channel touching the panel is square to it and sits on a box's own
+    // centre line.
     await mount('control-plane.mmd');
     const { edges, nodes, clusters } = await measure();
     const panel = clusters[0]!;
@@ -297,20 +306,21 @@ describe('panels, loops and the grid', () => {
 
     const columns = { in: [] as number[], out: [] as number[] };
     for (const edge of touching) {
-      assert.equal(edge.corners.length, 0, `${edge.id}: a channel into a panel must not bend`);
-      assert.equal(edge.runs.length, 1, `${edge.id}: a channel into a panel is one run`);
-      const run = edge.runs[0]!;
+      // The run that meets the panel: the last for an arrival, the first for
+      // a departure. A corridor route bends on its way there; what has to be
+      // square is the leg that touches the border.
+      const run = edge.to === panel.id ? edge.runs[edge.runs.length - 1]! : edge.runs[0]!;
       assert.ok(Math.abs(run.x2 - run.x1) < 0.5, `${edge.id}: the channel is not vertical`);
       (edge.to === panel.id ? columns.in : columns.out).push(Math.round(run.x1));
     }
-    columns.in.sort((a, b) => a - b);
-    columns.out.sort((a, b) => a - b);
-    assert.deepEqual(columns.out, columns.in, 'inputs and outputs must share their columns');
-    // …and no two share one, which is what "converging on one pixel" was.
-    assert.equal(new Set(columns.in).size, columns.in.length, 'two inputs share a column');
+    assert.deepEqual(
+      [...new Set(columns.out)].sort((a, b) => a - b),
+      [...new Set(columns.in)].sort((a, b) => a - b),
+      'inputs and outputs must share their columns',
+    );
 
     // Each column is a box's own middle, so the channel leaves and lands square.
-    for (const x of columns.in) {
+    for (const x of [...columns.in, ...columns.out]) {
       assert.ok(
         nodes.some((n) => Math.abs(n.x + n.w / 2 - x) < 1),
         `the channel at ${x} is not on any box's centre line`,

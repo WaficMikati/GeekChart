@@ -19,6 +19,7 @@ import {
 } from './measure.ts';
 import { detectChannelChart, layoutChannels, wrapLabelToCap } from './channels.ts';
 import { detectRing, layoutRing, layoutRingColumn, ringWidth, wrapLabelLines } from './ring.ts';
+import { layoutSafe } from './safe.ts';
 import { identifySatellites, placeSatellites } from './satellites.ts';
 import { expandFan, findFans, planFan, type FanPlan } from './stack.ts';
 import { wrapSiblings, type WrappedRow } from './wrap.ts';
@@ -266,9 +267,14 @@ export async function layout(
       );
       if (!wrapped) continue;
       node.titleLines = wrapped;
-      item.label.width = Math.max(
-        ...wrapped.map((l) => measurer.measure(l, scene.titleFont, scene.titleSize)),
-      );
+      // The budget IS the width — not a re-measure of the wrapped lines.
+      // Re-measuring hands the shape back to the font measurer, and fontkit
+      // and the browser disagree by fractions that the grid then snaps to
+      // different sides (python-or-java@358: 592 vs 600 wide). The budget is
+      // arithmetic, identical in both engines, and by construction the label
+      // width that lands the diamond at the packed room (DESIGN 2.2's wrap-
+      // rather-than-widen, sized to what the display affords).
+      item.label.width = budget;
       item.label.height = twoLineHeight;
     }
   }
@@ -332,34 +338,32 @@ export async function layout(
     // either a bigger loop pad or a side-face arrival for a return into a
     // root, and that is the user's call, not a silent widening here.
     //
-    // Applied to this attempt only: a chart the engine declines gets its
-    // label-solved diamonds back on the way to the old path.
-    const grown = new Map<GraphNode, { width: number; height: number }>();
+    // Applied for good: since DESIGN 1.10 a flowchart never leaves the
+    // engine, so there is no old path left to hand the label-solved
+    // diamonds back to — the safe layout draws the shared size too.
     const diamonds = graph.nodes.filter((n) => n.shape === 'diamond');
     if (diamonds.length > 1) {
       const width = Math.max(...diamonds.map((n) => n.width!));
       const height = Math.max(...diamonds.map((n) => n.height!));
       for (const node of diamonds) {
-        grown.set(node, { width: node.width!, height: node.height! });
         node.width = width;
         node.height = height;
       }
     }
-    const laid = layoutChannels(graph, channelPlan, scene, measureLine, packToDisplay);
+    // DESIGN 1.10: the designed shapes are tried first and may decline once
+    // real sizes are known; the safe layout is the last attempt and never
+    // does. A flowchart therefore never reaches the pre-rewrite router —
+    // there is nothing below this branch for it to fall to. The
+    // `GC_GRID_DEBUG` decline lines stay: they now say why a chart got the
+    // plain column instead of a shape someone designed.
+    const laid =
+      layoutChannels(graph, channelPlan, scene, measureLine, packToDisplay) ??
+      layoutSafe(graph, scene, measureLine);
     pillMeasurer.done();
-    if (!laid) {
-      for (const [node, was] of grown) {
-        node.width = was.width;
-        node.height = was.height;
-      }
-    }
     // No `square()` here: the engine's own grid is already exact, and the
     // banding pass snaps *centres* to the grid one at a time — which can
     // move a symmetric pair asymmetrically and break DESIGN 2.8's ±1.
-    if (laid) return { width: laid.width, height: laid.height, warnings: laid.warnings };
-    // A `grid` plan declined once real sizes were known (too wide, a loop
-    // with no in-budget corridor, a gap the gate would flag) — the chart
-    // falls through to the old path exactly as if never detected.
+    return { width: laid.width, height: laid.height, warnings: laid.warnings };
   }
 
   // DESIGN 1.8: placed directly, on real sizes, instead of handed to ELK —

@@ -492,6 +492,12 @@ export const sameRowLeaf: Check = {
     if (!isChannels(svg)) return [];
     // The rule is written on rows: the TB axis.
     if (svg.dataset.flow === 'LR' || svg.dataset.flow === 'RL') return [];
+    // DESIGN 1.10: the safe layout puts every node on its own rank by
+    // definition — that is the whole of what it promises. 2.9 is a rule about
+    // which designed shape a decision earns, and there is no designed shape
+    // here: the chart is on the safe layout precisely because every one of
+    // them declined.
+    if (svg.dataset.gcLayout === 'safe') return [];
     const ids = nodeById(ctx);
     const meta = edgeMeta(ctx).filter((m) => m.from && m.to && ids.has(m.from) && ids.has(m.to));
     // Forward out-degree only: a leaf whose single exit loops back to an
@@ -1403,6 +1409,13 @@ export const panelEndpoint: Check = {
             message: `2.10 edge ${t.edge} lands on no column of panel ${id}'s ${face} face`,
           });
       }
+      // A panel whose children stand in one column has one column to offer.
+      // Every arrival on a face then lands on it, and they share it by
+      // arithmetic, not by carelessness — that shared point is 6.3's merged
+      // fan-in arrival and 6.14's trunk, which is the drawing 2.10 wants
+      // here, not a defect. The rule's "column for column" only has something
+      // to say once there is more than one column to line up against.
+      if (cols.length < 2) continue;
       const seen = new Set<number>();
       for (const t of touches) {
         const key = Math.round(t.at / u);

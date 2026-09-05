@@ -141,9 +141,22 @@ export const aspect: Check = {
     // a defect (revised 2026-08-28 alongside 1.6).
     const display = Number(svg.dataset.display) || 0;
     if (display && display < CANVAS.width) return [];
-    return h > w * CANVAS.maxAspect
-      ? [{ severity: 'fail', message: `1.4 taller than ${CANVAS.maxAspect}×w (${h})` }]
-      : [];
+    if (h <= w * CANVAS.maxAspect) return [];
+    // DESIGN 1.10: the safe layout has no side-by-side to go to. It is the
+    // last resort precisely because every designed shape declined, and it
+    // draws one box per rank in one column — height is ranks × boxes and
+    // nothing in it can trade height for width. Capping it here would only
+    // clip the bottom of the column off the canvas, so the reading a tall
+    // safe render deserves is "this chart never found a shape", which is a
+    // WARN pointing at the split 1.4 actually wants.
+    return svg.dataset.gcLayout === 'safe'
+      ? [
+          {
+            severity: 'warn',
+            message: `1.4 safe layout is ${h} tall on ${w} — no designed shape fitted; split the chart`,
+          },
+        ]
+      : [{ severity: 'fail', message: `1.4 taller than ${CANVAS.maxAspect}×w (${h})` }];
   },
 };
 

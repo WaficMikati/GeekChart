@@ -1096,7 +1096,7 @@ function attemptDraw(
   // never allowed to just drop one instead.
   const labelCount = graph.edges.filter((e) => e.label).length;
   const svg =
-    `<svg class="gc-chart" data-gc="${uid}" data-flow="${graph.direction}"${graph.engine === 'channels' ? ' data-gc-engine="channels"' : ''} data-label-count="${labelCount}" viewBox="${viewBox}" role="img" xmlns="${SVG}">` +
+    `<svg class="gc-chart" data-gc="${uid}" data-flow="${graph.direction}"${graph.engine === 'channels' ? ' data-gc-engine="channels"' : ''}${graph.layoutKind === 'safe' ? ' data-gc-layout="safe"' : ''} data-label-count="${labelCount}" viewBox="${viewBox}" role="img" xmlns="${SVG}">` +
     `${parts.join('')}${endLabels.join('')}${sparks.join('')}${arrows.join('')}</svg>`;
 
   // The union of everything actually drawn, in the same coordinates the
