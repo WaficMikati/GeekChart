@@ -1581,6 +1581,12 @@ export function layoutGrid(
       /** Which of the band's wrap runs this is: the exit sits above the tree
        *  bus line, so it crosses none of the first-row siblings' own drops. */
       exitSlot: number;
+      /** DESIGN 6.5/1.6 (2026-09-07): the corridor's own vertical run rarely
+       *  has lateral room for a pill — LOOP_CLEAR (24) beside a column is far
+       *  short of half a real label — so a labeled bus seats its pill on the
+       *  horizontal leg that turns into the target's row instead, and the
+       *  corridor is derived wide enough to give that leg the length. */
+      useHorizontalPill: boolean;
     }
     const wrapBuses: WrapBus[] = [];
     const wrapExitSlots: number[] = Array.from({ length: Math.max(lastRow, 0) }, () => 0);
@@ -1608,11 +1614,31 @@ export function layoutGrid(
         // edge — every row the bus passes, not just the two it joins.
         const boxes = rowSpanBoxes(rs, rt);
         const start = Math.max(...boxes.map((b) => b.hi)) + LOOP_CLEAR;
-        const cu = settleCorridor(1, start, rs, rt, myPillU, LOOP_CLEAR);
+        let cu = settleCorridor(1, start, rs, rt, myPillU, LOOP_CLEAR);
+        // DESIGN 6.5/2.7 (2026-09-07): a labeled bus's pill needs either
+        // lateral room beside the vertical corridor (rare — LOOP_CLEAR alone
+        // is 24, well under half of any real label) or length along the
+        // horizontal leg that turns into the target's row, in the band
+        // between the wrapped rows. When the corridor stands no farther than
+        // LOOP_CLEAR off the content, there is no lateral room, so the pill
+        // moves to that horizontal leg instead, and the corridor is derived
+        // just wide enough to give the leg the length the pill needs — never
+        // wider than that, since width here is spent only where earned.
+        let useHorizontalPill = false;
+        const busPill = es.length === 1 ? pills.get(es[0]!.id) : undefined;
+        if (busPill) {
+          const sideRoom = cu - (start - LOOP_CLEAR);
+          if (sideRoom < pu(busPill) / 2 + PILL_NODE_CLEAR) {
+            useHorizontalPill = true;
+            const kU = anchorU.get(es[0]!.to)!;
+            const need = roundUp(kU + pu(busPill) + 2 * TURN, GRID);
+            if (need > cu) cu = settleCorridor(1, need, rs, rt, myPillU, LOOP_CLEAR);
+          }
+        }
         corridorLegs.push({ u: cu, rLo: rs, rHi: rt, pillU: myPillU });
         const exitSlot = wrapExitSlots[rs]!++;
         if (!allocLane(rt - 1, es)) return decline('wrap arrival lane');
-        wrapBuses.push({ edges: es, parent: pid, rs, rt, corridorU: cu, exitSlot });
+        wrapBuses.push({ edges: es, parent: pid, rs, rt, corridorU: cu, exitSlot, useHorizontalPill });
       }
     }
 
@@ -1774,6 +1800,18 @@ export function layoutGrid(
         2 * EDGE_NODE_CLEAR +
         (laneSlots[r]! ? 8 + laneSlot[r]! * laneSlots[r]! : 0);
       stackBand[r] = Math.max(stackBand[r]!, roundUp(need, GRID));
+    }
+    // DESIGN 6.5/1.6 (2026-09-07): a wrap bus seated on its horizontal leg
+    // (above) needs its band tall enough to hold the pill plus 6.9's 8
+    // clearance either side — the same derived-channel exemption a stacked
+    // leaf column already earns above, applied to a label instead of a
+    // column.
+    for (const wb of wrapBuses) {
+      if (!wb.useHorizontalPill) continue;
+      const busPill = pills.get(wb.edges[0]!.id);
+      if (!busPill) continue;
+      const need = roundUp(pv(busPill) + 2 * PILL_NODE_CLEAR, GRID);
+      stackBand[wb.rt - 1] = Math.max(stackBand[wb.rt - 1] ?? 0, need);
     }
 
     // Row centres along the flow axis.
@@ -2025,12 +2063,44 @@ export function layoutGrid(
       const pU = anchorU.get(wb.parent)!;
       const pBottom = bottomOf(p);
       const lvS = wrapExitV(wb);
-      const lvT = laneV(wb.rt - 1, wb.edges[0]!);
+      // DESIGN 6.5/2.7 (2026-09-07): the ordinary lane offset hugs the
+      // target's row by a fixed, TRACK-scale margin — plenty for the old
+      // vertical-run pill, not for one that now sits directly on this turn.
+      // A horizontally-seated pill instead sets the turn just far enough off
+      // the target's top for its own height plus 6.9's 8 clearance; the band
+      // was derived (above) to have exactly that much room to give.
+      const busPillHere = wb.useHorizontalPill ? pills.get(wb.edges[0]!.id) : undefined;
+      const lvT = busPillHere
+        ? rowTopMin(wb.rt) - (pv(busPillHere) / 2 + PILL_NODE_CLEAR)
+        : laneV(wb.rt - 1, wb.edges[0]!);
       const cu = wb.corridorU;
       for (const e of wb.edges) {
         const k = byId.get(e.to)!;
         const kU = anchorU.get(e.to)!;
         const pill = pills.get(e.id);
+        // DESIGN 6.5 (2026-09-07): a labeled bus prefers the horizontal leg
+        // that turns into the target's row — the band between the wrapped
+        // rows — over the vertical corridor, which has no lateral room for
+        // a pill's width beside a column it hugs by only LOOP_CLEAR. The
+        // corridor was derived wide enough for this leg's length whenever
+        // `useHorizontalPill` is set (floor plan, above); the length check
+        // here is the same by-construction guarantee 6.9 asks for, not a
+        // search — it only ever falls through on a plan the derivation
+        // itself could not satisfy.
+        let pillRun: [FlowPt, FlowPt] | undefined;
+        let pillAt: FlowPt | undefined;
+        if (pill && wb.useHorizontalPill) {
+          const lo = Math.min(kU, cu) + TURN;
+          const hi = Math.max(kU, cu) - TURN;
+          if (hi - lo >= pu(pill)) pillRun = [{ u: lo, v: lvT }, { u: hi, v: lvT }];
+        }
+        if (pill && !pillRun) {
+          pillRun = [
+            { u: cu, v: lvS + TURN },
+            { u: cu, v: lvT - TURN },
+          ];
+          pillAt = { u: cu, v: nearestBandCentre(lvS, lvT) };
+        }
         planned.push({
           edge: e,
           pts: simplify([
@@ -2042,13 +2112,8 @@ export function layoutGrid(
             { x: kU, y: topOf(k) },
           ]).map((q) => ({ u: q.x, v: q.y })),
           exempt: 'wrap',
-          pillRun: pill
-            ? [
-                { u: cu, v: lvS + TURN },
-                { u: cu, v: lvT - TURN },
-              ]
-            : undefined,
-          pillAt: pill ? { u: cu, v: nearestBandCentre(lvS, lvT) } : undefined,
+          pillRun,
+          pillAt,
         });
       }
     }

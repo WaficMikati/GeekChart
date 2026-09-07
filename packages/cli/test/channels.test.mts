@@ -1256,6 +1256,78 @@ describe('channel engine — DESIGN 1.6 sibling wrapping', () => {
     );
     assert.deepEqual(await gateFails(), []);
   });
+
+  // DESIGN 6.5 (2026-09-07): python-or-java's Q1→JAVA wrap bus at 358 needs
+  // this exact seating (its "no, enterprise or Android" pill has nowhere else
+  // to go), but a separate, wider gap — the wrap corridor's own mandatory
+  // LOOP_CLEAR stand-off past the widest row it passes, plus that row's own
+  // 264-wide content, already exceeds the 358 column's 262 of usable room,
+  // with or without any label — keeps that chart on the safe layout at 358
+  // regardless of this fix. diamond-cascade hits the same wrap-bus code path
+  // at 358 without that outer conflict, so it is what proves the seating.
+  test('DESIGN 6.5: diamond-cascade’s wrapped “fail” pill seats on the band leg into the target’s row, not beside the corridor', async () => {
+    const reply = await mount(fixture('diamond-cascade.mmd'), { display: 358 });
+    assert.ok(isChannels(reply.svg), 'diamond-cascade at 358 should stay on the channel engine');
+    const shape = await session.page.evaluate(() => {
+      const svg = document.querySelector('svg.gc-chart') as SVGSVGElement;
+      const path = svg.querySelector('.gc-edge[data-id="L_Q3_E3_0"]')!;
+      const d = path.getAttribute('d')!;
+      const segs: { x1: number; y1: number; x2: number; y2: number }[] = [];
+      const nums = d.match(/-?\d+(\.\d+)?/g)!.map(Number);
+      // Every command (M, L, or Q) ends with one x,y pair; a run of them is
+      // the polyline `pts` the route planned, arc rounding aside.
+      const pts: [number, number][] = [];
+      for (let i = 0; i + 1 < nums.length; i += 2) pts.push([nums[i]!, nums[i + 1]!]);
+      for (let i = 1; i < pts.length; i++) {
+        const [x1, y1] = pts[i - 1]!;
+        const [x2, y2] = pts[i]!;
+        segs.push({ x1, y1, x2, y2 });
+      }
+      const e3 = svg.querySelector('.gc-node[data-id="E3"] .gc-outline') as SVGGraphicsElement;
+      const e3Box = e3.getBBox();
+      const plate = svg.querySelector('.gc-edge-label[data-id="L_Q3_E3_0"] .gc-plate')!;
+      return {
+        bends: (d.match(/Q/g) ?? []).length,
+        segs,
+        targetCx: e3Box.x + e3Box.width / 2,
+        plateX: Number(plate.getAttribute('x')),
+        plateY: Number(plate.getAttribute('y')),
+        plateW: Number(plate.getAttribute('width')),
+        plateH: Number(plate.getAttribute('height')),
+      };
+    });
+    assert.equal(shape.bends, 4, `L_Q3_E3_0 is not the four-bend wrap bus (${shape.bends} bends)`);
+    // The corridor is the one vertical run of real length — the others are
+    // the short turn-radius stubs the rounded corners leave behind.
+    const vertical = shape.segs.filter((s) => Math.abs(s.x1 - s.x2) < 0.5);
+    const corridor = vertical.reduce((a, b) => (Math.abs(b.y1 - b.y2) > Math.abs(a.y1 - a.y2) ? b : a));
+    const corridorU = corridor.x1;
+    // DESIGN 6.5: the pill centres on the drawn extent's midpoint — the
+    // corridor to the target's own centre column — which is exactly the
+    // band leg's midpoint regardless of the turn radius trimmed off each end
+    // (a fixed trim off both ends moves a midpoint by nothing).
+    const bandMidX = (corridorU + shape.targetCx) / 2;
+    const plateCx = shape.plateX + shape.plateW / 2;
+    const plateCy = shape.plateY + shape.plateH / 2;
+    assert.ok(
+      Math.abs(plateCx - bandMidX) <= 1,
+      `pill centre x=${plateCx} sits ${Math.abs(plateCx - bandMidX).toFixed(1)} off the band leg's own midpoint ${bandMidX}`,
+    );
+    // The plate sits in the band between the wrapped rows, well below the
+    // corridor's own upper turn — not up beside the vertical run the old
+    // seating used, which had no lateral room to spare beside the content.
+    const corridorLo = Math.min(corridor.y1, corridor.y2);
+    const corridorHi = Math.max(corridor.y1, corridor.y2);
+    assert.ok(
+      plateCy > corridorLo + 40,
+      `pill centre y=${plateCy} sits up near the corridor's own top (${corridorLo}), the old vertical-run seating`,
+    );
+    assert.ok(
+      Math.abs(plateCy - corridorHi) < 20,
+      `pill centre y=${plateCy} is not in the arrival band, just past the corridor's bottom turn (${corridorHi})`,
+    );
+    assert.deepEqual(await gateFails(), []);
+  });
 });
 
 describe('channel engine — the whole gate still applies', () => {

@@ -110,6 +110,22 @@ and the check that enforces it cannot drift apart.
   allowance, one arrowhead. Every edge starts on its source's outline
   (gate `6.2-departs-source`); the first version of this bus started at the
   corridor's x on the parent's bottom y, a line beginning in space.
+  The "24 past the widest row's right edge" is not negotiable per-chart: at
+  a display narrow enough that the widest row already spends nearly the
+  whole column, that 24 alone can push the corridor's own line past the
+  display's room, with no label anywhere in the chart to blame. Measured
+  2026-09-07: python-or-java at 358 packs Python's and Java's leaf-stacked
+  fans into two stacked columns, each 264 wide against 262 of usable room
+  (358 less two 48 margins) — 2px over on content alone — so the wrap
+  bus's corridor, 24 past that, stands at 288, and the chart declines to
+  the safe layout every time, labels or none. Confirmed by re-running the
+  same chart with both branch labels stripped: the decline persists
+  unchanged. 6.5's fix above (a wrap bus's pill riding the horizontal leg
+  instead of the vertical corridor) is a real, separate defect and stays
+  fixed regardless; this one is not a pill-seating problem and needs its
+  own measured fix — most likely to the corridor's own 24 stand-off or to
+  how a leaf-stacked column's width is derived at a declared display —
+  before python-or-java itself can reach 358 on the channel engine.
 
 - **1.7** **Phone height.** Full-size type on a phone column means height is
   boxes × rows, and nothing in the layout can shorten it. A chart laid out for
@@ -446,7 +462,19 @@ the renderer keeps what was written and writers own their casing.)
   other edge shares. Not the longest run outright: on a bus (1.5, 6.12,
   6.13) the longest footage is shared trunk, where pills from every branch
   would collide by construction; each branch's exclusive leg is where its
-  pill belongs. The centre is the midpoint of the run's **drawn extent**
+  pill belongs. The same reasoning decides which of a **wrap bus's** (1.6)
+  own legs a label rides: its vertical corridor stands only 6.7's 24 off
+  the content it skirts — far short of half a real pill's width — so a
+  labeled wrap bus seats its pill on the horizontal leg that turns into the
+  target's row instead, in the band between the wrapped rows, and the
+  corridor is derived (2.7) just wide enough to give that leg the length
+  the pill needs. (Added 2026-09-07: python-or-java's "no, enterprise or
+  Android" pill, riding the vertical corridor beside the leaf-stacked
+  Python column at a 358px display, had nowhere to sit without overlapping
+  it — `pill L_Q1_JAVA_0 overlaps PYWEB`; diamond-cascade's own wrapped
+  "fail" pill at the same display is the case that proves the seating,
+  since python-or-java itself stays on the safe layout at 358 for an
+  unrelated reason — see 1.6.) The centre is the midpoint of the run's **drawn extent**
   — the line as painted, which stops short of the arrowhead (10.3) — so
   the head never counts toward centring. (Added 2026-09-03: a pill
   centred on the vertex-to-face span sat visibly off the line it labels.) Pills never overlap each other or a node; when two pills on
