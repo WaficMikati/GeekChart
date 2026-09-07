@@ -187,52 +187,67 @@ export async function layout(
   // that still would not fit *that* box — the box every one of its siblings
   // already has — is wrapped to a second line, in the title's own style,
   // rather than left to overhang or drag the box wider than the list allows.
-  for (const item of pool) {
-    const { node } = item;
-    if (node.caption || ownShape.includes(node.shape)) continue;
-    if (item.label.width + scene.padX * 2 <= baseWidth) continue;
-    const measureTitle = (s: string) => measurer.measure(s, scene.titleFont, scene.titleSize);
-    const inner = baseWidth - scene.padX * 2;
-    // DESIGN 2.2 offers two outs, and until 2026-09-04 only the first was
-    // taken: a title with no two-line split that fits — "Another very long
-    // label testing the measurement of text at width" — fell through and drew
-    // one line straight out of both sides of its box. `clampTitle` is the
-    // other out, "shortened", and it always returns something that fits.
-    const lines = wrapTitle(node.title, measureTitle, inner) ?? clampTitle(node.title, measureTitle, inner);
-    if (lines.length === 2) node.titleLines = lines;
-    else node.title = lines[0];
-    item.label.width = Math.max(...lines.map(measureTitle));
-  }
-
-  // DESIGN 2.2: the same "wrap rather than widen" for a caption that will
-  // not fit the chart's shared box even at its widest — "Pandas · Django ·
-  // #1 on TIOBE" is the case: a caption in its own mono face can easily run
-  // longer than any title on the same box. Wrapped in the caption's own
-  // style, on the same `baseWidth` every sibling already has, never the box
-  // grown past what DESIGN 2.2's list allows.
-  for (const item of pool) {
-    const { node } = item;
-    if (!node.caption || ownShape.includes(node.shape)) continue;
-    const captionWidth = measurer.measure(
-      node.caption,
-      scene.captionFont,
-      scene.captionSize,
-      scene.captionTracking,
-    );
-    if (captionWidth + scene.padX * 2 <= baseWidth) continue;
-    const measureCaption = (s: string) =>
-      measurer.measure(s, scene.captionFont, scene.captionSize, scene.captionTracking);
-    const inner = baseWidth - scene.padX * 2;
-    // Same pair of outs as the title above (DESIGN 2.2): wrap if a split fits,
-    // otherwise shorten. A caption in its own mono face runs longer per
-    // character than a title, so it reaches the un-splittable case sooner.
-    const lines =
-      wrapTitle(node.caption, measureCaption, inner) ??
-      clampTitle(node.caption, measureCaption, inner);
-    if (lines.length === 2) node.captionLines = lines;
-    else node.caption = lines[0];
-    item.label.width = Math.max(item.label.width, ...lines.map(measureCaption));
-  }
+  // A caption gets the same treatment ("Pandas · Django · #1 on TIOBE" is the
+  // case: a caption in its own mono face can easily run longer than any title
+  // on the same box).
+  //
+  // Both passes are folded into one function, keyed on a width rather than
+  // hard-wired to `baseWidth`, so DESIGN 2.2's own size step-down (below,
+  // where the channel attempt declines outright at the chart's natural
+  // width) can re-run them from each node's original text at a narrower
+  // width — never compounding a previous wrap onto a new one.
+  const originalTitle = new Map(pool.map((i) => [i.node.id, i.node.title]));
+  const originalCaption = new Map(pool.map((i) => [i.node.id, i.node.caption]));
+  const originalLabelWidth = new Map(pool.map((i) => [i.node.id, i.label.width]));
+  const wrapPoolAtWidth = (width: number, liveMeasurer: Measurer): void => {
+    for (const item of pool) {
+      item.node.title = originalTitle.get(item.node.id)!;
+      item.node.titleLines = undefined;
+      item.node.caption = originalCaption.get(item.node.id);
+      item.node.captionLines = undefined;
+      item.label.width = originalLabelWidth.get(item.node.id)!;
+    }
+    for (const item of pool) {
+      const { node } = item;
+      if (node.caption || ownShape.includes(node.shape)) continue;
+      if (item.label.width + scene.padX * 2 <= width) continue;
+      const measureTitle = (s: string) => liveMeasurer.measure(s, scene.titleFont, scene.titleSize);
+      const inner = width - scene.padX * 2;
+      // DESIGN 2.2 offers two outs, and until 2026-09-04 only the first was
+      // taken: a title with no two-line split that fits — "Another very long
+      // label testing the measurement of text at width" — fell through and drew
+      // one line straight out of both sides of its box. `clampTitle` is the
+      // other out, "shortened", and it always returns something that fits.
+      const lines = wrapTitle(node.title, measureTitle, inner) ?? clampTitle(node.title, measureTitle, inner);
+      if (lines.length === 2) node.titleLines = lines;
+      else node.title = lines[0];
+      item.label.width = Math.max(...lines.map(measureTitle));
+    }
+    for (const item of pool) {
+      const { node } = item;
+      if (!node.caption || ownShape.includes(node.shape)) continue;
+      const captionWidth = liveMeasurer.measure(
+        node.caption,
+        scene.captionFont,
+        scene.captionSize,
+        scene.captionTracking,
+      );
+      if (captionWidth + scene.padX * 2 <= width) continue;
+      const measureCaption = (s: string) =>
+        liveMeasurer.measure(s, scene.captionFont, scene.captionSize, scene.captionTracking);
+      const inner = width - scene.padX * 2;
+      // Same pair of outs as the title above (DESIGN 2.2): wrap if a split fits,
+      // otherwise shorten. A caption in its own mono face runs longer per
+      // character than a title, so it reaches the un-splittable case sooner.
+      const lines =
+        wrapTitle(node.caption, measureCaption, inner) ??
+        clampTitle(node.caption, measureCaption, inner);
+      if (lines.length === 2) node.captionLines = lines;
+      else node.caption = lines[0];
+      item.label.width = Math.max(item.label.width, ...lines.map(measureCaption));
+    }
+  };
+  wrapPoolAtWidth(baseWidth, measurer);
 
   // DESIGN 1.1/1.6: a diamond solves its own geometry from its label (it is
   // in `ownShape`, above, exactly so a long diamond label never drags the
@@ -244,40 +259,71 @@ export async function layout(
   // instead — the same packing-before-scaling DESIGN 1.1 asks everywhere
   // else. Never runs undeclared: every diamond in the default catalog
   // already fits, so this only ever fires for a caller that named a display.
-  if (packToDisplay) {
-    const room = scene.canvas.width - scene.canvas.margin * 2;
-    for (const item of intrinsic) {
+  const diamondItems = intrinsic.filter((i) => i.node.shape === 'diamond');
+  const originalDiamondTitle = new Map(diamondItems.map((i) => [i.node.id, i.node.title]));
+  const originalDiamondLabel = new Map(diamondItems.map((i) => [i.node.id, { ...i.label }]));
+  // DESIGN 1.1/1.6, 2026-09-07: kept as its own function, alongside
+  // `wrapPoolAtWidth` above, for the same reason — the packing search below
+  // may need to ask for a diamond narrower than `room` itself once a wrap
+  // corridor has to clear it (a diamond sits above the rows a wrap bus
+  // passes on its way to a sibling that had to move down — DESIGN 1.6 —  so
+  // the corridor's own clearance is spent past whichever is wider, the
+  // diamond or the row beneath it). Re-runs from each diamond's original
+  // title, never compounding a previous wrap onto a new one.
+  const wrapDiamondsToRoom = (targetRoom: number, liveMeasurer: Measurer): void => {
+    for (const item of diamondItems) {
       const { node } = item;
-      if (node.shape !== 'diamond') continue;
+      node.title = originalDiamondTitle.get(node.id)!;
+      node.titleLines = undefined;
+      Object.assign(item.label, originalDiamondLabel.get(node.id)!);
       // `base` (the shared rect box) isn't settled until below, but a
       // diamond's own `fitShape` case never reads it — it solves purely off
       // its own label, which is the whole reason it is in `ownShape`.
       const natural = fitShape(item, { width: 0, height: 0 }, scene, flow);
-      if (natural.width <= room) continue;
+      if (natural.width <= targetRoom) continue;
       // Two lines, the same inter-line gap DESIGN 3.5's own row rhythm uses
       // elsewhere — solved for first, since the label width a diamond can
       // afford depends on how tall its label block already is.
       const twoLineHeight = scene.titleSize * 1.16 * 2 + 4;
-      const budget = diamondLabelBudget(room, twoLineHeight, scene.padShape);
+      const budget = diamondLabelBudget(targetRoom, twoLineHeight, scene.padShape);
       if (budget <= 0) continue;
-      const wrapped = wrapTitle(
-        node.title,
-        (s) => measurer.measure(s, scene.titleFont, scene.titleSize),
-        budget,
-      );
-      if (!wrapped) continue;
-      node.titleLines = wrapped;
-      // The budget IS the width — not a re-measure of the wrapped lines.
-      // Re-measuring hands the shape back to the font measurer, and fontkit
-      // and the browser disagree by fractions that the grid then snaps to
-      // different sides (python-or-java@358: 592 vs 600 wide). The budget is
-      // arithmetic, identical in both engines, and by construction the label
-      // width that lands the diamond at the packed room (DESIGN 2.2's wrap-
-      // rather-than-widen, sized to what the display affords).
-      item.label.width = budget;
-      item.label.height = twoLineHeight;
+      const measureTitle = (s: string) => liveMeasurer.measure(s, scene.titleFont, scene.titleSize);
+      const wrapped = wrapTitle(node.title, measureTitle, budget);
+      if (wrapped) {
+        node.titleLines = wrapped;
+        // The budget IS the width — not a re-measure of the wrapped lines.
+        // Re-measuring hands the shape back to the font measurer, and fontkit
+        // and the browser disagree by fractions that the grid then snaps to
+        // different sides (python-or-java@358: 592 vs 600 wide). The budget is
+        // arithmetic, identical in both engines, and by construction the label
+        // width that lands the diamond at the packed room (DESIGN 2.2's wrap-
+        // rather-than-widen, sized to what the display affords).
+        item.label.width = budget;
+        item.label.height = twoLineHeight;
+        continue;
+      }
+      // DESIGN 2.2's other out, for a diamond too: no two-line split of this
+      // title fits the budget a corridor further down the chart needs this
+      // diamond to leave (DESIGN 1.6's wrap bus has to clear whatever sits
+      // above it, this diamond included) — `clampTitle` always returns
+      // something that fits, so the retry can still narrow the diamond past
+      // where a clean word-break would, rather than leaving it at its
+      // natural (unwrapped, and here already too wide) size. Re-measured
+      // rather than trusted at `budget`, since a clamp can land narrower or
+      // (one unbreakable word) wider than what was asked for.
+      const clamped = clampTitle(node.title, measureTitle, budget);
+      if (clamped.length === 2) node.titleLines = clamped;
+      else node.title = clamped[0];
+      const oneLineHeight = scene.titleSize * 1.16 + 4;
+      item.label.width = Math.max(...clamped.map(measureTitle));
+      item.label.height = clamped.length === 2 ? twoLineHeight : oneLineHeight;
     }
-  }
+  };
+  // Never runs undeclared: every diamond in the default catalog already
+  // fits at its own natural size, so this only ever fires for a caller that
+  // named a display.
+  const diamondRoom = scene.canvas.width - scene.canvas.margin * 2;
+  if (packToDisplay) wrapDiamondsToRoom(diamondRoom, measurer);
   measurer.done();
 
   const grid = GRID;
@@ -290,22 +336,29 @@ export async function layout(
   // 56- or 72-high box is the thing 3.2 forbids, and one row of 48s beside a
   // row of 56s/72s breaks 2.3. A wrapped title's second line gets the same
   // 56-high box a caption would.
-  const wrappedCaption = graph.nodes.some((n) => Boolean(n.captionLines));
-  const twoTier = graph.nodes.some((n) => Boolean(n.caption) || Boolean(n.titleLines));
-  const base = {
-    width: baseWidth,
-    height: wrappedCaption
-      ? BOX_SIZES.captionWrap.height
-      : twoTier
-        ? BOX_SIZES.captioned.height
-        : BOX_SIZES.standard.height,
+  //
+  // Kept as its own function, alongside `wrapPoolAtWidth` above, for the same
+  // reason: the box-width step-down below re-fits every node at a narrower
+  // `baseWidth` once wrapping has re-run, and this is the "then size them"
+  // half of that redo.
+  const refitAllNodes = (boxWidth: number): void => {
+    const wrappedCaption = graph.nodes.some((n) => Boolean(n.captionLines));
+    const twoTier = graph.nodes.some((n) => Boolean(n.caption) || Boolean(n.titleLines));
+    const base = {
+      width: boxWidth,
+      height: wrappedCaption
+        ? BOX_SIZES.captionWrap.height
+        : twoTier
+          ? BOX_SIZES.captioned.height
+          : BOX_SIZES.standard.height,
+    };
+    for (const item of intrinsic) {
+      const fitted = fitShape(item, base, scene, flow);
+      item.node.width = roundUp(fitted.width);
+      item.node.height = roundUp(fitted.height);
+    }
   };
-
-  for (const item of intrinsic) {
-    const fitted = fitShape(item, base, scene, flow);
-    item.node.width = roundUp(fitted.width);
-    item.node.height = roundUp(fitted.height);
-  }
+  refitAllNodes(baseWidth);
 
   // DESIGN 2.7: a detected fan or chain is placed by the channel engine on
   // the real sizes just fitted — corridors and bands derived from their
@@ -341,24 +394,85 @@ export async function layout(
     // Applied for good: since DESIGN 1.10 a flowchart never leaves the
     // engine, so there is no old path left to hand the label-solved
     // diamonds back to — the safe layout draws the shared size too.
-    const diamonds = graph.nodes.filter((n) => n.shape === 'diamond');
-    if (diamonds.length > 1) {
-      const width = Math.max(...diamonds.map((n) => n.width!));
-      const height = Math.max(...diamonds.map((n) => n.height!));
-      for (const node of diamonds) {
-        node.width = width;
-        node.height = height;
+    const syncDiamonds = (): void => {
+      const diamonds = graph.nodes.filter((n) => n.shape === 'diamond');
+      if (diamonds.length > 1) {
+        const width = Math.max(...diamonds.map((n) => n.width!));
+        const height = Math.max(...diamonds.map((n) => n.height!));
+        for (const node of diamonds) {
+          node.width = width;
+          node.height = height;
+        }
       }
-    }
+    };
+    syncDiamonds();
     // DESIGN 1.10: the designed shapes are tried first and may decline once
     // real sizes are known; the safe layout is the last attempt and never
     // does. A flowchart therefore never reaches the pre-rewrite router —
     // there is nothing below this branch for it to fall to. The
     // `GC_GRID_DEBUG` decline lines stay: they now say why a chart got the
     // plain column instead of a shape someone designed.
-    let laid =
-      layoutChannels(graph, channelPlan, scene, measureLine, packToDisplay) ??
-      layoutSafe(graph, scene, measureLine);
+    let laid = layoutChannels(graph, channelPlan, scene, measureLine, packToDisplay);
+
+    // DESIGN 1.1/2.2/1.6, 2026-09-07: 1.5's stack and 1.6's wrap (inside the
+    // decline above) pack whole nodes at whatever size they already are —
+    // neither can touch a box's own width, or a diamond's own label, to make
+    // more room. A designed shape that still declines at the chart's natural
+    // sizing is not necessarily unreachable: the same "wrap rather than
+    // widen" DESIGN 2.2 asks of one label runs at chart scale too, stepping
+    // the shared box down 2.2's own size list (200 → 160) and, when a
+    // diamond sits where a wrap corridor has to clear it (DESIGN 1.6: the
+    // corridor stands past whichever is wider, the diamond above or the row
+    // its bus is routing around), narrowing the diamond's own label budget
+    // in the same 8-unit steps the grid uses everywhere else, past the point
+    // a clean two-line break can reach — `wrapDiamondsToRoom`'s `clampTitle`
+    // fallback shortens with an ellipsis there, same as 2.2's other out for
+    // an ordinary box's caption.
+    //
+    // Measured on python-or-java at a 358 phone (content room 262): the
+    // natural sizing's best packing reaches 296 — Q1's own 264-wide diamond
+    // plus the 32 a wrap corridor keeps clear of it (DESIGN 6.7), 34 over.
+    // The shared box stepping down to 160 does not move that number at all
+    // (Q1, not the leaf column, is what the corridor has to clear either
+    // way) — but narrowing Q1 itself, 8 units at a time, does: 224 (a clean
+    // two-line break) still packs to 272, 10 over; only past that, at 192 (an
+    // ellipsis dropping "web prototyping?" off the question's second line),
+    // does the packed width reach 256 and the chart ships designed — the
+    // Node/fontkit measurer reaches that at 8 steps down (64 below room); a
+    // real browser's own text metrics differ by enough to need more before
+    // the same split lands (DESIGN 3.1's own fontkit-vs-browser gap, at chart
+    // scale), so the search goes to 20 steps (160) rather than the bare
+    // minimum one measurer happened to need. Tried only once a decline has
+    // already happened, box width to 160 and no further (120 buys nothing
+    // more here).
+    if (!laid && packToDisplay) {
+      const narrowBoxWidth = Math.min(baseWidth, BOX_SIZES.standard.width);
+      for (let cut = GRID; !laid && cut <= 20 * GRID; cut += GRID) {
+        const dm = resolveMeasurer(measureWith);
+        wrapDiamondsToRoom(diamondRoom - cut, dm);
+        dm.done();
+        if (narrowBoxWidth < baseWidth) {
+          const bm = resolveMeasurer(measureWith);
+          wrapPoolAtWidth(narrowBoxWidth, bm);
+          bm.done();
+        }
+        refitAllNodes(narrowBoxWidth);
+        syncDiamonds();
+        laid = layoutChannels(graph, channelPlan, scene, measureLine, packToDisplay);
+      }
+      if (!laid) {
+        // Nothing narrower helped either — restore the natural sizing so the
+        // safe layout below (and everything downstream of it) sees exactly
+        // the chart today's render does.
+        const naturalMeasurer = resolveMeasurer(measureWith);
+        wrapDiamondsToRoom(diamondRoom, naturalMeasurer);
+        wrapPoolAtWidth(baseWidth, naturalMeasurer);
+        naturalMeasurer.done();
+        refitAllNodes(baseWidth);
+        syncDiamonds();
+      }
+    }
+    laid ??= layoutSafe(graph, scene, measureLine);
     // DESIGN 1.1: pack before you accept-wider. A designed shape that could
     // not reach the declared cap is only allowed to ship wide if nothing
     // narrower exists — and the safe layout is the ultimate packer, so it

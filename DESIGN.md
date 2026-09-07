@@ -199,7 +199,26 @@ and the check that enforces it cannot drift apart.
   left to force the whole chart's scale down. (Added 2026-08-28 alongside
   1.6: on a 358px phone column, python-or-java's own decision diamond — a
   35-character question — was the next thing over the cap once its two
-  fanned branches no longer were.)
+  fanned branches no longer were.) Wrap-rather-than-widen for a diamond does
+  not stop at one clean line break either: 1.5's stack and 1.6's wrap pack
+  whole nodes, not what is drawn inside one, so a decline that reaches past
+  both still leaves the diamond exactly where it was — and DESIGN 1.6's own
+  wrap corridor has to clear whatever sits above it, the diamond included, so
+  a diamond that is merely "as narrow as a clean two-line break allows" can
+  still be the thing that corridor cannot get around. Past that point the
+  diamond gets 2.2's *other* out, the one an overlong caption already has:
+  shortened with an ellipsis, same as `clampTitle`. Measured on python-or-java
+  at a 358 phone (content room 262): the chart's natural sizing packs to 296
+  regardless of the shared box's own width (200 or 160 — Q1's 264-wide
+  diamond is what the wrap corridor clears either way, not the leaf column
+  under it); narrowing the diamond's own budget 8 units at a time reaches 272
+  at a clean "Data, scripting, or / web prototyping?" break — still 10 over —
+  and only at a budget 64 under room does an ellipsized "Data, / scripting,
+  or…" bring the diamond, and the chart, in at 256 — measured against the
+  Node/fontkit measurer; a browser's own text metrics need the search to run
+  somewhat further past that same split before it lands, so it steps down to
+  160 under room before giving up. (Added 2026-09-07: the missing move once
+  the shared box itself is already at its floor.)
 - **2.3** Nodes in the same row share an exact `y` and height; nodes in the same
   column share an exact `x` and width. Gutters between siblings are equal
   (24 or 32) — except a gutter hosting a **derived channel** (2.7), which
@@ -472,9 +491,11 @@ the renderer keeps what was written and writers own their casing.)
   Android" pill, riding the vertical corridor beside the leaf-stacked
   Python column at a 358px display, had nowhere to sit without overlapping
   it — `pill L_Q1_JAVA_0 overlaps PYWEB`; diamond-cascade's own wrapped
-  "fail" pill at the same display is the case that proves the seating,
-  since python-or-java itself stays on the safe layout at 358 for an
-  unrelated reason — see 1.6.) The centre is the midpoint of the run's **drawn extent**
+  "fail" pill at the same display is the case that proves the seating
+  (python-or-java itself stayed on the safe layout at 358 for an unrelated
+  reason at the time — its own decision diamond, not this pill; see 2.2's
+  2026-09-07 addendum, which is what moved it onto the designed layout this
+  seating was already built for).) The centre is the midpoint of the run's **drawn extent**
   — the line as painted, which stops short of the arrowhead (10.3) — so
   the head never counts toward centring. (Added 2026-09-03: a pill
   centred on the vertex-to-face span sat visibly off the line it labels.) Pills never overlap each other or a node; when two pills on

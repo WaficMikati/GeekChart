@@ -2659,3 +2659,30 @@ describe('DESIGN 6.8, reconverging join lanes', () => {
     assert.equal(counts.intoE, 1, 'C→E and D→E merge into a single arrowhead on E');
   });
 });
+
+describe('DESIGN 2.2, a diamond narrows past a clean two-line break', () => {
+  // fixtures/blog/python-or-java.mmd at a 358 phone: 1.5's stack and 1.6's
+  // wrap already pack PY's and JAVA's own leaf pairs, but the search still
+  // declined — Q1's own diamond (above the wrap corridor Q1→JAVA has to
+  // clear) was never touched by either. Before this, the chart fell all the
+  // way to the safe layout at 640, well over the 358 cap.
+  const source = readFileSync(join(fixtures, 'blog', 'python-or-java.mmd'), 'utf8');
+
+  test('the decision diamond narrows (with an ellipsis, past 2.2\'s clean break) rather than the chart falling to safe', async () => {
+    await mount(source, { display: 358, motion: false });
+    const svg = await session.page.evaluate(() => document.querySelector('svg.gc-chart')!.outerHTML);
+    assert.ok(svg.includes('data-gc-engine="channels"'), 'the channel engine drew it');
+    assert.ok(!svg.includes('data-gc-layout="safe"'), 'not the plain safe column');
+    const vb = /viewBox="0 0 (\d+)/.exec(svg)![1];
+    assert.ok(Number(vb) <= 358, `chart is ${vb} wide, over the 358 cap`);
+
+    const q1Lines = await session.page.evaluate(
+      () => [...document.querySelectorAll('.gc-node[data-id="Q1"] .gc-title')].map((t) => t.textContent),
+    );
+    assert.equal(q1Lines.length, 2, 'the diamond still wraps to two lines, not one overhanging line');
+    assert.ok(
+      q1Lines.some((l) => l?.includes('…')),
+      `expected an ellipsis once a clean two-line break could not narrow the diamond enough, got ${JSON.stringify(q1Lines)}`,
+    );
+  });
+});
