@@ -733,9 +733,22 @@ export function layoutGrid(
           // Two branches only: three or more ride one bus (6.12), where the
           // pills share a single horizontal line and the packing gap above
           // already keeps them apart.
+          //
+          // A boxy parent's own two branches leave through a 'port' (TRACK=16
+          // off the parent's own centre, `treeMode` below) rather than the
+          // centre itself — a diamond's non-boxy 'trunk'/'side' legs leave
+          // from the centre with no such offset. The port eats TRACK off the
+          // usable run before the pill ever sees it, so a boxy parent's own
+          // budget has to include it back or the drawn leg comes up exactly
+          // TRACK short of what `2.7-fan-legs-mirror` requires — measured on
+          // state.mmd's Running (holiday/final project shipped) and
+          // state-lifecycle's UnderReview (committee yes/no): both plain
+          // `round` boxes, both landing 6-8 units under the 16-each floor
+          // before this term was added.
+          const boxy = isBoxyShape(node.shape);
           const legNeed =
             branchPill && mirrorLegs && ordered.length === 2
-              ? roundUp(branchPill + 2 * BRANCH_STUB + 2 * TURN, GRID)
+              ? roundUp(branchPill + 2 * BRANCH_STUB + 2 * TURN + (boxy ? TRACK : 0), GRID)
               : 0;
           for (let pass = 0; legNeed && pass < 4; pass++) {
             let moved = false;

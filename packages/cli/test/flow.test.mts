@@ -370,11 +370,14 @@ describe('routing', () => {
       });
       assert.deepEqual(failures, [], `${name}: ${failures.join('; ')}`);
     }
-    // DESIGN 1.10 took every flowchart off the old path, so the only graph
-    // fixtures still drawn there are the families that have not migrated:
-    // state.mmd and regex-engine.mmd. The floor is what is genuinely left,
-    // and it drops to zero the day those two move.
-    assert.ok(measured >= 2, `only ${measured} old-path fixtures left to measure`);
+    // DESIGN 1.10 took every flowchart off the old path, and state.mmd and
+    // regex-engine.mmd (the last two GRAPH_FIXTURES entries still on it)
+    // joined the channel engine on 2026-09-07 — so nothing in this list is
+    // measured here any more; the check above is dead code kept for the day
+    // a future family (class/ER) is added to GRAPH_FIXTURES before it
+    // migrates. Class and ER diagrams are still the old path's, but neither
+    // is in this list.
+    assert.equal(measured, 0, `expected every GRAPH_FIXTURES entry on the channel engine now, ${measured} were not`);
   });
 
   test('a diagram names itself uniquely, and the same way every render', async () => {
@@ -2684,5 +2687,61 @@ describe('DESIGN 2.2, a diamond narrows past a clean two-line break', () => {
       q1Lines.some((l) => l?.includes('…')),
       `expected an ellipsis once a clean two-line break could not narrow the diamond enough, got ${JSON.stringify(q1Lines)}`,
     );
+  });
+});
+
+describe('DESIGN 1.10, state diagrams on the channel engine', () => {
+  // State, class and ER share the flowchart Graph shape (unified.ts). Before
+  // 2026-09-07 a state diagram's start/end dots and fork/join bars were the
+  // one thing keeping `detectChannelChart` (channels.ts) from claiming it —
+  // PLAIN_SHAPES excluded 'dot'/'ring'/'bar' even though `fitShape`
+  // (measure.ts) already sized them and `draw.ts` already drew them. Class
+  // and ER still fall to the old path; only state moved.
+  test('state.mmd draws its start dot and end ring on the channel engine', async () => {
+    const reply = await mount(readFileSync(join(fixtures, 'state.mmd'), 'utf8'));
+    assert.ok(
+      reply.svg.includes('data-gc-engine="channels"'),
+      'expected state.mmd on the channel engine, not the old ELK path',
+    );
+    const shapes = await session.page.evaluate(() => ({
+      dots: document.querySelectorAll('.gc-node.gc-shape-dot').length,
+      rings: document.querySelectorAll('.gc-node.gc-shape-ring').length,
+    }));
+    assert.ok(shapes.dots >= 1, 'expected at least one start dot ([*] --> ...)');
+    assert.ok(shapes.rings >= 1, 'expected at least one end ring (... --> [*])');
+  });
+
+  test('a plain-box decision with two labeled branches mirrors its legs, DESIGN 2.7', async () => {
+    // Regression: `treeMode`'s 'port' departure (grid.ts) leaves a boxy
+    // parent TRACK (16) off its own centre, which the two-branch mirrored-leg
+    // budget (`legNeed`) did not account for — every existing fixture with
+    // two labeled forward branches off one node used a diamond there (a
+    // non-boxy shape, no port offset), so the shortfall was never exercised
+    // until a state diagram's own plain `round` boxes (Running, UnderReview)
+    // branched the same way. Both legs used to land 6-8 units short of
+    // DESIGN 2.7's 16-either-side floor; gate reported it as
+    // `2.7-fan-legs-mirror` FAILs on state.mmd and state-lifecycle.mmd.
+    for (const name of ['state.mmd', 'state-lifecycle.mmd']) {
+      const reply = await mount(readFileSync(join(fixtures, name), 'utf8'));
+      assert.ok(reply.svg.includes('data-gc-engine="channels"'), `${name}: expected the channel engine`);
+      const fails = await gateFails(name.replace(/\.mmd$/, ''));
+      const mirrorFails = fails.filter((f) => f.startsWith('2.7'));
+      assert.deepEqual(mirrorFails, [], `${name}: ${mirrorFails.join('; ')}`);
+    }
+  });
+
+  test('the trial lifecycle source renders with zero 6.x-runtime warnings', async () => {
+    // Acceptance case for the state-diagram migration: this source used to
+    // land on the old ELK path and trip `checkRuntimeGeometry`'s
+    // (layout/runtime-checks.ts) invariants — an edge passing too close to a
+    // node it does not touch (6.1), an edge not departing its own source's
+    // outline (6.2), or two arrowheads sharing one side (6.3). The channel
+    // engine and the safe layout both verify their own routes before they
+    // commit, so a violation here is an engine bug, not an expected finding.
+    const source = readFileSync(join(fixtures, 'state-lifecycle.mmd'), 'utf8');
+    const reply = await mount(source);
+    assert.ok(reply.svg.includes('data-gc-engine="channels"'), 'expected the channel engine');
+    const runtimeWarnings = reply.warnings.filter((w) => /^6\.[123]-runtime/.test(w));
+    assert.deepEqual(runtimeWarnings, [], runtimeWarnings.join(' | '));
   });
 });

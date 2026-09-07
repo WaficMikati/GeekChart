@@ -123,6 +123,7 @@ const GROUPS = [
       ['hub-with-returns', 'Hub with returns', 'flowchart'],
       ['source-stack', 'Mirrored source stack', 'flowchart'],
       ['reconverge', 'Reconverging joins, separate lanes', 'flowchart'],
+      ['state-lifecycle', 'State lifecycle', 'stateDiagram-v2'],
     ],
   },
   {

@@ -1,0 +1,8 @@
+stateDiagram-v2
+  [*] --> Submitted
+  Submitted --> UnderReview: docs complete
+  UnderReview --> Approved: committee yes
+  UnderReview --> Rejected: committee no
+  Approved --> Enrolled: signs agreement
+  Enrolled --> [*]
+  Rejected --> [*]

@@ -162,7 +162,14 @@ and the check that enforces it cannot drift apart.
   that holds every rule. (Added 2026-09-05, user's ruling on seeing an
   old-fallback render: "why are we using it as a fallback? that makes no
   sense." The old machinery remains only behind the non-flowchart types
-  until they migrate.)
+  until they migrate.) A state diagram is the same graph shape as a
+  flowchart (one adapter, `unified.ts`) and now holds the same rule: its
+  start/end dots, its rings and its fork/join bars are plain marks the
+  designed grid (or, failing that, the safe layout) seats on the same rows
+  and corridors as any other node — the old ELK path is unreachable for a
+  state diagram exactly as it already was for a flowchart. (Added
+  2026-09-07. Class and ER diagrams still fall to the old path; they have
+  not migrated.)
 - **1.9** **Chain wrapping is a reading-order ribbon, wrapped at the last
   possible moment.** Columns = as many as the declared display fits at full
   box-plus-gutter pitch — a chain never wraps earlier than the width forces
@@ -226,6 +233,16 @@ and the check that enforces it cannot drift apart.
   carries is not arbitrary. (Exemption added 2026-09-04: the 2.3 check
   predates 2.7 and read a 112 corridor derived for a 66-wide pill as a
   violation, forcing labelled cross-panel LR charts onto the old path.)
+  A shape that solves its own size instead of sharing 2.2's list — a
+  diamond, a circle, a panel, a state diagram's dot/ring/bar — does not
+  share the row's height either; it **centres on the row's own axis**
+  instead, the same axis every other member of the row shares, rather than
+  seating by a shared top edge. This was already true by construction
+  before state diagrams reached the grid or the safe layout (`grid.ts`
+  places every node at `rowCentre − ownSpan/2`; `safe.ts` places every
+  node at `columnAxis − ownWidth/2`), so a 22-wide start dot beside a
+  160-wide box was already centred, never top-aligned — verified rather
+  than re-specified when the markers arrived (2026-09-07).
 - **2.4** Diamonds come in **one size per chart**: the smallest that fits the
   chart's longest decision label (drawn around its label box with 16 of
   clearance at the widest point), applied to every diamond in the chart.
