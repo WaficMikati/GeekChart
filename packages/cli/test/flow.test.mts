@@ -2873,3 +2873,82 @@ describe('DESIGN 1.10, state diagrams on the channel engine', () => {
     assert.deepEqual(runtimeWarnings, [], runtimeWarnings.join(' | '));
   });
 });
+
+describe('DESIGN 2.7 + 2.10, a panel band derives like the outside world and stays its own', () => {
+  // fixtures/panel-compare.mmd: SLACK, a plain 3-box labeled chain, beside
+  // BUZZ, a fan-in/fan-out of 5 boxes with bent, labeled routes. Before this
+  // fix, panelgrid.ts kept ONE chart-wide `BAND` variable, derived from the
+  // single widest pill's raw WIDTH regardless of the chart's own flow axis —
+  // SLACK alone drew 480×616 (measured at commit 61734db), roughly double
+  // the 480×336 the identical chain draws with no panel around it at all,
+  // and BUZZ's own turn-driven need leaked into SLACK's straight one.
+  const source = readFileSync(join(fixtures, 'panel-compare.mmd'), 'utf8');
+
+  test('renders on the designed layout, not the safe column', async () => {
+    const reply = await mount(source, { motion: false });
+    assert.ok(reply.svg.includes('data-gc-engine="channels"'), 'the channel engine drew it');
+    assert.ok(!reply.svg.includes('data-gc-layout="safe"'), 'not the plain safe column');
+  });
+
+  test('DESIGN 2.7: a panel band derives from its own pills, the same way outside a panel', async () => {
+    await mount(source, { motion: false });
+    const fails = await gateCheck('2.7-panel-band-parity', 'panel-compare');
+    assert.deepEqual(fails, [], fails.join(' | '));
+  });
+
+  test('DESIGN 2.10: independent panels compact independently, never inheriting a sibling\'s band', async () => {
+    await mount(source, { motion: false });
+    const fails = await gateCheck('2.10-panel-independence', 'panel-compare');
+    assert.deepEqual(fails, [], fails.join(' | '));
+  });
+
+  test('SLACK\'s own labeled gap measures its own content, not BUZZ\'s wider pill', async () => {
+    await mount(source, { motion: false });
+    const gaps = await session.page.evaluate(() => {
+      const rectOf = (id: string) => {
+        const el = document.querySelector(`.gc-node[data-id="${id}"] .gc-outline, .gc-node[data-id="${id}"] .gc-fill`);
+        return (el as SVGGraphicsElement).getBBox();
+      };
+      const sa = rectOf('SA');
+      const sb = rectOf('SB');
+      const sw = rectOf('SW');
+      return {
+        gap1: sb.y - (sa.y + sa.height),
+        gap2: sw.y - (sb.y + sb.height),
+      };
+    });
+    // 2.7's own derivation for a single-line pill (22 tall) on a straight
+    // run: 48 floor, or a touch more for the pill's own 8-either-side
+    // clearance plus the drawn line's end standoffs — nowhere near the
+    // 152-plus a chart-wide, width-based `BAND` used to force here.
+    assert.ok(gaps.gap1 < 80, `SLACK's first gap is ${gaps.gap1}, expected well under 80`);
+    assert.ok(gaps.gap2 < 80, `SLACK's second gap is ${gaps.gap2}, expected well under 80`);
+  });
+
+  test('no pill overlaps a node or another pill', async () => {
+    await mount(source, { motion: false });
+    const geo = await session.page.evaluate(() => {
+      const rectOf = (el: Element) => {
+        const b = (el as SVGGraphicsElement).getBBox();
+        return { x: b.x, y: b.y, w: b.width, h: b.height };
+      };
+      const plates = [...document.querySelectorAll('.gc-plate')].map(rectOf);
+      const nodes = [...document.querySelectorAll('.gc-node')].map(rectOf);
+      return { plates, nodes };
+    });
+    const overlaps = (
+      a: { x: number; y: number; w: number; h: number },
+      b: { x: number; y: number; w: number; h: number },
+    ) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    for (const p of geo.plates) {
+      for (const n of geo.nodes) {
+        assert.ok(!overlaps(p, n), `a pill (${JSON.stringify(p)}) must not cover a node (${JSON.stringify(n)})`);
+      }
+    }
+    for (let i = 0; i < geo.plates.length; i++) {
+      for (let j = i + 1; j < geo.plates.length; j++) {
+        assert.ok(!overlaps(geo.plates[i]!, geo.plates[j]!), 'pills must not overlap each other');
+      }
+    }
+  });
+});

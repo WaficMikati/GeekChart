@@ -1051,6 +1051,16 @@ function directChildren(ctx: Ctx, p: PanelBox): DOMRect[] {
   return out;
 }
 
+/** Whether an edge endpoint id names panel `p` itself (2.10's own endpoint
+ *  convention) or a node or nested panel that sits inside it. */
+function belongsTo(ctx: Ctx, id: string, p: PanelBox): boolean {
+  if (id === p.id) return true;
+  const n = nodeById(ctx).get(id);
+  if (n) return contains(p.b, rect(outline(n)));
+  const panel = panelBoxes(ctx).find((q) => q.id === id);
+  return panel ? contains(p.b, panel.b) : false;
+}
+
 /** The parent panel of a panel: the smallest one that contains it. */
 function panelParent(ctx: Ctx, p: PanelBox): string | null {
   let best: PanelBox | null = null;
@@ -1207,22 +1217,278 @@ export const panelGeometry: Check = {
     }
     for (const group of ranks) {
       if (group.length < 2) continue;
-      const rows = group.map((p) => childRows(directChildren(ctx, p)));
-      for (let i = 1; i < group.length; i++) {
-        const n = Math.min(rows[0]!.length, rows[i]!.length);
-        for (let k = 0; k < n; k++) {
-          const off = Math.abs(rows[0]![k]! - rows[i]![k]!) / u;
-          if (off > tol)
-            findings.push({
-              severity: 'fail',
-              message: `2.6 row ${k + 1} of ${group[i]!.id} is ${off.toFixed(0)} off the same row of ${group[0]!.id}`,
-            });
+      // DESIGN 2.10, amended (2026-09-08): the shared row above is owed to
+      // panels a cross-panel edge actually connects — subgraph-pair's
+      // Frontend/Backend (B→C), three-subgraphs' chain — never to two
+      // panels that merely landed in the same visual rank. "Panels with no
+      // edges between them align their TOPS, not every internal rank" (the
+      // owner's own words): a shared top is already guaranteed for free
+      // (every panel's kicker strip is the same fixed height, so two panels
+      // starting at the same y always have their own first child row at the
+      // same y too), and independent panels compact independently past it —
+      // panel-compare's SLACK and BUZZ, sharing a rank with NOTHING
+      // connecting them, used to fail here for exactly that reason.
+      // Components follow the chart's own edges, not rank-bucket membership.
+      const parent = new Map<PanelBox, PanelBox>(group.map((p) => [p, p] as const));
+      const find = (p: PanelBox): PanelBox => {
+        let r = p;
+        while (parent.get(r) !== r) r = parent.get(r)!;
+        parent.set(p, r);
+        return r;
+      };
+      const union = (a: PanelBox, b: PanelBox): void => {
+        const ra = find(a);
+        const rb = find(b);
+        if (ra !== rb) parent.set(ra, rb);
+      };
+      for (const m of edgeMeta(ctx)) {
+        if (!m.from || !m.to) continue;
+        const a = group.find((p) => belongsTo(ctx, m.from!, p));
+        const b = group.find((p) => belongsTo(ctx, m.to!, p));
+        if (a && b && a !== b) union(a, b);
+      }
+      const components = new Map<PanelBox, PanelBox[]>();
+      for (const p of group) {
+        const r = find(p);
+        components.set(r, [...(components.get(r) ?? []), p]);
+      }
+      for (const comp of components.values()) {
+        if (comp.length < 2) continue;
+        const rows = comp.map((p) => childRows(directChildren(ctx, p)));
+        for (let i = 1; i < comp.length; i++) {
+          const n = Math.min(rows[0]!.length, rows[i]!.length);
+          for (let k = 0; k < n; k++) {
+            const off = Math.abs(rows[0]![k]! - rows[i]![k]!) / u;
+            if (off > tol)
+              findings.push({
+                severity: 'fail',
+                message: `2.6 row ${k + 1} of ${comp[i]!.id} is ${off.toFixed(0)} off the same row of ${comp[0]!.id}`,
+              });
+          }
         }
       }
     }
     return findings;
   },
 };
+
+const PANEL_BAND_PILL_CLEAR = RULES['6.9']!.threshold!;
+/** `layoutGrid()`'s own floor for a plain, non-panel chain (DESIGN 2.7): the
+ *  box height itself, so an unlabeled chain reads as square gaps. A panel's
+ *  own bands owe the same floor — never a separately-tuned, more generous
+ *  number (2.10, 2026-09-08 amendment). */
+const PANEL_BAND_FLOOR = 48;
+/** `layoutGrid()`'s own turn allowance (2×TURN + STANDOFF), for a container
+ *  whose own routes bend but carry no label at all. */
+const PANEL_BAND_TURN = Math.max(
+  PANEL_BAND_FLOOR,
+  Math.ceil((2 * 12 + 4 + tokens.CLEARANCE.stub + 4) / 8) * 8,
+);
+
+/**
+ * `isChannels` alone also matches a panel chart the channel engine's own
+ * panel planner DECLINED — `safe.ts`'s plain column stamps the identical
+ * `data-gc-engine="channels"` (every engine in this codebase does), keyed
+ * apart only by `data-gc-layout="safe"`. `panelBandParity` and
+ * `panelIndependence` below are about `panelgrid.ts`'s OWN band derivation
+ * specifically, so a chart that never reached it — `control-plane`,
+ * `prompt-anatomy`, `platform-layers`, `pyenv-resolution`, all declined for
+ * reasons this task's rules do not touch — is excluded the same way.
+ */
+function isPanelgridChart(svg: SVGSVGElement): boolean {
+  return isChannels(svg) && svg.dataset.gcLayout !== 'safe';
+}
+
+/** A panel whose direct children include another panel: nested composition
+ *  (2.6's "a nested panel is a child like any other") has its own padding
+ *  and kicker geometry already checked by `panelGeometry` above, and a
+ *  "row" that mixes a tall nested panel with a plain node needs a rank
+ *  concept this DOM-level band reader does not attempt — out of scope for
+ *  these two checks, which target a LEAF panel's own straight/turned runs. */
+function hasNestedPanelChild(ctx: Ctx, p: PanelBox): boolean {
+  return panelBoxes(ctx).some((q) => q.id !== p.id && contains(p.b, q.b));
+}
+
+/** Every node id that is a direct child of panel `p` — a node inside a
+ *  nested panel of `p`'s own belongs to that nested panel instead (2.6's "a
+ *  nested panel is a child like any other"). */
+function directChildNodeIds(ctx: Ctx, p: PanelBox): Set<string> {
+  const panels = panelBoxes(ctx);
+  const out = new Set<string>();
+  for (const [id, n] of nodeById(ctx)) {
+    const b = rect(outline(n));
+    if (!b.width || !contains(p.b, b)) continue;
+    const nested = panels.some((q) => q.id !== p.id && contains(p.b, q.b) && contains(q.b, b));
+    if (!nested) out.add(id);
+  }
+  return out;
+}
+
+/**
+ * A panel's own uniform band (DESIGN 2.7: "uniform per chart", scoped here
+ * to one container) — derived from its OWN edges alone, the same way
+ * `layoutGrid()`'s plain, non-panel chain derives one: the widest pill's
+ * own along-axis extent (height for a TB chart's vertical bands, width for
+ * an LR chart's horizontal ones) plus 6.9's 8 clear either side and the
+ * drawn line's own end standoffs, when any edge carries a label; the turn
+ * allowance alone when a route bends but nothing is labeled; the plain 48
+ * floor otherwise. Never a separately-tuned, more generous number.
+ */
+function panelBandExpected(ctx: Ctx, p: PanelBox, tb: boolean): number {
+  const u = ctx.unit;
+  const mine = directChildNodeIds(ctx, p);
+  const plateOf = new Map(plates(ctx).map((pl) => [pl.id, pl.b] as const));
+  const edgeGap = tokens.CLEARANCE.stub; // scene.edgeGap — the arrowhead standoff
+  const edgeGapStart = 4; // scene.edgeGapStart, fixed across every scene
+  const roundUp8 = (v: number): number => Math.ceil(v / 8) * 8;
+  let widestPv = 0;
+  let anyBent = false;
+  for (const m of edgeMeta(ctx)) {
+    if (!m.from || !m.to || !mine.has(m.from) || !mine.has(m.to)) continue;
+    const ctm = m.e.getScreenCTM();
+    const pts = ctm ? pathPointsHV(m.e.getAttribute('d'), ctm) : [];
+    if (pts.length > 2) anyBent = true;
+    const plate = plateOf.get(m.e.dataset.id ?? '');
+    if (plate) widestPv = Math.max(widestPv, (tb ? plate.height : plate.width) / u);
+  }
+  if (widestPv > 0) {
+    return Math.max(
+      PANEL_BAND_FLOOR,
+      roundUp8(widestPv + 2 * PANEL_BAND_PILL_CLEAR + edgeGap + edgeGapStart),
+    );
+  }
+  return anyBent ? PANEL_BAND_TURN : PANEL_BAND_FLOOR;
+}
+
+/**
+ * The panel's own ACTUAL band between each pair of consecutive rows: the
+ * next row's own top less the previous row's own bottom — the visual gap
+ * itself, not top-to-top (which would also count a row's own box height,
+ * and rows do not all share one height, e.g. a cylinder beside a rect).
+ */
+function panelRowBands(ctx: Ctx, p: PanelBox, tb: boolean): number[] {
+  const kids = directChildren(ctx, p);
+  const rows = new Map<number, DOMRect[]>();
+  for (const b of kids) {
+    const top = tb ? b.top : b.left;
+    const key = [...rows.keys()].find((k) => Math.abs(k - top) < 2) ?? top;
+    rows.set(key, [...(rows.get(key) ?? []), b]);
+  }
+  const ordered = [...rows.entries()].sort((a, b) => a[0] - b[0]);
+  const out: number[] = [];
+  for (let i = 1; i < ordered.length; i++) {
+    const prevBottom = Math.max(...ordered[i - 1]![1].map((b) => (tb ? b.bottom : b.right)));
+    const nextTop = ordered[i]![0];
+    out.push((nextTop - prevBottom) / ctx.unit);
+  }
+  return out;
+}
+
+/**
+ * DESIGN 2.7, amended (2026-09-08): a panel's own band derives EXACTLY the
+ * way the same content draws outside any panel — never a separately-tuned,
+ * more generous formula. Before this amendment, `panel-compare.mmd`'s SLACK
+ * (a plain 3-box chain, two labeled edges) drew 480×616 alone, roughly
+ * double the 480×336 the identical chain draws with no panel around it —
+ * this check is the number that catches it.
+ */
+export const panelBandParity: Check = {
+  id: '2.7-panel-band-parity',
+  rule: '2.7',
+  run(svg, ctx) {
+    if (!isPanelgridChart(svg)) return [];
+    const findings: Finding[] = [];
+    const tb = svg.dataset.flow !== 'LR';
+    for (const p of panelBoxes(ctx)) {
+      if (hasNestedPanelChild(ctx, p)) continue;
+      const expected = panelBandExpected(ctx, p, tb);
+      const actuals = panelRowBands(ctx, p, tb);
+      actuals.forEach((actual, i) => {
+        if (Math.abs(actual - expected) > 3) {
+          findings.push({
+            severity: 'fail',
+            message:
+              `2.7 panel ${p.id}'s row ${i + 1} band is ${actual.toFixed(0)}, not the ` +
+              `${expected.toFixed(0)} its own content derives to outside a panel`,
+          });
+        }
+      });
+    }
+    return findings;
+  },
+};
+
+/**
+ * DESIGN 2.10, amended (2026-09-08): "Panels with no edges between them
+ * align their TOPS, not every internal rank... each lays out its interior
+ * on its own rank grid." Before this amendment every panel's band came from
+ * one chart-wide `BAND` variable, derived from the single WIDEST pill in
+ * the ENTIRE graph — so a panel whose own content asked for far less still
+ * measured whatever a busier sibling needed. This check reproduces that
+ * exact, once-real shape (a panel's band matching the chart's widest pill
+ * rather than its OWN) as the forbidden pattern: `panel-compare.mmd`'s
+ * SLACK (a plain 3-box chain, own widest pill 22 tall) used to draw its
+ * band from BUZZ's 182-wide "every message signed" pill instead, 480×616
+ * alone against the 480×336 the identical chain draws with no panel at all.
+ */
+export const panelIndependence: Check = {
+  id: '2.10-panel-independence',
+  rule: '2.10',
+  run(svg, ctx) {
+    if (!isPanelgridChart(svg)) return [];
+    const findings: Finding[] = [];
+    const tb = svg.dataset.flow !== 'LR';
+    const panels = panelBoxes(ctx).filter((p) => !hasNestedPanelChild(ctx, p));
+    if (panels.length < 2) return findings;
+    const u = ctx.unit;
+    const plateOf = new Map(plates(ctx).map((pl) => [pl.id, pl.b] as const));
+    const roundUp8 = (v: number): number => Math.ceil(v / 8) * 8;
+    const edgeGap = tokens.CLEARANCE.stub;
+    const edgeGapStart = 4;
+    // The one shared value every panel in the chart used to be forced onto:
+    // `bandLabel` fed the WIDEST pill's raw WIDTH, chart-wide, regardless of
+    // which panel it belonged to or which axis the chart actually flows on
+    // (the same axis mistake `panelBandParity` catches on a panel's own
+    // content — reproduced here across the whole chart on purpose, since
+    // that is exactly the value the old single `BAND` variable computed).
+    let widestPillWidth = 0;
+    for (const p of panels) {
+      const mine = directChildNodeIds(ctx, p);
+      for (const m of edgeMeta(ctx)) {
+        if (!m.from || !m.to || !mine.has(m.from) || !mine.has(m.to)) continue;
+        const plate = plateOf.get(m.e.dataset.id ?? '');
+        if (plate) widestPillWidth = Math.max(widestPillWidth, plate.width / u);
+      }
+    }
+    if (widestPillWidth <= 0) return findings;
+    const forbiddenShared = Math.max(
+      PANEL_BAND_FLOOR,
+      roundUp8(widestPillWidth + 2 * PANEL_BAND_PILL_CLEAR + edgeGap + edgeGapStart),
+    );
+    for (const p of panels) {
+      const ownExpected = panelBandExpected(ctx, p, tb);
+      // This panel IS (or is close to) the chart's own widest need — a
+      // match here is unremarkable, not a borrowed value.
+      if (forbiddenShared - ownExpected <= 8) continue;
+      for (const actual of panelRowBands(ctx, p, tb)) {
+        const matchesOwn = Math.abs(actual - ownExpected) <= 3;
+        const matchesForbidden = Math.abs(actual - forbiddenShared) <= 24;
+        if (!matchesOwn && matchesForbidden) {
+          findings.push({
+            severity: 'fail',
+            message:
+              `2.10 panel ${p.id}'s band is ${actual.toFixed(0)}, matching the chart-wide widest ` +
+              `pill's own need (~${forbiddenShared.toFixed(0)}) rather than its own content ` +
+              `(${ownExpected.toFixed(0)}) — independent panels compact independently`,
+          });
+        }
+      }
+    }
+    return findings;
+  },
+};
+
+
 
 /**
  * DESIGN 2.10: sibling panels keep one row. Measured on the axis the rule was
