@@ -3,6 +3,7 @@ import { RULES } from '../rules.ts';
 import type { Scene } from '../scene.ts';
 import { CLEARANCE, GRID, GUTTER, PANEL } from '../tokens.ts';
 import {
+  narrowPill,
   PILL_PAD_X,
   pillHeight,
   roundUp,
@@ -13,6 +14,7 @@ import {
   type Pill,
   type SeatedPill,
 } from './channels.ts';
+import { HUB_ENTRY_DROP, HUB_GAP, STACK_GAP, TRUNK_INDENT } from './source-stack.ts';
 
 /**
  * DESIGN 2.6 + 2.10, phase 3b: flowcharts with subgraphs, planned by the
@@ -29,6 +31,16 @@ import {
  *     leaf-stack move at panel scale) and the row stands. Cross-panel edges
  *     leave the child shape's own face (6.2) and cross the panel border
  *     perpendicular; the panel border is never a proxy for the shape.
+ *   1.5, mirrored, at panel scale — a PANEL's own fan-in source row: two or
+ *     more plain sources feeding one hub, all inside the same panel and nothing
+ *     else in it, stack in one column when that row cannot stand at the
+ *     declared display, joined by one collecting trunk in an indent strip on
+ *     their right (`layout/source-stack.ts`'s own construction, reused here
+ *     rather than reimplemented — same STACK_GAP/TRUNK_INDENT/HUB_GAP/
+ *     HUB_ENTRY_DROP). Unlike that whole-graph module, a labeled arrival is
+ *     not disqualifying here: the indent strip widens for the widest branch's
+ *     pill exactly as 2.7 already derives a jog's corridor elsewhere in this
+ *     file, and the panel's own width is derived from the stacked form.
  *
  * Structure is the engine's usual floor-plan/plan/derive/realize, run
  * recursively over the cluster forest: every container (the chart, then each
@@ -132,6 +144,7 @@ export function layoutPanelChart(
   graph: Graph,
   scene: Scene,
   packToDisplay = false,
+  measureLine: (s: string) => number = () => 0,
 ): ChannelLayout | null {
   const TB = graph.direction === 'TB';
   const flowAxis: Axis = TB ? 'y' : 'x';
@@ -327,6 +340,155 @@ export function layoutPanelChart(
     backLifted.push({ edge: e, from: l.from, to: l.to });
   }
 
+  // --- DESIGN 1.5, mirrored: find a panel that IS a fan-in ------------------
+  // Deliberately narrow, the same way `source-stack.ts` is narrow about the
+  // whole chart: a panel qualifies only when it holds nothing BUT two or more
+  // plain sources (no arrivals of their own anywhere in the graph, one exit
+  // apiece) and the one hub they all feed, with that hub not continuing to
+  // anything else inside the same panel. A hub whose own forward edge lands on
+  // another member of the panel would need its downstream chain seated after
+  // the stack too — a shape this port does not draw yet, so it is left to the
+  // ordinary row (and, failing that, to 2.10's own moves and the safe layout).
+  interface StackCandidate {
+    sources: NodeItem[];
+    hub: NodeItem;
+  }
+  const stackCandidates = new Map<string, StackCandidate>(); // panel id -> its fan-in
+  {
+    const insCount = new Map<string, number>(graph.nodes.map((n) => [n.id, 0] as const));
+    const outsCount = new Map<string, number>(graph.nodes.map((n) => [n.id, 0] as const));
+    for (const e of graph.edges) {
+      insCount.set(e.to, (insCount.get(e.to) ?? 0) + 1);
+      outsCount.set(e.from, (outsCount.get(e.from) ?? 0) + 1);
+    }
+    for (const p of panelItems.values()) {
+      const items = p.items;
+      if (items.length < 3 || items.some((i) => i.kind !== 'node')) continue;
+      const nodeList = items as NodeItem[];
+      for (const hubCand of nodeList) {
+        const others = nodeList.filter((i) => i !== hubCand);
+        if (others.length < 2) continue;
+        const inEdges = (liftedIn.get(p.id) ?? []).filter((l) => l.to === hubCand);
+        if (inEdges.length !== others.length) continue;
+        if (!others.every((o) => inEdges.some((l) => l.from === o))) continue;
+        if (!others.every((o) => insCount.get(o.id) === 0 && outsCount.get(o.id) === 1)) continue;
+        const outEdges = (liftedIn.get(p.id) ?? []).filter((l) => l.from === hubCand);
+        if (outEdges.length > 0) continue;
+        stackCandidates.set(p.id, {
+          sources: others.sort(
+            (a, b) => graph.nodes.indexOf(a.node) - graph.nodes.indexOf(b.node),
+          ),
+          hub: hubCand,
+        });
+        break;
+      }
+    }
+  }
+  // Whether each candidate panel is CURRENTLY drawn stacked — off until the
+  // packing search below finds the plain row does not fit.
+  const useStack = new Map<string, boolean>([...stackCandidates.keys()].map((k) => [k, false]));
+  // The stack's own routes, pill placements and which edges they cover, keyed
+  // by panel id and refreshed on every `sizePanel` call (never appended to) so
+  // a container re-solved with different geometry never carries a stale copy.
+  const stackRoutesByPanel = new Map<string, Route[]>();
+  const stackPillsByPanel = new Map<string, SeatedPill[]>();
+
+  /**
+   * Seat a fan-in panel's contents as one stacked column: the sources 16
+   * apart (DESIGN 1.5's own leaf gap), a single collecting trunk in an indent
+   * strip on their right, one arrival into the hub, the hub after the stack
+   * and centred on it — `layout/source-stack.ts`'s construction, reused
+   * rather than reimplemented, run here in the panel's own local coordinates
+   * instead of the whole chart's. A labeled arrival widens the strip for its
+   * own pill (DESIGN 2.7's "widest pill any branch carries plus its 16
+   * stubs" — the same PILL_RUN_CLEAR this file already derives a bent jog's
+   * corridor from, reused rather than a new number), and every branch's own
+   * pill is queued directly rather than left to the generic longest-run
+   * search below: the vertical trunk is often the longest run in a tall
+   * stack, and DESIGN 1.5 keeps it shared and pill-free.
+   */
+  const seatSourceStack = (
+    pid: string,
+    candidate: StackCandidate,
+  ): { w: number; h: number } => {
+    const { sources, hub } = candidate;
+    const edgesToHub = (liftedIn.get(pid) ?? []).filter((l) => l.to === hub);
+    const colW = Math.max(...sources.map((s) => s.w), hub.w);
+    let cursorY = 0;
+    for (const s of sources) {
+      s.x = (colW - s.w) / 2;
+      s.y = cursorY;
+      cursorY += s.h + STACK_GAP;
+    }
+    const stackBottom = cursorY - STACK_GAP;
+    const widestPill = Math.max(
+      0,
+      ...edgesToHub.map((l) => pills.get(l.edge.id)?.width ?? 0),
+    );
+    const indent = Math.max(
+      TRUNK_INDENT,
+      widestPill ? roundUp(widestPill + 2 * PILL_RUN_CLEAR, GRID) : 0,
+    );
+    const trunkX = colW + indent;
+    hub.x = (colW - hub.w) / 2;
+    hub.y = stackBottom + HUB_GAP;
+    const hubCentreX = hub.x + hub.w / 2;
+    const entryY = hub.y - HUB_ENTRY_DROP;
+    const routes: Route[] = [];
+    const seatedPills: SeatedPill[] = [];
+    for (const s of sources) {
+      const l = edgesToHub.find((x) => x.from === s)!;
+      const sRightX = s.x + s.w;
+      const sCentreY = s.y + s.h / 2;
+      routes.push({
+        edge: l.edge,
+        pts: [
+          { x: sRightX, y: sCentreY },
+          { x: trunkX, y: sCentreY },
+          { x: trunkX, y: entryY },
+          { x: hubCentreX, y: entryY },
+          { x: hubCentreX, y: hub.y },
+        ],
+        startSide: 'right',
+        endSide: 'top',
+        bus: true,
+      });
+      const pill = pills.get(l.edge.id);
+      if (pill) {
+        seatedPills.push({
+          edge: l.edge,
+          pill,
+          cx: (sRightX + trunkX) / 2,
+          cy: sCentreY,
+          run: { x1: sRightX, y1: sCentreY, x2: trunkX, y2: sCentreY },
+        });
+      }
+    }
+    stackRoutesByPanel.set(pid, routes);
+    stackPillsByPanel.set(pid, seatedPills);
+    return { w: Math.max(trunkX, colW), h: hub.y + hub.h };
+  };
+
+  /** 2.7 + 1.5: shrink the widest pill any active stack's branch carries onto
+   *  a second line before the layout gives up more width — the same "derive
+   *  smaller, plan again" trade `narrowWidestBranchPill` already makes for
+   *  grid.ts's own fans. */
+  const narrowWidestStackPill = (): boolean => {
+    let best: { id: string; pill: Pill; was: number } | null = null;
+    for (const [pid, on] of useStack) {
+      if (!on) continue;
+      for (const l of liftedIn.get(pid) ?? []) {
+        const pill = pills.get(l.edge.id);
+        if (!pill || (best && pill.width <= best.was)) continue;
+        const narrower = narrowPill(pill, scene, measureLine);
+        if (narrower) best = { id: l.edge.id, pill: narrower, was: pill.width };
+      }
+    }
+    if (!best) return false;
+    pills.set(best.id, best.pill);
+    return true;
+  };
+
   // --- SEAT ---------------------------------------------------------------
   /**
    * One container. `along` is the axis its ranks advance on; the cross axis
@@ -447,9 +609,19 @@ export function layoutPanelChart(
     for (const child of p.items) {
       if (child.kind === 'panel' && !sizePanel(child)) return false;
     }
-    const inner = seatContainer(p.items, p.id, interiorOf.get(p.id) ?? flowAxis, p.override);
+    const candidate = stackCandidates.get(p.id);
+    let inner: { w: number; h: number } | null;
+    if (candidate && useStack.get(p.id)) {
+      // DESIGN 1.5, mirrored, at panel scale: this panel IS a fan-in and the
+      // packing search below decided its plain row cannot stand — draw the
+      // stacked column instead of ranking it the ordinary way.
+      inner = seatSourceStack(p.id, candidate);
+      p.profile = [inner.h];
+    } else {
+      inner = seatContainer(p.items, p.id, interiorOf.get(p.id) ?? flowAxis, p.override);
+      if (inner) p.profile = profileOf(p.items, interiorOf.get(p.id) ?? flowAxis);
+    }
     if (!inner) return false;
-    p.profile = profileOf(p.items, interiorOf.get(p.id) ?? flowAxis);
     const header = (p.cluster.panelHeaderWidth ?? 0) + 2 * PANEL.pad;
     p.w = Math.max(inner.w + 2 * PANEL.pad, header);
     p.h = inner.h + PANEL.head + PANEL.pad;
@@ -500,6 +672,11 @@ export function layoutPanelChart(
       const byRank = new Map<number, PanelItem[]>();
       for (const i of items) {
         if (i.kind !== 'panel') continue;
+        // DESIGN 1.5, mirrored: a panel drawn as a stacked fan-in is not a
+        // ranked sequence of rows any more, so it has no per-rank profile a
+        // sibling could line up with — 2.6's row-sharing simply does not
+        // reach it, the same way it does not reach a panel of one rank.
+        if (useStack.get(i.id)) continue;
         const k = containerAlong === 'x' ? 0 : i.rank;
         byRank.set(k, [...(byRank.get(k) ?? []), i]);
       }
@@ -577,8 +754,15 @@ export function layoutPanelChart(
       ac: number;
       bc: number;
     }
+    // DESIGN 1.5, mirrored: a stacked fan-in's own edges already have their
+    // routes (the trunk and its branches, built in `seatSourceStack`) — they
+    // skip the ordinary one-bend Z-route entirely rather than getting a
+    // second, competing route computed for the same edge.
+    const stackEdgeIds = new Set<string>();
+    for (const rs of stackRoutesByPanel.values()) for (const r of rs) stackEdgeIds.add(r.edge.id);
     const legs: Leg[] = [];
     for (const e of forwardEdges) {
+      if (stackEdgeIds.has(e.id)) continue;
       const l = liftedOf(e)!;
       const horizontal = (interiorOf.get(key(l.owner)) ?? flowAxis) === 'x';
       const a = boxOf(e.from);
@@ -658,6 +842,19 @@ export function layoutPanelChart(
         startSide: horizontal ? 'right' : 'bottom',
         endSide: horizontal ? 'left' : 'top',
       });
+    }
+    // DESIGN 1.5, mirrored: every active fan-in's own trunk and branches,
+    // built directly in `seatSourceStack` against the panel's own LOCAL
+    // coordinates (before REALIZE moved its contents to the chart's own
+    // frame) — shift them the same way `place()` just shifted the panel's
+    // children, since nothing else will.
+    for (const [pid, rs] of stackRoutesByPanel) {
+      const p = panelItems.get(pid)!;
+      const dx = p.x + p.contentX;
+      const dy = p.y + p.contentY;
+      for (const r of rs) {
+        routes.push({ ...r, pts: r.pts.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })) });
+      }
     }
     // --- RETURNS (DESIGN 6.7 / 6.14) ---------------------------------------
     // A loop-back across a panel border goes AROUND the content: out of its
@@ -845,6 +1042,24 @@ export function layoutPanelChart(
       interiorOf.clear();
       solution = solve();
     }
+    // DESIGN 1.5, mirrored, at panel scale: 2.10's own move above is a no-op
+    // for a panel that is ALREADY ranked (its contents already stack
+    // top-to-bottom the ordinary way) — the shape still too wide here is a
+    // fan-in's own source RANK, side by side within that stack, which is a
+    // narrower move than re-axing the whole panel. Try every candidate panel
+    // stacked at once (2.10's own retry does the same, not one at a time),
+    // narrowing the widest branch pill onto a second line (2.7) before
+    // giving up more width.
+    if (solution && overWide(solution.seated) && stackCandidates.size) {
+      for (const id of stackCandidates.keys()) useStack.set(id, true);
+      let stacked = solve();
+      while (stacked && overWide(stacked.seated) && narrowWidestStackPill()) stacked = solve();
+      if (stacked && stacked.seated.w < solution.seated.w) solution = stacked;
+      else {
+        for (const id of stackCandidates.keys()) useStack.set(id, false);
+        solution = solve();
+      }
+    }
   } else if (solution && overTall(solution.seated)) {
     // DESIGN 1.4's own remedy, at panel scale and the mirror of 2.10's: a
     // stack too tall for the canvas goes side by side instead, innermost
@@ -878,22 +1093,29 @@ export function layoutPanelChart(
    * four-bend return between the rows, which this planner has no route shape
    * for yet — so it declines and the old path draws it, rather than inventing
    * a return the spec describes and the code does not draw.
+   *
+   * "Root is currently a row" is not the same test as "root is along x": for
+   * sibling panels joined by an edge (subgraph-pair's B→C, an LR row) the
+   * default IS along-x, but for panels with no edge between them at all
+   * (panel-pair's SLACK/BUZZ, a TB chart) the row is the CROSS axis of an
+   * unranked along-y root instead — `stackAxis`/`ranked` already carry that
+   * distinction for 2.10's own panel-content move above; the root gets the
+   * identical test rather than a second, TB-blind one. (Fixed 2026-09-07: a
+   * TB chart's unranked root never reached this block at all, so a caller
+   * could not have SLACK and BUZZ trade "row" for "list" the way 2.10
+   * describes — panel-pair.mmd stuck at whatever the row seated, even once
+   * DESIGN 1.5's own fan-in stack had nothing left to give it.)
    */
   const rootPanels = [...panelItems.values()].filter((p) => !parentOf.has(p.id));
-  if (
-    packToDisplay &&
-    solution &&
-    overWide(solution.seated) &&
-    (interiorOf.get(ROOT) ?? flowAxis) === 'x' &&
-    rootPanels.length > 1
-  ) {
+  const rootIsRow = (interiorOf.get(ROOT) ?? flowAxis) !== stackAxis(ROOT);
+  if (packToDisplay && solution && overWide(solution.seated) && rootIsRow && rootPanels.length > 1) {
     const widths = rootPanels.map((p) => p.w).sort((a, b) => a - b);
     const perRow = widths[0]! + GUTTER.panel + widths[1]! <= room ? 2 : 1;
     if (perRow > 1) {
       decline(`a wrap of ${perRow} panels a row needs 1.9's return, which this planner has not`);
       return null;
     }
-    interiorOf.set(ROOT, 'y');
+    interiorOf.set(ROOT, stackAxis(ROOT));
     const listed = solve();
     if (listed && listed.seated.w < solution.seated.w) solution = listed;
     else {
@@ -1049,19 +1271,25 @@ export function layoutPanelChart(
   }
 
   for (const r of routes) {
-    // Bends (6.1) — a loop-back has its own allowance — and the short-jog range.
-    const bendBudget = RULES[r.isReturn ? '6.1-bends-loop' : '6.1-bends-forward']!.threshold!;
-    if (r.pts.length - 2 > bendBudget)
-      return decline(`edge ${r.edge.id} bends`);
-    for (let i = 1; i < r.pts.length; i++) {
-      const d =
-        Math.abs(r.pts[i]!.x - r.pts[i - 1]!.x) + Math.abs(r.pts[i]!.y - r.pts[i - 1]!.y);
-      if (d > 0.5 && d < 6) return decline(`edge ${r.edge.id} short jog`);
+    // Bends (6.1) — a loop-back has its own allowance — and the short-jog
+    // range. DESIGN 1.5's own fan bus is exempt here exactly as the gate
+    // itself exempts `gc-bus` from this trio (`edgeShapeStats`): a bus
+    // branch is deliberately short (the trunk carries the real distance) and
+    // its bend count is 1.5's shape, not a detour.
+    if (!r.bus) {
+      const bendBudget = RULES[r.isReturn ? '6.1-bends-loop' : '6.1-bends-forward']!.threshold!;
+      if (r.pts.length - 2 > bendBudget)
+        return decline(`edge ${r.edge.id} bends`);
+      for (let i = 1; i < r.pts.length; i++) {
+        const d =
+          Math.abs(r.pts[i]!.x - r.pts[i - 1]!.x) + Math.abs(r.pts[i]!.y - r.pts[i - 1]!.y);
+        if (d > 0.5 && d < 6) return decline(`edge ${r.edge.id} short jog`);
+      }
+      let len = 0;
+      for (let i = 1; i < r.pts.length; i++)
+        len += Math.abs(r.pts[i]!.x - r.pts[i - 1]!.x) + Math.abs(r.pts[i]!.y - r.pts[i - 1]!.y);
+      if (len < RULES['2.3']!.threshold!) return decline(`edge ${r.edge.id} touching`);
     }
-    let len = 0;
-    for (let i = 1; i < r.pts.length; i++)
-      len += Math.abs(r.pts[i]!.x - r.pts[i - 1]!.x) + Math.abs(r.pts[i]!.y - r.pts[i - 1]!.y);
-    if (len < RULES['2.3']!.threshold!) return decline(`edge ${r.edge.id} touching`);
 
     for (let i = 1; i < r.pts.length; i++) {
       const x1 = Math.min(r.pts[i - 1]!.x, r.pts[i]!.x);
@@ -1188,8 +1416,30 @@ export function layoutPanelChart(
   // segment's DRAWN extent: the line as painted, which stands off its source
   // by `edgeGapStart` and stops short of the arrowhead by `edgeGap`, so the
   // head never counts toward the centring.
+  // DESIGN 1.5, mirrored: a fan-in's own branch pills are already placed —
+  // `seatSourceStack` put each one on its own short horizontal run, not the
+  // path's longest run, because the shared vertical trunk is often longer
+  // than any one branch and 1.5 keeps that trunk pill-free.
+  const stackEdgeIds = new Set<string>();
+  for (const rs of stackRoutesByPanel.values()) for (const r of rs) stackEdgeIds.add(r.edge.id);
+  // Same LOCAL-to-chart shift the routes above just got: these pills were
+  // centred against `seatSourceStack`'s own panel-relative coordinates.
   const seatedPills: SeatedPill[] = [];
+  for (const [pid, sps] of stackPillsByPanel) {
+    const p = panelItems.get(pid)!;
+    const dx = p.x + p.contentX;
+    const dy = p.y + p.contentY;
+    for (const sp of sps) {
+      seatedPills.push({
+        ...sp,
+        cx: sp.cx + dx,
+        cy: sp.cy + dy,
+        run: { x1: sp.run.x1 + dx, y1: sp.run.y1 + dy, x2: sp.run.x2 + dx, y2: sp.run.y2 + dy },
+      });
+    }
+  }
   for (const r of routes) {
+    if (stackEdgeIds.has(r.edge.id)) continue;
     const pill = pills.get(r.edge.id);
     if (!pill) continue;
     const drawn = r.pts.map((p) => ({ ...p }));
@@ -1285,7 +1535,19 @@ export function layoutPanelChart(
   }
   const totalW = maxX - minX;
   const totalH = maxY - minY;
-  if (totalW > room) return decline(`too wide (${Math.round(totalW)} > ${room})`);
+  // DESIGN 1.1 + 1.5: a fan-in stacked because its plain row could not stand
+  // ships even when the stack alone still cannot reach the declared display —
+  // `layout/source-stack.ts`'s own whole-graph version of this move has no
+  // room check at all, on exactly this reasoning ("the stack ships at every
+  // display", 2026-09-05): a designed picture packed as narrow as 1.5 and
+  // 2.7's pill-wrap can make it is a better result than the safe layout's
+  // plain column, even wider than asked, and `flow.ts`'s own `displayMet`
+  // check is what turns that into the ordinary WARN (never a silent scale or
+  // a clip) — the same contract every other packing move in this file already
+  // leans on. Declining here would only hand the chart to a worse picture.
+  const stackShipsWide = packToDisplay && [...useStack.values()].some(Boolean);
+  if (totalW > room && !stackShipsWide)
+    return decline(`too wide (${Math.round(totalW)} > ${room})`);
   if (Number.isFinite(scene.canvas.maxAspect)) {
     const m = scene.canvas.margin;
     const frameW = Math.max(scene.canvas.min, roundUp(totalW + 2 * m, GRID));

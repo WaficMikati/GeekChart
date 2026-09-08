@@ -35,18 +35,20 @@ import type { ChannelLayout } from './channels.ts';
  * is the general planner's business, not this one's.
  */
 
-/** DESIGN 1.5: leaves (and, mirrored, sources) stack this far apart. */
-const STACK_GAP = 16;
+/** DESIGN 1.5: leaves (and, mirrored, sources) stack this far apart. Exported
+ *  so panelgrid.ts's own port of this move (a panel-scoped fan-in) reuses the
+ *  same derivation rather than picking a new number. */
+export const STACK_GAP = 16;
 /** DESIGN 1.5 mirrored: the collecting trunk's own indent strip. */
-const TRUNK_INDENT = 24;
+export const TRUNK_INDENT = 24;
 /** Room between the stack's last source and the hub, for the trunk's own
  *  final turn into the hub's top face plus a standoff before the arrowhead. */
-const HUB_GAP = 48;
+export const HUB_GAP = 48;
 /** How far above the hub's own top face the trunk turns to run level, before
  *  its last, vertical drop into that face — DESIGN 6.1/6.8's 16-unit
  *  clearance from the last source's own bottom edge, plus the two turns the
  *  trunk spends getting off its own line and into the hub's. */
-const HUB_ENTRY_DROP = 24;
+export const HUB_ENTRY_DROP = 24;
 
 export function layoutMirroredSourceStack(
   graph: Graph,

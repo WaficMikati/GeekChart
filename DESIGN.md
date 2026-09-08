@@ -285,7 +285,20 @@ and the check that enforces it cannot drift apart.
   speaks of sibling panels sharing a rank — an LR row; a TB chart's
   sequential panels are a sequence, not a row, and owe each other
   nothing here. (Clarified 2026-09-04: the check read the rule as
-  unconditional and failed a legitimate TB panel stack.) Contents
+  unconditional and failed a legitimate TB panel stack.) 1.5's **mirrored**
+  clause reaches inside a panel's own contents the same way: a panel whose
+  row is itself two or more plain sources feeding one hub — nothing else in
+  the panel — stacks that row into a column, the trunk in an indent strip on
+  the sources' right exactly as 1.5 describes, when the row cannot stand at
+  the declared width; a labeled arrival's pill widens the strip and is
+  seated on its own branch, never the shared trunk, and the panel's own
+  width is derived from the stacked form rather than the plain row. (Added
+  2026-09-07, following 2.7's fan-in corridor-growth fix above: panel-pair's
+  BUZZ has two fixed-width sources into one shared log, which corridor
+  growth alone cannot narrow — the row itself has to become a column, the
+  same shape `layout/source-stack.ts` already draws for a fan-in that is the
+  *whole* chart, ported here for one that is only a panel's own contents.)
+  Contents
   stacking is what a chart at the plain **default** display gets, and it
   is enough there. Under a **declared** display it can run out: a row of
   panels already stacked as narrow as their own contents go can still be
@@ -294,7 +307,28 @@ and the check that enforces it cannot drift apart.
   a caller who asked for a narrow column has spent the room that made
   keeping the row the better read. A display with room for only one panel
   is 1.9's own degenerate case, "the ribbon degenerates to a vertical
-  list", and those edges run straight down with no returns at all.
+  list", and those edges run straight down with no returns at all. This
+  applies to a TB chart's unconnected sibling panels too, not only an LR
+  row: two subgraphs with no edge between them still sit side by side by
+  default (mermaid's own convention for independent siblings, whatever the
+  declared direction), so the same "one row, then one column" trade 1.9
+  names for a ranked LR row is owed to them as well. (Added 2026-09-07: the
+  check for "is the root currently a row" read a fixed axis that only ever
+  matched a *ranked* LR root, so an unranked TB root's row — panel-pair's
+  SLACK beside BUZZ — could not reach this fallback at all, even once
+  nothing narrower than a fully-packed, still-too-wide row remained; the
+  fix asks the same `stackAxis`/`ranked` distinction 2.10's own
+  contents-stack already uses above, not a second, direction-specific one.)
+  Even the stacked and listed form can still be wider than a narrow
+  declared display once its own legally-seated pill is accounted for —
+  1.1's own "packed as narrow as it goes, wider than asked, a WARN rather
+  than a worse picture" applies here exactly as it does to 1.5's plain
+  fan-in stack, rather than discarding a designed shape for the safe
+  layout merely for having lost the race on width. (Added 2026-09-07:
+  panel-pair at 358 packs its stacked BUZZ to 288 against a 262 room —
+  12 over even fully narrowed — and 528 side by side with SLACK; shipping
+  it beats the safe layout's plain column on every other measure DESIGN
+  judges a chart by.)
   (Added 2026-09-04: at a 358 phone column subgraph-pair seats 376 wide
   and three-subgraphs 584, against a room of 262, with every panel's
   contents already in one column.) An edge whose

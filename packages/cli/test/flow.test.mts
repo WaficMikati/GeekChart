@@ -2705,20 +2705,89 @@ describe('DESIGN 2.7, a corridor grows for a pill before the chart declines', ()
     }
   });
 
-  // At a declared 612 or 358 display this chart still falls to the safe
-  // layout — but not for the pill-vs-run reason this fix closes. BUZZ's own
-  // two fan-in sources (H, G) are two fixed 160-wide boxes side by side
-  // before the log even needs a label; that row alone is wider than either
-  // budget leaves once SLACK stands beside it, so no amount of corridor
-  // growth reaches the display — closing this needs 1.5's own "shared-hub
-  // source row becomes a stacked column" move (already in grid.ts) ported to
-  // the panel planner, which is a separate change from growing a corridor.
-  test('a declared 612 or 358 display still declines, for a width panelgrid.ts cannot pack yet', async () => {
+  // DESIGN 1.5, mirrored, ported to the panel planner (2026-09-07): a
+  // declared 612 or 358 display used to fall all the way to the safe layout
+  // here, for a width reason unrelated to the corridor-growth fix above —
+  // BUZZ's own two fan-in sources (H, G) are two fixed 160-wide boxes side
+  // by side before the log even needs a label, wider than either budget
+  // leaves once SLACK stands beside it, and no amount of corridor growth
+  // narrows a box's own width. Stacking BUZZ's source row into a column
+  // (this test's own fixture) closes it — the row that used to decline is
+  // now the shape 1.5 draws for a shared-hub fan-in wherever it stands, and
+  // at both displays the row of panels itself goes on to fail width too
+  // (528 side by side, even with both own-key pills narrowed to two lines),
+  // so SLACK and BUZZ list vertically instead (DESIGN 2.10's own row-to-list
+  // trade, ported the same way for an unranked TB root below).
+  test('a declared 612 or 358 display draws BUZZ\'s fan-in stacked, designed rather than safe', async () => {
     for (const display of [612, 358]) {
       await mount(source, { display, motion: false });
       const svg = await session.page.evaluate(() => document.querySelector('svg.gc-chart')!.outerHTML);
-      assert.ok(svg.includes('data-gc-layout="safe"'), `display ${display}: expected the safe fallback`);
+      assert.ok(svg.includes('data-gc-engine="channels"'), `display ${display}: expected the channel engine`);
+      assert.ok(!svg.includes('data-gc-layout="safe"'), `display ${display}: expected a designed shape, not safe`);
     }
+  });
+
+  test('at 612 and 358, SLACK and BUZZ list vertically (2.10\'s row-to-list, ported for an unranked TB root)', async () => {
+    for (const display of [612, 358]) {
+      const reply = await mount(source, { display, motion: false });
+      assert.deepEqual(reply.warnings, [], `display ${display}: ${reply.warnings.join(' | ')}`);
+      const geo = await session.page.evaluate(() => {
+        const rectOf = (el: Element) => {
+          const b = (el as SVGGraphicsElement).getBBox();
+          return { x: b.x, y: b.y, w: b.width, h: b.height };
+        };
+        const panels = [...document.querySelectorAll('.gc-cluster-box')].map(rectOf);
+        return { panels };
+      });
+      assert.equal(geo.panels.length, 2, `display ${display}: expected SLACK and BUZZ`);
+      const [a, b] = geo.panels as [{ x: number; y: number; w: number; h: number }, typeof geo.panels[0]];
+      const sideBySide = Math.abs(a.y - b.y) < 4;
+      assert.ok(!sideBySide, `display ${display}: SLACK/BUZZ still side by side (${JSON.stringify(geo.panels)})`);
+    }
+  });
+
+  // BUZZ's own fan-in, stacked: H and G one above the other (DESIGN 1.5's
+  // own 16-unit leaf gap, mirrored), a single trunk carrying both own-key
+  // pills on their own branches — never the shared vertical run — and one
+  // arrival into L, centred under the stack.
+  test('358: BUZZ\'s fan-in is a stacked column, one trunk, both own-key pills legally seated', async () => {
+    const reply = await mount(source, { display: 358, motion: false });
+    assert.deepEqual(reply.warnings, [], reply.warnings.join(' | '));
+    const geo = await session.page.evaluate(() => {
+      const rectOf = (el: Element) => {
+        const b = (el as SVGGraphicsElement).getBBox();
+        return { x: b.x, y: b.y, w: b.width, h: b.height };
+      };
+      const nodeOf = (id: string) => rectOf(document.querySelector(`.gc-node[data-id="${id}"] .gc-outline`)!);
+      // Only the two "own key" pills, on the edges into L — SLACK's own
+      // "app token" pill is a different chart entirely, sharing the canvas.
+      const plates = [...document.querySelectorAll('.gc-edge-label[data-id$="_L_0"] .gc-plate')].map(
+        rectOf,
+      );
+      const arrowsIntoL = document.querySelectorAll('.gc-arrow[data-id$="_L_0"]').length;
+      const busEdges = document.querySelectorAll('.gc-edge.gc-bus').length;
+      return { H: nodeOf('H'), G: nodeOf('G'), L: nodeOf('L'), plates, arrowsIntoL, busEdges };
+    });
+    // H above G, same x column (DESIGN 1.5's stack, mirrored) — 16 apart.
+    assert.ok(Math.abs(geo.H.x - geo.G.x) < 1, `H and G share a column: ${JSON.stringify([geo.H, geo.G])}`);
+    assert.ok(geo.G.y > geo.H.y, 'G sits below H in the stack');
+    assert.ok(Math.abs(geo.G.y - (geo.H.y + geo.H.h) - 16) < 1, `16 apart per DESIGN 1.5: ${JSON.stringify([geo.H, geo.G])}`);
+    // L sits after (below) the stack, and both fan-in edges land as one
+    // arrowhead (DESIGN 6.3/6.8's merge, same as any other fan-in bus).
+    assert.ok(geo.L.y > geo.G.y + geo.G.h, 'L sits below the stack');
+    assert.equal(geo.arrowsIntoL, 1, 'H→L and G→L merge into a single arrowhead on L');
+    assert.equal(geo.busEdges, 2, 'both branches are drawn as the fan-bus exemption (DESIGN 6.4)');
+    // Both own-key pills seated, legally: neither covers a node or the other.
+    assert.equal(geo.plates.length, 2, 'both own-key pills are drawn');
+    const overlaps = (
+      a: { x: number; y: number; w: number; h: number },
+      b: { x: number; y: number; w: number; h: number },
+    ) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const nodes = [geo.H, geo.G, geo.L];
+    for (const p of geo.plates) {
+      for (const n of nodes) assert.ok(!overlaps(p, n), `pill ${JSON.stringify(p)} must not cover a node`);
+    }
+    assert.ok(!overlaps(geo.plates[0]!, geo.plates[1]!), 'the two own-key pills must not overlap');
   });
 });
 
