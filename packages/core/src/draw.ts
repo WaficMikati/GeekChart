@@ -821,7 +821,11 @@ function attemptDraw(
     const cy = node.y + node.height / 2;
     // Off the primary path is 'quiet' by default (DESIGN 5.1/5.3), not 'alt' —
     // 'alt' is a hue a chart has to earn with a legend-explained category.
-    const role = onPath.has(node.id) ? 'path' : 'quiet';
+    // An explicit `:::path` / `:::quiet` / `:::alt` class wins (DESIGN 5.1):
+    // the author saying "this box is the hero" beats the longest-path guess,
+    // same escape hatch kindOf() gives shapes.
+    const roleClass = node.classes?.find((c) => c === 'path' || c === 'quiet' || c === 'alt');
+    const role = roleClass ?? (onPath.has(node.id) ? 'path' : 'quiet');
     const label = node.rows?.length ? panelLabel(node, scene) : centredLabel(node, cx, cy);
 
     // The end state is a ring with a filled core, which is the only way to tell

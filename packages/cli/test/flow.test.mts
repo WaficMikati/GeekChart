@@ -501,6 +501,24 @@ describe('routing', () => {
     }
   });
 
+  test('an explicit :::path class overrides the longest-path guess (DESIGN 5.1)', async () => {
+    // The author saying "this box is the hero" wins — a fan sibling off the
+    // primary path can be promoted, and a path member demoted.
+    await mount(
+      'flowchart TB\n  A[Start] --> B[On the path]\n  A --> C[Promoted]:::path\n  B --> D[End]:::quiet\n',
+    );
+    const roles = await session.page.$$eval('.gc-node', (nodes) =>
+      Object.fromEntries(
+        nodes.map((n) => [
+          n.getAttribute('data-id'),
+          [...n.classList].find((c) => c.startsWith('gc-role-')),
+        ]),
+      ),
+    );
+    assert.equal(roles.C, 'gc-role-path', 'C: :::path did not promote the fan sibling');
+    assert.equal(roles.D, 'gc-role-quiet', 'D: :::quiet did not demote the path member');
+  });
+
   test('a panel card never gets an outline, even on the primary path (DESIGN 4.2)', async () => {
     // subgraphs.mmd's Database (id F) is a filled datastore tile inside the
     // "Origin" panel and sits on the primary path; its Cache sibling (id D)

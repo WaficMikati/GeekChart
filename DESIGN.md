@@ -565,6 +565,9 @@ the renderer keeps what was written and writers own their casing.)
 
 - **5.1** The ground is dark (`--gc-bg`); ink is near-white; "quiet" is one
   grey. Those three do 90% of the work.
+  An explicit `:::path`, `:::quiet` or `:::alt` class on a node overrides
+  the longest-path guess (owner's ruling 2026-09-08): the author saying
+  "this box is the hero" wins, the same escape hatch shapes already have.
 - **5.2** **One accent per chart**, and it is reserved for the one thing the
   reader should follow: the primary path, the focal layer, the current step.
   Gallery: "Color reserved for the happy path." If two things are accented,
