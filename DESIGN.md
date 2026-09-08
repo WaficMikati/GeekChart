@@ -197,6 +197,11 @@ and the check that enforces it cannot drift apart.
   label: `160×48` (title only), `160×56` (title + caption), `200×48` (wide),
   `120×48` (compact). One chart uses at most two of these. Labels that don't
   fit are shortened or wrapped to a second line, never given a wider box.
+  A datastore cylinder wears a **5px lid on a flat, box-cornered base**
+  (owner's ruling 2026-09-08): the shallow lid keeps the storage read, the
+  flat base ranks and aligns like every other box, and the node grows only
+  5px over its list size at top and bottom — the old double ellipse spent
+  up to 18px per end on curvature.
   A diamond solves its own size from its label rather than sharing this list
   (2.4), which is exactly why leaf stacking, the chain fold and sibling
   wrapping (1.5, 1.2, 1.6) cannot pack a long diamond label the way they pack

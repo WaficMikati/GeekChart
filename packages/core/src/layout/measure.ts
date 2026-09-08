@@ -1,6 +1,9 @@
 import type { Graph, GraphNode } from '../graph.ts';
 import type { Scene } from '../scene.ts';
 
+/** Datastore lid depth (DESIGN 2.2) — draw.ts shapes the lid with it. */
+export const CYLINDER_LID = 5;
+
 /**
  * Text measurement and per-shape fitting. DESIGN 2.2 (the fixed box-size
  * list and each shape's own geometry), 2.6 (a panel's title/kicker count as
@@ -233,9 +236,11 @@ export function fitShape(
       return { width: d, height: d };
     }
     case 'cylinder': {
-      // The label has to clear the ellipse capping each end, not just the sides.
-      const ry = Math.min(18, base.height * 0.2);
-      return { width: base.width, height: base.height + ry * 2 };
+      // DESIGN 2.2, datastore: the 5px lid draws INSIDE the list size — a
+      // datastore is a list-sized box now, so it ranks, aligns and shares a
+      // row middle like every other box (was self-sizing: ellipse caps both
+      // ends at up to 18 each).
+      return { width: base.width, height: base.height };
     }
     case 'hexagon':
     case 'parallelogram':

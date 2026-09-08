@@ -23,6 +23,7 @@ import {
 import { planRoutes, type Extent, type OrthoRoute } from './route.ts';
 import { tipPath, tipReach } from './tips.ts';
 import { isBoxyShape, TRUNK_OFFSET } from './layout/stack.ts';
+import { CYLINDER_LID } from './layout/measure.ts';
 import { checkRuntimeGeometry, type RuntimeEdge } from './layout/runtime-checks.ts';
 import { GRID, GUTTER, PANEL } from './tokens.ts';
 import { RULES } from './rules.ts';
@@ -88,10 +89,16 @@ function outline(node: Placed, scene: Scene): string {
       return roundedRect(x, y, w, h, rr);
     }
     case 'cylinder': {
-      const ry = Math.min(16, h * 0.18);
+      // DESIGN 2.2, datastore (owner's ruling 2026-09-08, option B): a 5px
+      // lid keeps the storage read; the base sits flat on box corners so the
+      // node ranks and aligns like every other box. The deep double-ellipse
+      // cap spent up to a third of the node on curvature.
+      const ry = CYLINDER_LID;
+      const cr = 6;
       return (
         `M${round(x)},${round(y + ry)} a${round(w / 2)},${round(ry)} 0 0,1 ${round(w)},0 ` +
-        `v${round(h - ry * 2)} a${round(w / 2)},${round(ry)} 0 0,1 ${round(-w)},0 Z ` +
+        `V${round(y + h - cr)} a${cr},${cr} 0 0,1 ${-cr},${cr} ` +
+        `H${round(x + cr)} a${cr},${cr} 0 0,1 ${-cr},${-cr} Z ` +
         `M${round(x)},${round(y + ry)} a${round(w / 2)},${round(ry)} 0 0,0 ${round(w)},0`
       );
     }
