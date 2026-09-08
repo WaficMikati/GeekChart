@@ -1,0 +1,11 @@
+flowchart TB
+  subgraph SLACK
+    SA[AI agent] -- app token --> SB[Bot]
+    SB -- limited API --> SW[Workspace]
+  end
+  subgraph BUZZ
+    BH[Human] -- own keypair --> BL[(Signed event log)]
+    BA[Any AI agent] -- own keypair --> BL
+    BL -- every message signed --> BS[Ships real apps]
+    BL -- shell access --> BR[Real risk]
+  end

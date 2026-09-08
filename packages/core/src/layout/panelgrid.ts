@@ -4,6 +4,7 @@ import type { Scene } from '../scene.ts';
 import { CLEARANCE, GRID, GUTTER, PANEL } from '../tokens.ts';
 import {
   narrowPill,
+  PILL_NODE_CLEAR,
   PILL_PAD_X,
   pillHeight,
   roundUp,
@@ -53,35 +54,56 @@ import { HUB_ENTRY_DROP, HUB_GAP, STACK_GAP, TRUNK_INDENT } from './source-stack
  */
 
 /**
- * DESIGN 2.7: a band is sized by what has to live in it, and 7.4 makes that
- * one value chart-wide — the largest any band needs. Two sizes come up here.
- * A band every route crosses in a straight line needs only the arrowhead and
- * a visible run, which is the ordinary sibling gutter. A band that hosts a
- * turn needs both turn legs and the departure standoff as well. Which one
- * applies is not knowable before routing, so the planner derives with the
- * smaller, plans, and re-derives once if a turn showed up — 2.7's fixed
- * point, run at most twice, never a grow-and-retry loop.
+ * DESIGN 2.7, amended (2026-09-08): a band derives IN a panel exactly the
+ * way it derives OUTSIDE one — `layoutGrid()`'s own plain-chain formula,
+ * reused rather than duplicated with different numbers. Two sizes come up.
+ * A band every route crosses in a straight line needs nothing more than
+ * `layoutGrid()`'s own floor: 48, the height of the box itself, which is
+ * what makes an unlabeled chain read as square gaps whether or not it sits
+ * in a panel. A band that hosts a turn needs both turn legs and the
+ * departure standoff as well. Which one applies is not knowable before
+ * routing, so the planner derives with the smaller, plans, and re-derives
+ * once if a turn showed up in THAT container's own routes — 2.7's fixed
+ * point, run at most a few times, never a grow-and-retry loop, and never
+ * reaching past the one container whose routes actually bent (2.10's own
+ * amendment below: an independent panel's band is not owed to a sibling's
+ * turn).
+ *
+ * (Previously this file kept its own formula — `pillAlong + 2×16` plus
+ * `edgeGap`/`edgeGapStart` and a 32 floor, `pillAlong` always the pill's
+ * WIDTH regardless of flow axis. Against a TB chart's vertical bands that
+ * is the wrong dimension entirely — the pill's HEIGHT is what rides a
+ * vertical run, the same split `layoutGrid()`'s own `pv`/`pu` already make
+ * — and the formula's own numbers were never checked against the one
+ * `layoutGrid()` actually draws beside it: measured on `panel-compare.mmd`,
+ * SLACK's own 3-box chain came out 480×616 alone, roughly double the same
+ * chain's 480×336 outside any panel, purely from this drift.)
  */
-const bandStraight = (scene: Scene): number =>
-  Math.max(GUTTER.panel, roundUp(RULES['2.3']!.threshold! + scene.edgeGap + scene.edgeGapStart, GRID));
+const BAND_FLOOR = 48;
+const bandStraight = (): number => BAND_FLOOR;
 const bandTurn = (scene: Scene): number =>
-  Math.max(GUTTER.panel, roundUp(2 * TURN + STANDOFF + scene.edgeGap + 4, GRID));
+  Math.max(BAND_FLOOR, roundUp(2 * TURN + STANDOFF + scene.edgeGap + 4, GRID));
 
 /**
- * DESIGN 2.7's third size: a band that has to host a label pill.
- *
- * Derived the way 2.9 derives the flank gutter, because it is the same
- * arithmetic — the pill's own along-axis size, 2×16 of visible line either
- * side of it, the arrowhead at the far end and the standoff at the near one.
- * Nothing here is a minimum picked to look right: a band that came out
- * narrower would leave the pill with nubs instead of line, which is exactly
- * what 2.9 says never to ship.
+ * DESIGN 2.7's third size: a band that has to host a label pill. `pillAlong`
+ * is the pill's own along-axis extent — the caller derives which dimension
+ * that is (height for a container stacking top-to-bottom, width for one
+ * running left-to-right), exactly as `layoutGrid()`'s own `pv` does for a
+ * plain, non-panel chain. 6.9's 8 either side is what a pill riding a
+ * straight run keeps clear of the line's own ends; the `edgeGap`/
+ * `edgeGapStart` term is the same standoff the drawn line itself loses at
+ * each end (6.1's arrowhead, the departure stub) before the pill ever gets
+ * seated — a straight run's ONE segment is trimmed by both at once, so the
+ * band has to hold that too, or the pill-seating pass below would measure a
+ * drawn run shorter than the band it came from and decline a plan that was
+ * actually fine. A band narrower than this would leave the pill without
+ * 6.9's own clearance, which 6.9 says never to ship.
  */
 const PILL_RUN_CLEAR = 16;
-const bandLabel = (scene: Scene, pillAlong: number): number =>
+const bandLabel = (pillAlong: number, scene: Scene): number =>
   Math.max(
-    GUTTER.panel,
-    roundUp(pillAlong + 2 * PILL_RUN_CLEAR + scene.edgeGap + scene.edgeGapStart, GRID),
+    BAND_FLOOR,
+    roundUp(pillAlong + 2 * PILL_NODE_CLEAR + scene.edgeGap + scene.edgeGapStart, GRID),
   );
 
 /** DESIGN 6.1/6.8: an edge keeps this clear of a node it does not connect. */
@@ -163,11 +185,38 @@ export function layoutPanelChart(
       height: pillHeight(scene, lines.length),
     });
   }
-  // 2.7: the band is sized for what must live in it, before anything is
-  // placed. A pill on a straight cross-panel run lies along the flow axis, so
-  // that is the extent the band has to hold.
-  const widestPill = Math.max(0, ...[...pills.values()].map((p) => p.width));
-  let BAND = Math.max(bandStraight(scene), widestPill ? bandLabel(scene, widestPill) : 0);
+  // 2.7 + 2.10 (2026-09-08): the band is sized for what must live in it,
+  // before anything is placed — but "it" is one CONTAINER's own band, never
+  // the whole chart's. Two independent panels compact independently (2.10):
+  // a panel with no edges to anything else derives its own band from its
+  // own pills alone, exactly the way the root derives its band from the
+  // root's own pills, and a sibling's wider need never reaches in. `pv`
+  // picks the pill dimension that actually rides a container's own along-
+  // axis run — height for one stacking top-to-bottom, width for one running
+  // left-to-right (`interiorOf` records that axis once packing decides it;
+  // before then every container defaults to the chart's own flow axis) —
+  // the same split `layoutGrid()`'s `pv`/`pu` already make for a plain,
+  // non-panel chain, so a labeled straight run costs a panel exactly what it
+  // costs outside one.
+  const pv = (ownerKey: string, p: Pill): number =>
+    (interiorOf.get(ownerKey) ?? flowAxis) === 'y' ? p.height : p.width;
+  const containerWidestPill = (ownerKey: string): number =>
+    Math.max(
+      0,
+      ...(liftedIn.get(ownerKey) ?? []).map((l) => {
+        const p = pills.get(l.edge.id);
+        return p ? pv(ownerKey, p) : 0;
+      }),
+    );
+  const baseBandOf = (ownerKey: string): number => {
+    const widest = containerWidestPill(ownerKey);
+    return widest ? bandLabel(widest, scene) : bandStraight();
+  };
+  /** A container's currently active band — grown past its base only when
+   *  one of ITS OWN routes turned out to need a turn (see `growBandsForTurns`
+   *  below), never because a sibling container's routes did. */
+  const bandOf = new Map<string, number>();
+  const bandFor = (ownerKey: string): number => bandOf.get(ownerKey) ?? baseBandOf(ownerKey);
 
   // DESIGN 2.7 addendum (2026-09-07): a corridor between two ranked siblings
   // is a channel too, and a bent route's own cross-axis jog leg lives in it —
@@ -583,7 +632,7 @@ export function layoutPanelChart(
         }
         at += sizeCross(item);
       }
-      cursor += rowAlong[r]! + (r < maxRank ? BAND : 0);
+      cursor += rowAlong[r]! + (r < maxRank ? bandFor(key(owner)) : 0);
     }
 
     // A container hugs what it actually holds, not the ranks it reserved: a
@@ -680,17 +729,63 @@ export function layoutPanelChart(
         const k = containerAlong === 'x' ? 0 : i.rank;
         byRank.set(k, [...(byRank.get(k) ?? []), i]);
       }
+      // DESIGN 2.10, amended (2026-09-08): a shared row is owed to panels a
+      // cross-panel edge actually connects — 2.6's "children of sibling
+      // panels share exact rows" describes subgraph-pair's Frontend/Backend
+      // (an LR sequence, B→C directly lifted between the two panel items
+      // here) and three-subgraphs' three-deep chain, both genuinely linked.
+      // It was never meant for two panels a bucket merely landed together —
+      // panel-compare's SLACK and BUZZ share a rank with NOTHING connecting
+      // them (no forward edge can ever link two items of one rank; that is
+      // what put them in the same rank to begin with), and 2.10's own words
+      // are explicit: "Panels with no edges between them align their TOPS,
+      // not every internal rank." Grouping here now follows connectivity —
+      // this container's own lifted edges between panel items — rather than
+      // bucket membership alone, so an unconnected pair keeps its own
+      // profile (each derives its own band from its own content) while a
+      // connected chain still shares rows exactly as before.
       for (const group of byRank.values()) {
         if (group.length < 2) continue;
-        const merged: number[] = [];
-        for (const p of group) {
-          p.profile.forEach((v, r) => (merged[r] = Math.max(merged[r] ?? 0, v)));
+        const edgesHere = liftedIn.get(ownerKeyOf(items)) ?? [];
+        const parent = new Map<PanelItem, PanelItem>(group.map((p) => [p, p] as const));
+        const find = (p: PanelItem): PanelItem => {
+          let r = p;
+          while (parent.get(r) !== r) r = parent.get(r)!;
+          parent.set(p, r);
+          return r;
+        };
+        const union = (a: PanelItem, b: PanelItem): void => {
+          const ra = find(a);
+          const rb = find(b);
+          if (ra !== rb) parent.set(ra, rb);
+        };
+        for (const l of edgesHere) {
+          if (
+            l.from.kind === 'panel' &&
+            l.to.kind === 'panel' &&
+            group.includes(l.from) &&
+            group.includes(l.to)
+          ) {
+            union(l.from, l.to);
+          }
         }
+        const components = new Map<PanelItem, PanelItem[]>();
         for (const p of group) {
-          const was = p.override;
-          if (!was || was.length !== merged.length || was.some((v, r) => v !== merged[r])) {
-            p.override = [...merged];
-            changed = true;
+          const r = find(p);
+          components.set(r, [...(components.get(r) ?? []), p]);
+        }
+        for (const comp of components.values()) {
+          if (comp.length < 2) continue;
+          const merged: number[] = [];
+          for (const p of comp) {
+            p.profile.forEach((v, r) => (merged[r] = Math.max(merged[r] ?? 0, v)));
+          }
+          for (const p of comp) {
+            const was = p.override;
+            if (!was || was.length !== merged.length || was.some((v, r) => v !== merged[r])) {
+              p.override = [...merged];
+              changed = true;
+            }
           }
         }
       }
@@ -1124,19 +1219,45 @@ export function layoutPanelChart(
     }
   }
 
-  // 2.7's fixed point: derive with the straight-run band, and re-derive once
-  // if a turn actually turned up in the plan. A band already widened for a
-  // pill never narrows here — a turn asks for more room, never less.
-  const bandFloor = widestPill ? bandLabel(scene, widestPill) : 0;
-  if (solution?.routes.some((r) => r.pts.length > 2)) {
-    BAND = Math.max(bandTurn(scene), bandFloor);
-    const wider = solve();
-    if (wider) solution = wider;
-    else {
-      BAND = Math.max(bandStraight(scene), bandFloor);
+  // 2.7's fixed point, scoped per container (2.10, 2026-09-08): derive with
+  // the straight/label band, and re-derive a CONTAINER's own band once a
+  // turn actually turned up among THAT container's own routes. A band
+  // already widened for a pill never narrows here — a turn asks for more
+  // room, never less — and a turn found in one panel's routes never widens
+  // another panel's band, or the root's: independent panels compact
+  // independently, so the growth this loop does is exactly as local as
+  // `corridorGrow`'s own per-row growth just below it.
+  const growBandsForTurns = (): void => {
+    for (let pass = 0; pass < 3 && solution; pass++) {
+      const bentOwners = new Set<string>();
+      for (const r of solution.routes) {
+        if (r.isReturn || r.bus || r.pts.length <= 2) continue;
+        const l = liftedOf(r.edge);
+        if (l) bentOwners.add(key(l.owner));
+      }
+      let grew = false;
+      for (const ownerKey of bentOwners) {
+        const need = Math.max(bandTurn(scene), baseBandOf(ownerKey));
+        if (bandFor(ownerKey) < need - 0.5) {
+          bandOf.set(ownerKey, need);
+          grew = true;
+        }
+      }
+      if (!grew) return;
+      const next = solve();
+      if (next) {
+        solution = next;
+        continue;
+      }
+      // Growing these containers' bands broke the chart outright (pushed it
+      // past a budget) — undo just this pass's growth and stop, the same
+      // retreat the old single-band version made.
+      for (const ownerKey of bentOwners) bandOf.delete(ownerKey);
       solution = solve();
+      return;
     }
-  }
+  };
+  if (solution) growBandsForTurns();
   if (!solution) return null;
 
   // DESIGN 2.7 addendum (2026-09-07): a bent route's own cross-axis jog — the
@@ -1158,7 +1279,16 @@ export function layoutPanelChart(
     const p2 = r.pts[2]!;
     const horizontal = Math.abs(p1.y - p2.y) < 0.01;
     if (!horizontal && Math.abs(p1.x - p2.x) >= 0.01) return null;
-    return { len: Math.hypot(p2.x - p1.x, p2.y - p1.y), horizontal };
+    // `draw.ts` rounds every bend at the standard TURN radius, which eats
+    // into BOTH ends of this leg — the straight run a pill can actually ride
+    // is shorter than the raw corner-to-corner distance by one turn radius
+    // per end. Measured on panel-pair's own H→L leg and panel-compare's
+    // BL→BS/BL→BR fan-out alike: a 216 or 108 raw jog draws its usable
+    // straight run 22-ish shorter, independent of the leg's own length —
+    // 2×TURN, the same radius the corner itself is drawn at, rounded up a
+    // hair for the curve's own rendering slack.
+    const raw = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    return { len: Math.max(0, raw - 2 * TURN), horizontal };
   };
   const jogShortfall = (
     sol: Solved,
@@ -1172,6 +1302,14 @@ export function layoutPanelChart(
     const need = (jog.horizontal ? pill.width : pill.height) + 2 * PILL_RUN_CLEAR;
     return { need, got: jog.len };
   };
+  // DESIGN 2.7: "when [a fan leg's] derived length costs more width than the
+  // canvas has, the label wraps to a second line... a second line is far
+  // cheaper than the width" — grid.ts's own remedy for a fan branch pill,
+  // owed here too: a jog corridor that would have to grow past the chart's
+  // own budget to seat its pill narrows the pill first and tries again,
+  // rather than growing the chart wider than 1.1 allows. Bounded outer
+  // attempts, each a fresh 3-pass growth fixed point.
+  for (let narrowAttempt = 0; narrowAttempt < 4; narrowAttempt++) {
   for (let pass = 0; pass < 3; pass++) {
     // Worst edge per (container, rank): the group a corridor growth actually
     // reaches, so several fan branches off the same row share one fix.
@@ -1181,10 +1319,21 @@ export function layoutPanelChart(
       if (!s || s.got >= s.need) continue;
       const l = liftedOf(r.edge);
       if (!l) continue;
-      const groupKey = `${key(l.owner)}:${l.from.rank}`;
       const shortfall = s.need - s.got;
-      const cur = worst.get(groupKey);
-      if (!cur || shortfall > cur.shortfall) worst.set(groupKey, { edgeId: r.edge.id, shortfall });
+      // Either end of the jog can be the row that actually governs its
+      // length: the SOURCE's own row when its siblings are what set the
+      // offset (a fan spreading its sources apart, e.g. two sources into
+      // one hub below them), or the TARGET's when a lone source instead
+      // drops onto a spread row of targets (one hub fanning out again below
+      // it). 2.7's "that channel alone" does not say which channel, so both
+      // are queued and the one that does not actually move this edge falls
+      // out on its own zero slope below, exactly as a single wrong guess
+      // already did.
+      for (const rank of new Set([l.from.rank, l.to.rank])) {
+        const groupKey = `${key(l.owner)}:${rank}`;
+        const cur = worst.get(groupKey);
+        if (!cur || shortfall > cur.shortfall) worst.set(groupKey, { edgeId: r.edge.id, shortfall });
+      }
     }
     if (!worst.size) break;
     let grew = false;
@@ -1219,6 +1368,35 @@ export function layoutPanelChart(
     const next = solve();
     if (!next) break;
     solution = next;
+  }
+  if (!solution || !overWide(solution.seated)) break;
+  // Growth alone would still cost more width than the canvas has — narrow
+  // the widest pill riding any jog leg onto a second line and let growth
+  // try again from scratch. The corridors already grown for the OLD, wider
+  // pill are reset for this edge's own rows first — a narrower pill needs
+  // less room, and a stale amount from the pill it replaced would hold the
+  // chart just as wide as before for nothing. Giving up (no pill left to
+  // narrow) leaves the shortfall for the ordinary decline below.
+  let widest: { edgeId: string; pill: Pill } | null = null;
+  for (const r of solution.routes) {
+    const pill = pills.get(r.edge.id);
+    if (!pill || !jogLenOf(r)) continue;
+    if (!widest || pill.width > widest.pill.width) widest = { edgeId: r.edge.id, pill };
+  }
+  if (!widest) break;
+  const narrower = narrowPill(widest.pill, scene, measureLine);
+  if (!narrower) break;
+  pills.set(widest.edgeId, narrower);
+  const widestRoute = solution.routes.find((r) => r.edge.id === widest!.edgeId)!;
+  const widestLifted = liftedOf(widestRoute.edge);
+  if (widestLifted) {
+    for (const rank of new Set([widestLifted.from.rank, widestLifted.to.rank])) {
+      corridorGrow.delete(`${key(widestLifted.owner)}:${rank}`);
+    }
+  }
+  const renarrowed = solve();
+  if (!renarrowed) break;
+  solution = renarrowed;
   }
   if (!solution) return null;
   // 2.3 vs 2.7 was resolved in the spec on 2026-09-04: a gutter hosting a
@@ -1458,7 +1636,15 @@ export function layoutPanelChart(
     for (let i = 1; i < drawn.length; i++) {
       const p = drawn[i - 1]!;
       const q = drawn[i]!;
-      const len = Math.hypot(q.x - p.x, q.y - p.y);
+      const rawLen = Math.hypot(q.x - p.x, q.y - p.y);
+      // `draw.ts` rounds every internal bend at the standard TURN radius, so
+      // a segment's actual straight, pill-holding run is shorter than its
+      // own endpoints by one radius per end that is a real bend — the
+      // path's absolute start/end is not a bend at all (`pull()` above
+      // already trimmed those for the departure standoff and the
+      // arrowhead), so only an INTERNAL vertex costs a radius.
+      const trim = (i - 1 > 0 ? TURN : 0) + (i < drawn.length - 1 ? TURN : 0);
+      const len = Math.max(0, rawLen - trim);
       if (len > bestLen) {
         bestLen = len;
         best = [p, q];
@@ -1467,10 +1653,18 @@ export function layoutPanelChart(
     if (!best) return decline(`${r.edge.id} has no run for its pill`);
     const vertical = Math.abs(best[0].x - best[1].x) < 0.01;
     const along = vertical ? pill.height : pill.width;
-    // 2.7 sized the band for exactly this, so a pill that still cannot keep
-    // 2.9's 16 of visible line either side means the plan is wrong, not that
+    // 2.7 sized the band for exactly this. A genuinely straight (2-point)
+    // route is the plain in-line case `bandLabel` derives for — 6.9's own 8
+    // clear of the line's own ends, the same clearance a plain, non-panel
+    // chain keeps. A bent route's own longest leg can instead be its cross-
+    // axis jog, which is what the corridor-growth pass above derives for
+    // (2.7's addendum) using 2.9's wider 16 — a leg that is not trimmed by
+    // the departure/arrowhead standoff `pull()` just applied at all, so it
+    // is held to that stricter number instead. Either way, a pill that
+    // still cannot keep its own clearance means the plan is wrong, not that
     // the pill should be nudged somewhere it does not belong.
-    if (bestLen < along + 2 * PILL_RUN_CLEAR)
+    const clear = r.pts.length <= 2 ? PILL_NODE_CLEAR : PILL_RUN_CLEAR;
+    if (bestLen < along + 2 * clear)
       return decline(
         `${r.edge.id}'s run is ${Math.round(bestLen)} for a ${Math.round(along)} pill`,
       );

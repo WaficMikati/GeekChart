@@ -138,6 +138,7 @@ const GROUPS = [
       ['nested-subgraph', 'Nested subgraph', 'flowchart + subgraph'],
       ['nested-depth-3', 'Nested, three deep', 'flowchart + subgraph'],
       ['panel-pair', 'Panel pair', 'flowchart + subgraph'],
+      ['panel-compare', 'Panel compare', 'flowchart + subgraph'],
     ],
   },
   {
