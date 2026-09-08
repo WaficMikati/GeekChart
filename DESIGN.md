@@ -344,6 +344,23 @@ and the check that enforces it cannot drift apart.
   (6.2), crossing the panel border perpendicular — never the panel
   border as a proxy. (Added 2026-09-04, approved by mockup:
   three-subgraphs sent Data to a lonely second row.)
+- **Independent panels compact independently** (added 2026-09-08). Panels
+  with no edge between them align their **tops** — free by construction,
+  since every panel's kicker strip is the same fixed height — and owe each
+  other nothing past that: each lays out its interior on its own rank grid,
+  deriving its own bands (2.7) from only its own content. Two panels can
+  only land on the same rank at all because nothing ranks them relative to
+  each other (an edge would put them on different ranks), so this is the
+  *only* shape 2.6's own "children of sibling panels share exact rows" can
+  describe for a rank-sharing pair with no edge between them — and sharing
+  rows was never owed there; it describes panels a cross-panel edge actually
+  connects (subgraph-pair's Frontend/Backend, three-subgraphs' chain), where
+  only the ranks that edge touches need aligning. `panelgrid.ts` had one
+  chart-wide `BAND` variable instead, so a turn or a wide pill anywhere in
+  the chart inflated every panel's band, connected or not. Measured on
+  `panel-compare.mmd`: SLACK (a plain 3-box chain) used to measure BUZZ's
+  own wider need exactly, both panels sharing one number neither's own
+  content asked for; fixed, each panel's band is keyed to that panel alone.
 
 - **2.7** **Channels.** The floor plan reserves **corridors** (the vertical
   gaps between columns) and **bands** (the horizontal gaps between rows) as
@@ -410,6 +427,31 @@ and the check that enforces it cannot drift apart.
   the bare minimum) seats both own-key pills on legal runs at 760×424, and
   every other fixture's corridors are untouched because none of their bent
   legs were ever short to begin with.)
+- **2.7 inside a panel derives the same way it does outside one** (added
+  2026-09-08). A panel's own interior bands are channels exactly like the
+  chart's own — sized from what has to live in them, never a separately
+  maintained formula. `panelgrid.ts` had drifted: its labeled-band size used
+  the pill's raw **width** regardless of the chart's own flow axis (the
+  wrong dimension for a TB chart's vertical bands — the pill's **height** is
+  what actually rides a vertical run, the same split the plain-chain planner
+  already makes for `pv`/`pu`), 2.9's flank clearance (16) in place of 6.9's
+  plain "8 clear of a box" for an on-line pill, and a 32 floor instead of
+  the plain-chain planner's own 48. A corridor's own growth (the addendum
+  above) is scoped to whichever rank actually governs a jog's length — the
+  **source's** row when its own siblings spread it apart, but the
+  **target's** when a lone source instead drops onto a spread row of
+  targets (one hub fanning out again below it) — and accounts for the
+  standard TURN radius `draw.ts` rounds every bend at, which eats into a
+  jog's own usable straight run from both ends. When growth alone would
+  cost more width than the canvas has, the label wraps to a second line
+  first, exactly as 2.7 already prescribes for a plain fan's mirrored leg.
+  Measured on `panel-compare.mmd` (SLACK, a plain 3-box labeled chain,
+  beside BUZZ, a bent fan-in/fan-out of 5): SLACK alone used to draw
+  480×616, roughly double the 480×336 the identical chain draws with no
+  panel around it — fixed, it draws 480×424, within 8px of parity (the
+  residual is this planner's own generic verify-then-place model reserving
+  the departure/arrowhead standoff a direct-placement model does not need
+  to declare separately).
 - **2.8** **Fan symmetry.** A parent sits centred on the geometric extent of
   its **entire subtree** — measured, within **±1** — not merely its
   immediate children row: with uneven subtrees the two differ, and the
