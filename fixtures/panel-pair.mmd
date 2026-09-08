@@ -1,0 +1,8 @@
+flowchart TB
+  subgraph SLACK
+    A[AI agent] -- app token --> B[Bot]
+  end
+  subgraph BUZZ
+    H[Human] -- own key --> L[(Shared signed log)]
+    G[AI agent] -- own key --> L
+  end

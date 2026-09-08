@@ -347,6 +347,35 @@ and the check that enforces it cannot drift apart.
   once, before routing instead of after it. Pattern proven in the
   channel-engine spike: 13/13 fan-family charts, zero overlaps, derived
   gaps of ~75 where the old pipeline spent up to 224.)
+- **2.7's corridors derive the same way, and grow before a chart declines**
+  (added 2026-09-07). A corridor is not just a gutter a route happens to
+  cross straight through: when a route bends — two sources fanning into one
+  target below them is the common shape — one of its legs runs *along* the
+  corridor, and that leg carries the label pill exactly as a band's own
+  straight run does. The corridor is sized for that leg's pill the same way
+  a band is sized for a straight one, computed before the pill is ever
+  seated: the corridor's contribution to that leg's length is a fixed,
+  known function of the corridor's own width (this planner's seating is sums
+  and midpoint centring throughout, so the function is exactly linear, never
+  approximated), so one sample of it tells the planner the exact width to
+  ask for — not a guess, not a retry loop, the same closed-form derivation
+  2.7 already does for a band, run once per corridor that actually needs it.
+  Nothing else moves: the growth is scoped to the one row whose corridor is
+  short ("that channel alone", 2.7's own words, applied here), and a chart
+  with no such leg is laid out exactly as if this rule did not exist.
+  Declining to the safe layout is still correct once growth is exhausted —
+  when the grown corridor would push the chart past its declared display
+  budget (1.1) or another hard rule, nothing here overrides that — but a
+  14px shortfall on a corridor that had 900px of unused canvas to spend was
+  never that case. (Measured on `panel-pair.mmd`: two subgraphs, one a
+  shared log fed by two independent keys; `H`'s own-key pill needed 106 of
+  run — its width plus 2.9's 16 either side — against a corridor that gave
+  its bent leg only 92. The old planner declined the whole chart to the
+  824-tall safe column over a 14px gap it had the width budget to close;
+  growing the one corridor 32 (to clear the pill with 2.7's own margin, not
+  the bare minimum) seats both own-key pills on legal runs at 760×424, and
+  every other fixture's corridors are untouched because none of their bent
+  legs were ever short to begin with.)
 - **2.8** **Fan symmetry.** A parent sits centred on the geometric extent of
   its **entire subtree** — measured, within **±1** — not merely its
   immediate children row: with uneven subtrees the two differ, and the

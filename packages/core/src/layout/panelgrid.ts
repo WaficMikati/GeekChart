@@ -156,6 +156,17 @@ export function layoutPanelChart(
   const widestPill = Math.max(0, ...[...pills.values()].map((p) => p.width));
   let BAND = Math.max(bandStraight(scene), widestPill ? bandLabel(scene, widestPill) : 0);
 
+  // DESIGN 2.7 addendum (2026-09-07): a corridor between two ranked siblings
+  // is a channel too, and a bent route's own cross-axis jog leg lives in it —
+  // so when that leg has to carry a label pill, the corridor derives for the
+  // pill exactly the way a band does, before anything declines. Keyed by
+  // `${container}:${rank}` so growth stays inside the one row that needs it
+  // ("that channel alone widens") rather than every sibling gutter in the
+  // chart. Empty until the pill-seating pass below finds a shortfall, so a
+  // chart with no such jog is laid out exactly as if this did not exist.
+  const corridorGrow = new Map<string, number>();
+  const sibGrow = (ownerKey: string, r: number): number => corridorGrow.get(`${ownerKey}:${r}`) ?? 0;
+
   const byId = new Map(graph.nodes.map((n) => [n.id, n] as const));
   const clusterById = new Map(graph.clusters.map((c) => [c.id, c] as const));
 
@@ -360,14 +371,14 @@ export function layoutPanelChart(
     const rows: Item[][] = Array.from({ length: maxRank + 1 }, () => []);
     for (const i of items) rows[rank.get(i)!]!.push(i);
 
-    const rowCross = rows.map((row) => {
+    const rowCross = rows.map((row, r) => {
       let total = 0;
       for (let k = 0; k < row.length; k++) {
         if (k > 0) {
           total +=
             row[k]!.kind === 'panel' || row[k - 1]!.kind === 'panel'
               ? GUTTER.panel
-              : GUTTER.sibling;
+              : GUTTER.sibling + sibGrow(key(owner), r);
         }
         total += sizeCross(row[k]!);
       }
@@ -393,7 +404,7 @@ export function layoutPanelChart(
         if (k > 0) {
           at += row[k]!.kind === 'panel' || row[k - 1]!.kind === 'panel'
             ? GUTTER.panel
-            : GUTTER.sibling;
+            : GUTTER.sibling + sibGrow(key(owner), r);
         }
         const item = row[k]!;
         // Flush to the rank's own start, never centred in it: 2.3 puts the
@@ -903,6 +914,89 @@ export function layoutPanelChart(
       BAND = Math.max(bandStraight(scene), bandFloor);
       solution = solve();
     }
+  }
+  if (!solution) return null;
+
+  // DESIGN 2.7 addendum (2026-09-07): a bent route's own cross-axis jog — the
+  // middle leg of a Z between two ranks whose columns don't line up, e.g. two
+  // sources fanning into one target below them — runs through the sibling
+  // corridor of the rank it leaves, and that corridor is a channel exactly
+  // like a band: derived from what it has to carry (2.7), never a flat
+  // sibling gutter a pill either fits or doesn't. When the jog can't seat its
+  // pill, the one row responsible grows before anything declines — "that
+  // channel alone", never every gutter in the chart (`corridorGrow` stays
+  // keyed per row for exactly that reason). Growth is solved, not searched
+  // for: seating is sums and midpoint centring, both linear in the gutter, so
+  // one probe step reads the exact slope and the fix is computed from it —
+  // the same "derive smaller, plan, re-derive" shape 2.7 already uses for
+  // BAND above, run per affected row instead of once for the whole chart.
+  const jogLenOf = (r: Route): { len: number; horizontal: boolean } | null => {
+    if (r.pts.length !== 4) return null;
+    const p1 = r.pts[1]!;
+    const p2 = r.pts[2]!;
+    const horizontal = Math.abs(p1.y - p2.y) < 0.01;
+    if (!horizontal && Math.abs(p1.x - p2.x) >= 0.01) return null;
+    return { len: Math.hypot(p2.x - p1.x, p2.y - p1.y), horizontal };
+  };
+  const jogShortfall = (
+    sol: Solved,
+    edgeId: string,
+  ): { need: number; got: number } | null => {
+    const r = sol.routes.find((x) => x.edge.id === edgeId);
+    const pill = r ? pills.get(r.edge.id) : undefined;
+    if (!r || !pill) return null;
+    const jog = jogLenOf(r);
+    if (!jog) return null;
+    const need = (jog.horizontal ? pill.width : pill.height) + 2 * PILL_RUN_CLEAR;
+    return { need, got: jog.len };
+  };
+  for (let pass = 0; pass < 3; pass++) {
+    // Worst edge per (container, rank): the group a corridor growth actually
+    // reaches, so several fan branches off the same row share one fix.
+    const worst = new Map<string, { edgeId: string; shortfall: number }>();
+    for (const r of solution.routes) {
+      const s = jogShortfall(solution, r.edge.id);
+      if (!s || s.got >= s.need) continue;
+      const l = liftedOf(r.edge);
+      if (!l) continue;
+      const groupKey = `${key(l.owner)}:${l.from.rank}`;
+      const shortfall = s.need - s.got;
+      const cur = worst.get(groupKey);
+      if (!cur || shortfall > cur.shortfall) worst.set(groupKey, { edgeId: r.edge.id, shortfall });
+    }
+    if (!worst.size) break;
+    let grew = false;
+    for (const [groupKey, { edgeId, shortfall }] of worst) {
+      const base = corridorGrow.get(groupKey) ?? 0;
+      const PROBE = 8;
+      corridorGrow.set(groupKey, base + PROBE);
+      const probed = solve();
+      const after = probed ? jogShortfall(probed, edgeId) : null;
+      const before = jogShortfall(solution, edgeId);
+      if (!probed || !after || !before) {
+        corridorGrow.set(groupKey, base);
+        continue;
+      }
+      const slope = (after.got - before.got) / PROBE;
+      if (slope <= 0.01) {
+        // This row's own corridor does not govern the jog (it is not the
+        // width-driving row) — growing it further would not help, so the
+        // shortfall is left for the ordinary decline below.
+        corridorGrow.set(groupKey, base);
+        continue;
+      }
+      const grownBy = roundUp(Math.ceil(shortfall / slope), GRID);
+      corridorGrow.set(groupKey, base + grownBy);
+      if (DEBUG)
+        console.warn(
+          `[panels] grow: ${groupKey}'s corridor +${grownBy} for ${edgeId} (short ${Math.round(shortfall)})`,
+        );
+      grew = true;
+    }
+    if (!grew) break;
+    const next = solve();
+    if (!next) break;
+    solution = next;
   }
   if (!solution) return null;
   // 2.3 vs 2.7 was resolved in the spec on 2026-09-04: a gutter hosting a

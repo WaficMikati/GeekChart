@@ -2663,6 +2663,65 @@ describe('DESIGN 6.8, reconverging join lanes', () => {
   });
 });
 
+describe('DESIGN 2.7, a corridor grows for a pill before the chart declines', () => {
+  // fixtures/panel-pair.mmd: two subgraphs, one a plain A->B, the other a
+  // shared signed log fed by two independent own-key edges. Before the 2.7
+  // corridor addendum, H's own-key pill needed 106 of run (its width plus
+  // 2.9's 16 either side) against a bent leg that only measured 92 — a 14px
+  // shortfall the planner had 900px of unused canvas to close — and declined
+  // the whole chart to the 824-tall safe column instead of growing 32.
+  const source = readFileSync(join(fixtures, 'panel-pair.mmd'), 'utf8');
+
+  test('the fan-in corridor grows to seat both own-key pills, at the default width', async () => {
+    const reply = await mount(source, { motion: false });
+    const svg = await session.page.evaluate(() => document.querySelector('svg.gc-chart')!.outerHTML);
+    assert.ok(svg.includes('data-gc-engine="channels"'), 'the channel engine drew it');
+    assert.ok(!svg.includes('data-gc-layout="safe"'), 'not the plain safe column');
+    assert.deepEqual(reply.warnings, [], reply.warnings.join(' | '));
+
+    const geo = await session.page.evaluate(() => {
+      const rectOf = (el: Element) => {
+        const b = (el as SVGGraphicsElement).getBBox();
+        return { x: b.x, y: b.y, w: b.width, h: b.height };
+      };
+      const plates = [...document.querySelectorAll('.gc-plate')].map(rectOf);
+      const nodes = [...document.querySelectorAll('.gc-node')].map(rectOf);
+      return { plates, nodes };
+    });
+    assert.equal(geo.plates.length, 3, 'A->B, H->L and G->L each get one pill');
+    const overlaps = (
+      a: { x: number; y: number; w: number; h: number },
+      b: { x: number; y: number; w: number; h: number },
+    ) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    for (const p of geo.plates) {
+      for (const n of geo.nodes) {
+        assert.ok(!overlaps(p, n), `a pill (${JSON.stringify(p)}) must not cover a node (${JSON.stringify(n)})`);
+      }
+    }
+    for (let i = 0; i < geo.plates.length; i++) {
+      for (let j = i + 1; j < geo.plates.length; j++) {
+        assert.ok(!overlaps(geo.plates[i]!, geo.plates[j]!), 'pills must not overlap each other');
+      }
+    }
+  });
+
+  // At a declared 612 or 358 display this chart still falls to the safe
+  // layout — but not for the pill-vs-run reason this fix closes. BUZZ's own
+  // two fan-in sources (H, G) are two fixed 160-wide boxes side by side
+  // before the log even needs a label; that row alone is wider than either
+  // budget leaves once SLACK stands beside it, so no amount of corridor
+  // growth reaches the display — closing this needs 1.5's own "shared-hub
+  // source row becomes a stacked column" move (already in grid.ts) ported to
+  // the panel planner, which is a separate change from growing a corridor.
+  test('a declared 612 or 358 display still declines, for a width panelgrid.ts cannot pack yet', async () => {
+    for (const display of [612, 358]) {
+      await mount(source, { display, motion: false });
+      const svg = await session.page.evaluate(() => document.querySelector('svg.gc-chart')!.outerHTML);
+      assert.ok(svg.includes('data-gc-layout="safe"'), `display ${display}: expected the safe fallback`);
+    }
+  });
+});
+
 describe('DESIGN 2.2, a diamond narrows past a clean two-line break', () => {
   // fixtures/blog/python-or-java.mmd at a 358 phone: 1.5's stack and 1.6's
   // wrap already pack PY's and JAVA's own leaf pairs, but the search still
