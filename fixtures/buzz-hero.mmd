@@ -1,0 +1,6 @@
+flowchart TB
+  Q{Where does your AI agent live?} -- on Buzz --> M["A member<br/>with its own signed key"]
+  Q -- on Slack --> B["A bot<br/>behind a borrowed app token"]
+  M -- builds real apps --> L["One signed log<br/>every action has a name"]
+  M -- shell access --> S["A real shell<br/>real power, on the record"]:::path
+  B -. posts messages .-> W["Messages only<br/>scoped, capped, anonymous"]

@@ -478,6 +478,13 @@ and the check that enforces it cannot drift apart.
   count). The old tell was a Dispatcher parked over its first child, or an
   Aggregator aligned to one producer of six. (Added 2026-09-03 from the
   user's review — ten charts flagged for exactly this.)
+  **Amendment (2026-09-08, owner-approved via mockup, citing 5.1):** when
+  exactly one branch's target is not itself explicitly `:::path` but a node
+  further down its subtree is, and no sibling branch qualifies the same way,
+  the parent seats over that branch's own box instead of the column's
+  geometric centre — the author's explicit accent (5.1) names the spine
+  further down than this parent's own children, and the parent lines up
+  with it rather than with the fan's midpoint.
 
 - **2.9** **Same-row leaves.** A terminal branch off a decision's side sits
   on the decision's **own row** — box centre sharing the decision's centre

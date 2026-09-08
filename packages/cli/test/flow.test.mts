@@ -2892,6 +2892,48 @@ describe('DESIGN 1.10, state diagrams on the channel engine', () => {
   });
 });
 
+describe('DESIGN 2.8 amendment (citing 5.1), an explicit :::path branch anchors the spine above it', () => {
+  test('buzz-hero seats the decision directly over its accented branch, not the fan centre', async () => {
+    // fixtures/buzz-hero.mmd: Q's "on Buzz" branch (M) carries no class of
+    // its own, but M's own subtree holds S, the chart's one explicitly
+    // `:::path`-classed node. Before this amendment, Q centred on the
+    // geometric midpoint of both children's columns (M's and B's) — 2.8's
+    // ordinary rule — which lands off M's own box because M's quiet sibling
+    // L pulls the column the other way. The amendment reseats Q directly
+    // over M so the Q -> M -> S spine reads as one straight vertical, while
+    // the quiet "on Slack" branch to B still departs on a normal fan leg.
+    const source = readFileSync(join(fixtures, 'buzz-hero.mmd'), 'utf8');
+    const reply = await mount(source);
+    assert.ok(reply.svg.includes('data-gc-engine="channels"'), 'expected the channel engine');
+    assert.ok(!reply.svg.includes('data-gc-layout="safe"'), 'not the plain safe column');
+    const runtimeWarnings = reply.warnings.filter((w) => /^6\.[123]-runtime/.test(w));
+    assert.deepEqual(runtimeWarnings, [], runtimeWarnings.join(' | '));
+
+    const cx = await session.page.$$eval('.gc-node', (nodes) =>
+      Object.fromEntries(
+        nodes.map((n) => [n.getAttribute('data-id'), n.style.getPropertyValue('--gc-cx')]),
+      ),
+    );
+    assert.equal(
+      parseFloat(cx.Q!),
+      parseFloat(cx.M!),
+      `Q's --gc-cx (${cx.Q}) does not equal M's (${cx.M})`,
+    );
+
+    // The Q -> M edge is a straight vertical drop: every x in its path is
+    // the same value, no elbow.
+    const qmPath = await session.page.$eval(
+      '.gc-edge[data-id="L_Q_M_0"]',
+      (el) => el.getAttribute('d')!,
+    );
+    const xs = [...qmPath.matchAll(/-?\d+(?:\.\d+)?(?=,)/g)].map(Number);
+    assert.ok(
+      xs.every((x) => Math.abs(x - xs[0]!) < 0.5),
+      `Q -> M is not a straight vertical drop: ${qmPath}`,
+    );
+  });
+});
+
 describe('DESIGN 2.7 + 2.10, a panel band derives like the outside world and stays its own', () => {
   // fixtures/panel-compare.mmd: SLACK, a plain 3-box labeled chain, beside
   // BUZZ, a fan-in/fan-out of 5 boxes with bent, labeled routes. Before this

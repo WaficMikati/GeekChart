@@ -344,6 +344,26 @@ export const fanSymmetry: Check = {
       /** True when those children do not all share one row (a stacked list). */
       const stacked = (kids: string[]): boolean =>
         kids.some((k) => flo(boxOf.get(k)!) > fhi(boxOf.get(kids[0]!)!) - 1);
+      // DESIGN 2.8 amendment (2026-09-08, citing 5.1): a node the author
+      // marked `:::path` directly is `gc-role-path` for a reason the DOM can
+      // still tell apart from the longest-path guess landing on the same
+      // role — `draw.ts` stamps `gc-explicit-role` only when the class came
+      // from the source, never from the guess.
+      const explicitPathDirect = (id: string): boolean => {
+        const el = ids.get(id)!;
+        return el.classList.contains('gc-explicit-role') && el.classList.contains('gc-role-path');
+      };
+      const explicitPathInSubtree = (id: string): boolean =>
+        explicitPathDirect(id) || (tree.kids.get(id) ?? []).some(explicitPathInSubtree);
+      // A branch qualifies as the amendment's hero when its own target is
+      // not itself the explicitly marked node (2.8's ordinary centring
+      // already seats a parent next to an adjacent explicit accent) but a
+      // node further down its subtree is.
+      const heroKid = (id: string): string | null => {
+        const kids = below(id);
+        const heroes = kids.filter((k) => !explicitPathDirect(k) && explicitPathInSubtree(k));
+        return heroes.length === 1 ? heroes[0]! : null;
+      };
       const column = new Map<string, [number, number]>();
       const measure = (id: string): [number, number] => {
         const done = column.get(id);
@@ -366,11 +386,23 @@ export const fanSymmetry: Check = {
       for (const id of ids.keys()) {
         const kids = below(id);
         if (!kids.length || stacked(kids)) continue;
-        const cols = kids.map(measure);
-        const subLo = Math.min(...cols.map((c) => c[0]));
-        const subHi = Math.max(...cols.map((c) => c[1]));
         const b = boxOf.get(id)!;
-        const off = (lo(b) + hi(b)) / 2 - (subLo + subHi) / 2;
+        // DESIGN 2.8 amendment: with exactly one hero branch, the expected
+        // centre is that branch's own box, not the column its measure()
+        // would return — the column still includes that branch's own quiet
+        // siblings, which is exactly what the amendment seats past.
+        const hero = heroKid(id);
+        let expected: number;
+        if (hero) {
+          const hb = boxOf.get(hero)!;
+          expected = (lo(hb) + hi(hb)) / 2;
+        } else {
+          const cols = kids.map(measure);
+          const subLo = Math.min(...cols.map((c) => c[0]));
+          const subHi = Math.max(...cols.map((c) => c[1]));
+          expected = (subLo + subHi) / 2;
+        }
+        const off = (lo(b) + hi(b)) / 2 - expected;
         if (Math.abs(off) > Math.abs(worst)) {
           worst = off;
           worstId = id;

@@ -193,6 +193,22 @@ export function layoutGrid(
     }
   }
 
+  // DESIGN 2.8 amendment (2026-09-08, citing 5.1): a branch counts as "the
+  // hero branch" when its target, or any node in its subtree, carries the
+  // explicit `:::path` class — 5.1's author override, not the longest-path
+  // guess. Walked once over the seating tree (`kidsOf`) and memoized; every
+  // `build()` call below asks it, however many layout attempts run.
+  const pathSubtree = new Map<string, boolean>();
+  const hasExplicitPath = (id: string): boolean => {
+    const cached = pathSubtree.get(id);
+    if (cached !== undefined) return cached;
+    const here =
+      byId.get(id)!.classes.includes('path') ||
+      kidsOf.get(id)!.some((e) => hasExplicitPath(e.to));
+    pathSubtree.set(id, here);
+    return here;
+  };
+
   const warnings: string[] = [];
   const pills = new Map<string, Pill>();
   for (const e of graph.edges) {
@@ -707,7 +723,41 @@ export function layoutGrid(
             const base = kidAt.get(ordered[i]!.to)! - kidExts[i]!.lo;
             return [base + kidExts[i]!.coreLo, base + kidExts[i]!.coreHi];
           };
+          // DESIGN 2.8 amendment (2026-09-08, citing 5.1): when exactly one
+          // branch's target does not itself carry the explicit `:::path`
+          // class but a node further down its subtree does, and no sibling
+          // branch qualifies the same way, the author has already named the
+          // hero further down the tree — this parent seats directly over
+          // that branch's own box instead of the centre of all of them, so
+          // the spine down to the named node reads straight. A branch whose
+          // OWN immediate target already carries the class is left to 2.8's
+          // ordinary centring: the accent is already adjacent, nothing to
+          // reach past, and reseating the parent onto it would in turn pull
+          // that branch's own quiet sibling out to a new distance, which is
+          // exactly the "everything else unchanged" this amendment does not
+          // touch (measured on buzz-hero: M's own children are the signed
+          // log and the explicitly accented shell-access box — M keeps its
+          // ordinary centre between them, unaffected). Two or zero
+          // qualifying branches also leave centring exactly as 2.8 had it.
+          //
+          // The seat is the branch's own box (`anchorsRel`), not its whole
+          // column (`kidCore`): the column can include the branch's own
+          // off-centre descendants and would misalign the spine by whatever
+          // they pull it — measured on buzz-hero, seating Q on M's column
+          // (M's box unioned with M's own children) put Q 112 off M's own
+          // box, not on it.
+          //
+          // Folded into `centreOfKids` itself, not applied once up front, so
+          // the 2.7 leg-growth pass below — which re-derives the anchor after
+          // moving branches — keeps seating over the same box rather than
+          // sliding back to the all-kids centre on its next pass.
+          const pathBranches = anchorKids.filter((i) => {
+            const to = ordered[i]!.to;
+            return !byId.get(to)!.classes.includes('path') && hasExplicitPath(to);
+          });
+          const pathAnchorIdx = pathBranches.length === 1 ? pathBranches[0]! : null;
           const centreOfKids = (): number => {
+            if (pathAnchorIdx !== null) return anchorsRel[pathAnchorIdx]!;
             const subLo = Math.min(...anchorKids.map((i) => kidCore(i)[0]));
             const subHi = Math.max(...anchorKids.map((i) => kidCore(i)[1]));
             return (subLo + subHi) / 2;

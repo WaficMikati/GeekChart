@@ -849,9 +849,14 @@ function attemptDraw(
         ? `<path class="gc-fill" d="${path}"/>`
         : '';
 
+    // DESIGN 2.8's amendment (5.1) needs to tell, from the rendered DOM alone,
+    // an explicit author class from the longest-path guess landing on the
+    // same 'path' role — the gate measures the render, never the source. This
+    // is the only signal that survives into the SVG: a plain marker class,
+    // no styling of its own.
     parts.push(
       `<g class="gc-node gc-role-${role} gc-kind-${node.kind} gc-shape-${node.shape}` +
-        `${inPanel.has(node.id) ? ' gc-in-panel' : ''}" ` +
+        `${inPanel.has(node.id) ? ' gc-in-panel' : ''}${roleClass ? ' gc-explicit-role' : ''}" ` +
         `data-id="${esc(node.id)}" style="--gc-cx:${cx}px;--gc-cy:${round(cy)}px">` +
         wash +
         `<path class="gc-outline" pathLength="1" d="${path}"/>` +

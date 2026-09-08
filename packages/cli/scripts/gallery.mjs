@@ -124,6 +124,7 @@ const GROUPS = [
       ['source-stack', 'Mirrored source stack', 'flowchart'],
       ['reconverge', 'Reconverging joins, separate lanes', 'flowchart'],
       ['state-lifecycle', 'State lifecycle', 'stateDiagram-v2'],
+      ['buzz-hero', 'Buzz hero, explicit path branch', 'flowchart'],
     ],
   },
   {
